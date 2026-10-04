@@ -572,7 +572,7 @@ fn test_case_d(workers: usize) {
     let mut task_sched = 0u64;
     let mut task_polled = 0u64;
 
-    session.runtime.as_ref().unwrap().block_on(async {
+    let reader_task_id = session.runtime.as_ref().unwrap().block_on(async {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
@@ -591,6 +591,7 @@ fn test_case_d(workers: usize) {
             let mut buf = [0u8; 16];
             client_conn.read(&mut buf).await.unwrap()
         });
+        let reader_id = read_task.id().to_string().parse::<u64>().unwrap();
 
         // Let all workers settle and park
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -613,6 +614,7 @@ fn test_case_d(workers: usize) {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         ground_truth_probes::disable();
+        reader_id
     });
 
     let (gt_events, stock_events, dial9_events) = session.finish();
@@ -625,10 +627,10 @@ fn test_case_d(workers: usize) {
             ProbeEvent::IoReadinessObserved { t_ns, .. } if tokio_io_ready == 0 => {
                 tokio_io_ready = *t_ns;
             }
-            ProbeEvent::TaskScheduled { t_ns, .. } if task_sched == 0 => {
+            ProbeEvent::TaskScheduled { t_ns, task_id, .. } if *task_id == reader_task_id && task_sched == 0 => {
                 task_sched = *t_ns;
             }
-            ProbeEvent::WorkerPollStart { t_ns, .. } if task_polled == 0 => {
+            ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if *task_id == reader_task_id && task_polled == 0 => {
                 task_polled = *t_ns;
             }
             _ => {}
@@ -672,7 +674,7 @@ fn test_case_e(workers: usize) {
     let mut task_sched = 0u64;
     let mut task_polled = 0u64;
 
-    session.runtime.as_ref().unwrap().block_on(async {
+    let reader_task_id = session.runtime.as_ref().unwrap().block_on(async {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
@@ -692,6 +694,7 @@ fn test_case_e(workers: usize) {
             let mut buf = [0u8; 16];
             client_conn.read(&mut buf).await.unwrap()
         });
+        let reader_id = read_task.id().to_string().parse::<u64>().unwrap();
 
         // Let reader poll once and register waker on driver
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -700,20 +703,28 @@ fn test_case_e(workers: usize) {
         ground_truth_probes::reset_base_time();
         ground_truth_probes::enable();
 
-        // Occupy all N workers with non-yielding CPU compute for 60ms
+        // Occupy all N workers with non-yielding CPU compute for 40ms
+        let compute_started = Arc::new(AtomicUsize::new(0));
         let mut compute_handles = Vec::new();
         for _ in 0..workers {
+            let c_started = compute_started.clone();
             compute_handles.push(dial9_tokio_telemetry::spawn(async move {
+                c_started.fetch_add(1, Ordering::SeqCst);
                 let start = Instant::now();
-                while start.elapsed() < Duration::from_millis(60) {
+                while start.elapsed() < Duration::from_millis(40) {
                     std::hint::spin_loop();
                 }
             }));
         }
 
-        // At t=15ms while all workers are 100% occupied with compute, send TCP data
+        // Wait until all workers are confirmed actively executing the non-yielding loop,
+        // then wait 10ms into the compute window before sending TCP data
+        let c_started = compute_started.clone();
         let handle = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(15));
+            while c_started.load(Ordering::SeqCst) < workers {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            std::thread::sleep(Duration::from_millis(10));
             let mut sync_stream = std_stream;
             use std::io::Write;
             ground_truth_probes::record_external_stimulus("WRITE_BEGIN", "Off-thread write while workers saturated");
@@ -729,11 +740,11 @@ fn test_case_e(workers: usize) {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         ground_truth_probes::disable();
+        reader_id
     });
 
     let (gt_events, stock_events, dial9_events) = session.finish();
 
-    let mut reader_task_id = None;
     for ev in &gt_events {
         match ev {
             ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_BEGIN" => {
@@ -742,11 +753,10 @@ fn test_case_e(workers: usize) {
             ProbeEvent::IoReadinessObserved { t_ns, .. } if tokio_io_ready == 0 => {
                 tokio_io_ready = *t_ns;
             }
-            ProbeEvent::TaskScheduled { t_ns, task_id, .. } if tokio_io_ready > 0 && task_sched == 0 => {
+            ProbeEvent::TaskScheduled { t_ns, task_id, .. } if *task_id == reader_task_id && task_sched == 0 => {
                 task_sched = *t_ns;
-                reader_task_id = Some(*task_id);
             }
-            ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if reader_task_id == Some(*task_id) && task_polled == 0 => {
+            ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if *task_id == reader_task_id && task_polled == 0 => {
                 task_polled = *t_ns;
             }
             _ => {}
@@ -953,6 +963,7 @@ fn run_distribution_benchmarks(runs: usize) {
     let mut d_delta_sched = Stats::default();
     let mut d_delta_poll = Stats::default();
     let mut d_delta_e2e = Stats::default();
+    let mut d_valid = 0usize;
 
     for _ in 0..runs {
         let session = InstrumentedSession::new(2);
@@ -962,7 +973,7 @@ fn run_distribution_benchmarks(runs: usize) {
         let mut t_sched = 0u64;
         let mut t_poll = 0u64;
 
-        session.runtime.as_ref().unwrap().block_on(async {
+        let reader_task_id = session.runtime.as_ref().unwrap().block_on(async {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
             let (client_conn, server_conn) = tokio::join!(
@@ -976,6 +987,7 @@ fn run_distribution_benchmarks(runs: usize) {
                 let mut buf = [0u8; 16];
                 client.read(&mut buf).await.unwrap()
             });
+            let reader_id = read_task.id().to_string().parse::<u64>().unwrap();
 
             tokio::time::sleep(Duration::from_millis(30)).await;
             stock_rec.reset();
@@ -993,6 +1005,7 @@ fn run_distribution_benchmarks(runs: usize) {
             handle.join().unwrap();
             read_task.await.unwrap();
             ground_truth_probes::disable();
+            reader_id
         });
 
         let (gt, _, _) = session.finish();
@@ -1000,12 +1013,13 @@ fn run_distribution_benchmarks(runs: usize) {
             match ev {
                 ProbeEvent::ExternalIoStimulus { t_ns, .. } => ext_write = *t_ns,
                 ProbeEvent::IoReadinessObserved { t_ns, .. } if io_ready == 0 => io_ready = *t_ns,
-                ProbeEvent::TaskScheduled { t_ns, .. } if t_sched == 0 => t_sched = *t_ns,
-                ProbeEvent::WorkerPollStart { t_ns, .. } if t_poll == 0 => t_poll = *t_ns,
+                ProbeEvent::TaskScheduled { t_ns, task_id, .. } if *task_id == reader_task_id && t_sched == 0 => t_sched = *t_ns,
+                ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if *task_id == reader_task_id && t_poll == 0 => t_poll = *t_ns,
                 _ => {}
             }
         }
         if ext_write > 0 && io_ready > 0 && t_sched > 0 && t_poll > 0 {
+            d_valid += 1;
             d_delta_driver.add(io_ready.saturating_sub(ext_write) as f64 / 1_000_000.0);
             d_delta_sched.add(t_sched.saturating_sub(io_ready) as f64 / 1_000_000.0);
             d_delta_poll.add(t_poll.saturating_sub(t_sched) as f64 / 1_000_000.0);
@@ -1013,7 +1027,7 @@ fn run_distribution_benchmarks(runs: usize) {
         }
     }
 
-    println!("\n--- [CASE D: I/O While Parked Distribution (N={})] ---", runs);
+    println!("\n--- [CASE D: I/O While Parked Distribution (N={}, valid={})] ---", runs, d_valid);
     let (d_min, d_p50, d_p95, d_max) = d_delta_driver.summarize();
     println!("  Δio_driver:  min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", d_min, d_p50, d_p95, d_max);
     let (s_min, s_p50, s_p95, s_max) = d_delta_sched.summarize();
@@ -1028,6 +1042,7 @@ fn run_distribution_benchmarks(runs: usize) {
     let mut e_delta_sched = Stats::default();
     let mut e_delta_poll = Stats::default();
     let mut e_delta_e2e = Stats::default();
+    let mut e_valid = 0usize;
 
     for _ in 0..runs {
         let session = InstrumentedSession::new(2);
@@ -1037,7 +1052,7 @@ fn run_distribution_benchmarks(runs: usize) {
         let mut t_sched = 0u64;
         let mut t_poll = 0u64;
 
-        session.runtime.as_ref().unwrap().block_on(async {
+        let reader_task_id = session.runtime.as_ref().unwrap().block_on(async {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
             let (client_conn, server_conn) = tokio::join!(
@@ -1051,15 +1066,19 @@ fn run_distribution_benchmarks(runs: usize) {
                 let mut buf = [0u8; 16];
                 client.read(&mut buf).await.unwrap()
             });
+            let reader_id = read_task.id().to_string().parse::<u64>().unwrap();
 
             tokio::time::sleep(Duration::from_millis(20)).await;
             stock_rec.reset();
             ground_truth_probes::reset_base_time();
             ground_truth_probes::enable();
 
+            let compute_started = Arc::new(AtomicUsize::new(0));
             let mut compute = Vec::new();
             for _ in 0..2 {
+                let c_started = compute_started.clone();
                 compute.push(tokio::spawn(async move {
+                    c_started.fetch_add(1, Ordering::SeqCst);
                     let start = Instant::now();
                     while start.elapsed() < Duration::from_millis(40) {
                         std::hint::spin_loop();
@@ -1067,7 +1086,11 @@ fn run_distribution_benchmarks(runs: usize) {
                 }));
             }
 
+            let c_started = compute_started.clone();
             let handle = std::thread::spawn(move || {
+                while c_started.load(Ordering::SeqCst) < 2 {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
                 std::thread::sleep(Duration::from_millis(10));
                 let mut s = std_stream;
                 use std::io::Write;
@@ -1081,25 +1104,25 @@ fn run_distribution_benchmarks(runs: usize) {
             }
             read_task.await.unwrap();
             ground_truth_probes::disable();
+            reader_id
         });
 
         let (gt, _, _) = session.finish();
-        let mut reader_task_id = None;
         for ev in &gt {
             match ev {
                 ProbeEvent::ExternalIoStimulus { t_ns, .. } => ext_write = *t_ns,
                 ProbeEvent::IoReadinessObserved { t_ns, .. } if io_ready == 0 => io_ready = *t_ns,
-                ProbeEvent::TaskScheduled { t_ns, task_id, .. } if io_ready > 0 && t_sched == 0 => {
+                ProbeEvent::TaskScheduled { t_ns, task_id, .. } if *task_id == reader_task_id && t_sched == 0 => {
                     t_sched = *t_ns;
-                    reader_task_id = Some(*task_id);
                 }
-                ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if reader_task_id == Some(*task_id) && t_poll == 0 => {
+                ProbeEvent::WorkerPollStart { t_ns, task_id, .. } if *task_id == reader_task_id && t_poll == 0 => {
                     t_poll = *t_ns;
                 }
                 _ => {}
             }
         }
         if ext_write > 0 && io_ready > 0 && t_sched > 0 && t_poll > 0 {
+            e_valid += 1;
             e_delta_driver.add(io_ready.saturating_sub(ext_write) as f64 / 1_000_000.0);
             e_delta_sched.add(t_sched.saturating_sub(io_ready) as f64 / 1_000_000.0);
             e_delta_poll.add(t_poll.saturating_sub(t_sched) as f64 / 1_000_000.0);
@@ -1107,7 +1130,7 @@ fn run_distribution_benchmarks(runs: usize) {
         }
     }
 
-    println!("\n--- [CASE E: Saturated Workers Distribution (N={})] ---", runs);
+    println!("\n--- [CASE E: Saturated Workers Distribution (N={}, valid={})] ---", runs, e_valid);
     let (d_min, d_p50, d_p95, d_max) = e_delta_driver.summarize();
     println!("  Δio_driver (Driver Service Delay): min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", d_min, d_p50, d_p95, d_max);
     let (s_min, s_p50, s_p95, s_max) = e_delta_sched.summarize();

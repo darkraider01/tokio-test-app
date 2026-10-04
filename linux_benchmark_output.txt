@@ -1,0 +1,36 @@
+===============================================================
+TOKIO / DIAL9 RUNTIME OBSERVABILITY GAP INVESTIGATION
+3-Way Empirical Observability Matrix (Ground Truth vs Stock vs Dial9)
+===============================================================
+
+=======================================================
+RUNNING STATISTICAL BENCHMARKS (30 iterations per case)
+=======================================================
+
+--- [CASE D: I/O While Parked Distribution (N=30, valid=30)] ---
+  Δio_driver:  min=0.083ms  p50=0.102ms  p95=0.195ms  max=0.224ms
+  Δschedule:   min=0.003ms  p50=0.003ms  p95=0.005ms  max=0.005ms
+  Δpoll:       min=0.017ms  p50=0.023ms  p95=0.035ms  max=0.041ms
+  Δend_to_end: min=0.105ms  p50=0.129ms  p95=0.241ms  max=0.251ms
+
+--- [CASE E: Saturated Workers Distribution (N=30, valid=30)] ---
+  Δio_driver (Driver Service Delay): min=29.675ms  p50=29.844ms  p95=31.308ms  max=31.667ms
+  Δschedule (Ready -> Sched):        min=0.001ms  p50=0.002ms  p95=0.003ms  max=0.003ms
+  Δpoll (Sched -> Poll):             min=0.004ms  p50=0.007ms  p95=0.013ms  max=0.014ms
+  Δend_to_end (Total Real Latency):   min=29.689ms  p50=29.851ms  p95=31.324ms  max=31.682ms
+
+--- [ADVERSARIAL: Wake Coalescing Distribution (N=30)] ---
+  Attempted runs:                                30
+  Runs matching intended scheduler precondition: 30
+  Runs with alternate scheduler topology:        0
+
+  [Metrics across 30 Valid Intended-Precondition Runs]:
+  Unpark requests dispatched:      min=1  p50=1  p95=1  max=1
+  Task-correlated wake suppressed: min=4  p50=4  p95=4  max=4 (tasks 2-5 coalesced)
+  Total target=None decisions:     min=5  p50=5  p95=5  max=5
+  Task 1 Sched->Poll Latency:      min=0.051ms  p50=0.060ms  p95=0.081ms  max=0.141ms
+  Coalesced Tasks Sched->Poll:     min=0.018ms  p50=0.034ms  p95=0.044ms  max=0.095ms
+
+--- [ADVERSARIAL: Work Stealing Distribution (N=30)] ---
+  Stolen Tasks Sched->Poll:    min=0.002ms  p50=0.003ms  p95=0.005ms  max=0.005ms
+  Stranded Task Sched->Poll:   min=40.016ms  p50=40.020ms  p95=40.038ms  max=40.053ms

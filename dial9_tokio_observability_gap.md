@@ -22,7 +22,7 @@ This investigation establishes a strict 3-way empirical comparison across three 
 2. **`stock recorder` (Maximum Stock Tokio Observability):**
    Uses only public and unstable Tokio hooks currently available in upstream Tokio (`tokio_unstable`): `on_task_spawn`, `on_before_task_poll`, `on_after_task_poll`, `on_task_terminate`, `on_thread_park`, `on_thread_unpark`, and `TaskMeta::schedule_latency()`.
 3. **`Dial9` (Actual Current Telemetry Consumer):**
-   The real Dial9 telemetry pipeline compiled with `features = ["analysis"]`. Spawns tasks via `dial9_tokio_telemetry::spawn`, captures raw segments via `CapturingProcessor`, and decodes wire-format events: `WakeEvent`, `WorkerParkEvent`, `WorkerUnparkEvent` (with Linux `schedstat` / `sched_wait_ns`), `PollStartEvent`, and `PollEndEvent`, followed by Dial9's `compute_wake_to_poll_delays()`.
+   The real Dial9 telemetry pipeline compiled with `features = ["analysis"]`. Spawns tasks via `dial9_tokio_telemetry::spawn`, captures raw segments via `CapturingProcessor`, and decodes wire-format events: `WakeEvent`, `WorkerParkEvent`, `WorkerUnparkEvent` (with Linux `schedstat` / `sched_wait_ns` support where available in the kernel), `PollStartEvent`, and `PollEndEvent`, followed by Dial9's `compute_wake_to_poll_delays()`.
 4. **`tokio-test-app` (Controlled Workload Generator):**
    Generates targeted concurrency patterns to isolate causal transitions: parked worker I/O, saturated worker I/O driver starvation, wake coalescing bursts, and work stealing with local-queue head-of-line blocking.
 
@@ -56,7 +56,7 @@ We decompose the runtime execution lifecycle into four distinct causal boundarie
 
 ### Boundary A: External I/O Stimulus $\to$ Tokio Driver Observation
 - **Interval:** External I/O stimulus initiated (`WRITE_BEGIN`/`WRITE_DONE`) $\to$ Tokio `driver.turn()` (`mio::Poll::poll`) returns readiness.
-- **Methodological Note:** Our start timestamp is `WRITE_BEGIN`/`WRITE_DONE` on the sending thread, not the exact instant the receiving socket became kernel-readable in the OS network stack. (Proving the exact kernel-readiness timestamp would require kernel/eBPF instrumentation). However, comparing the parked-worker control ($\Delta_{\text{io\_driver}} \approx 0.103\text{ ms}$) against worker CPU saturation ($\Delta_{\text{io\_driver}} \approx 29.834\text{ ms}$) definitively demonstrates a ~30 ms pre-scheduling blind spot where the runtime fails to service the driver while workers are occupied.
+- **Methodological Note:** Our start timestamp is `WRITE_BEGIN`/`WRITE_DONE` on the sending thread, not the exact instant the receiving socket became kernel-readable in the OS network stack. (Proving the exact kernel-readiness timestamp would require kernel/eBPF instrumentation). However, comparing the parked-worker control ($\Delta_{\text{io\_driver}} \approx 0.102\text{ ms}$) against worker CPU saturation ($\Delta_{\text{io\_driver}} \approx 29.844\text{ ms}$) definitively demonstrates a ~30 ms pre-scheduling blind spot where the runtime fails to service the driver while workers are occupied.
 - **Core Question:** Can current Tokio hooks or Dial9 detect when an application is waiting for Tokio to service the I/O driver while worker threads are saturated by CPU-bound tasks?
 
 ### Boundary B: Runnable Work $\to$ Wake / Coalesce Decision
@@ -143,17 +143,17 @@ All experiments were executed on Linux in release mode (`cargo run --release`). 
 
 ### Case E: External I/O Stimulus Under Scheduler / CPU Saturation
 
-- **Workload:** An async reader task is registered on a TCP stream. All $N$ workers (tested with $N=2$ and $N=4$) are occupied with non-yielding CPU compute loops (spin loops) for 40–60ms. While all workers are 100% occupied, an external thread sends a TCP packet at $t \approx 15\text{ ms}$.
-- **Key Observation:** Because all workers are executing compute loops, **no worker turns the I/O driver**. The TCP packet sits in the OS kernel receive buffer for ~30ms before Tokio discovers it.
+- **Workload & Synchronization:** An async reader task is registered on a TCP stream. All $N$ workers ($N=2$, canonical) are occupied with non-yielding CPU compute loops (spin loops) for 40 ms. Each compute task increments an atomic barrier (`compute_started.fetch_add(1, SeqCst)`); only after all $N$ workers are confirmed executing the spin loop does an external writer thread initiate a 10 ms delay and send a TCP packet at $t \approx 10.36\text{ ms}$.
+- **Key Observation:** Because all workers are executing non-yielding compute loops, **no worker turns the I/O driver**. The TCP packet sits in the OS kernel receive buffer for ~30 ms before Tokio discovers it.
 
-#### Distribution (N=30 Runs)
+#### Distribution (N=30 Runs, 30 Valid)
 
 | Interval | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **$\Delta_{\text{io\_driver}}$ (Driver Service Delay: Stimulus $\to$ Observation)** | 29.752 ms | **29.834 ms** | 29.867 ms | 29.871 ms |
-| **$\Delta_{\text{schedule}}$ (Tokio Observation $\to$ Task Scheduled)** | 0.001 ms | **0.001 ms** | 0.002 ms | 0.002 ms |
-| **$\Delta_{\text{poll}}$ (Task Scheduled $\to$ Worker Poll Start)** | 0.004 ms | **0.005 ms** | 0.012 ms | 0.030 ms |
-| **$\Delta_{\text{end\_to\_end}}$ (Total Physical Real Latency)** | 29.758 ms | **29.841 ms** | 29.872 ms | 29.877 ms |
+| **$\Delta_{\text{io\_driver}}$ (Driver Service Delay: Stimulus $\to$ Observation)** | 29.675 ms | **29.844 ms** | 31.308 ms | 31.667 ms |
+| **$\Delta_{\text{schedule}}$ (Tokio Observation $\to$ Task Scheduled)** | 0.001 ms | **0.002 ms** | 0.003 ms | 0.003 ms |
+| **$\Delta_{\text{poll}}$ (Task Scheduled $\to$ Worker Poll Start)** | 0.004 ms | **0.007 ms** | 0.013 ms | 0.014 ms |
+| **$\Delta_{\text{end\_to\_end}}$ (Total Physical Real Latency)** | 29.689 ms | **29.851 ms** | 31.324 ms | 31.682 ms |
 
 #### The Critical Observability Inversion
 
@@ -162,19 +162,19 @@ Timeline of Real Events vs Telemetry Views in Case E:
 
 Time        Physical Reality                       Stock Tokio View                Dial9 View
 ---------   --------------------------------       ----------------------------    ----------------------------
-t=15.30ms   External TCP Write Sent (WRITE_BEGIN)
+t=10.36ms   External TCP Write Sent (WRITE_BEGIN)
             [Packet in kernel socket buffer]       (completely invisible)          (completely invisible)
-            ... 29.83 ms latency ...               (completely invisible)          (completely invisible)
-t=60.13ms   Compute ends; Driver.turn() called     (no event emitted)              (no event emitted)
-t=60.14ms   Reader Task Scheduled                  set_scheduled_at(60.14ms)       WakeEvent captured
-t=60.14ms   Reader Task Polled                     schedule_latency: 0.007 ms!     wake_to_poll: 0.007 ms!
+            ... 29.85 ms driver service delay ...  (completely invisible)          (completely invisible)
+t=40.21ms   Compute ends; Driver::turn() called    (no event emitted)              (no event emitted)
+t=40.22ms   Reader Task Scheduled                  set_scheduled_at(40.22ms)       WakeEvent captured
+t=40.22ms   Reader Task Polled                     schedule_latency: 0.005 ms!     wake_to_poll: 0.009 ms!
 ```
 
-- **Reported `TaskMeta::schedule_latency()`:** **$0.007\text{ ms (7 \mu s)}$**
-- **Reported Dial9 `wake_to_poll_delay`:** **$0.007\text{ ms (7 \mu s)}$**
-- **Actual Application-Experienced Delay:** **$29.841\text{ ms}$**
+- **Reported `TaskMeta::schedule_latency()`:** **$0.005\text{ ms (5 \mu s)}$**
+- **Reported Dial9 `wake_to_poll_delay`:** **$0.009\text{ ms (9 \mu s)}$**
+- **Actual Application-Experienced Delay:** **$29.865\text{ ms}$** (representative run) / **$29.851\text{ ms}$** (benchmark p50)
 
-**Result:** Both stock Tokio and Dial9 report sub-10-microsecond schedule latency, hiding **99.98% of the real latency**. The delay occurred entirely before Tokio serviced the I/O driver, rendering the driver service starvation completely invisible to the application telemetry.
+**Result:** Both stock Tokio and Dial9 report sub-10-microsecond schedule latency, hiding **over 99.9% of the real latency**. The delay occurred entirely before Tokio serviced the I/O driver, rendering the driver service starvation completely invisible to application telemetry.
 
 ---
 
@@ -203,8 +203,8 @@ t=60.14ms   Reader Task Polled                     schedule_latency: 0.007 ms!  
 | **Unpark Requests Dispatched** | **1** | **1** | 1 | 1 |
 | **Task-Correlated Wake Suppressions (Tasks 2–5 Coalesced)** | **4** | **4** | 4 | 4 |
 | **Total `target=None` Scheduler Decisions in Window** | **5** | **5** | 5 | 5 |
-| **Task 1 Sched $\to$ Poll Latency** | 0.045 ms | **0.058 ms** | 0.082 ms | 0.108 ms |
-| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.010 ms | **0.035 ms** | 0.044 ms | 0.115 ms |
+| **Task 1 Sched $\to$ Poll Latency** | 0.051 ms | **0.060 ms** | 0.081 ms | 0.141 ms |
+| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.018 ms | **0.034 ms** | 0.044 ms | 0.095 ms |
 
 *Diagnostic Note on Earlier `min=0` Observations:*
 In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatched` reported `min=0` and `Task-Correlated Suppressions` reported `min=0`. Root-cause investigation showed this was a workload setup race: the blocker task was on an open-ended timer (40ms) while setup slept. If OS scheduling pauses delayed the setup thread, the blocker finished early, leaving Worker 0 idle, or if Worker 1 was still exiting searching mode when Task 1 arrived (`num_searching > 0`), Tokio suppressed Task 1's unpark too. Establishing explicit synchronization (atomic spin control on Worker 0, verified `poll_fn` registration on all 5 waiting tasks, and causal task tracking) eliminated setup nondeterminism across all 30 benchmark runs.
@@ -299,7 +299,7 @@ In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatc
 | **Task schedule latency** | Nano-precision math | `TaskMeta::schedule_latency()` | `compute_wake_to_poll_delays` | **Observable** |
 | **Work-stealing head-of-line blocking** | Worker idle vs stranded queue trace | High schedule latency, zero context | High delay, zero context | **REAL GAP** |
 
-*Note on Park Return:* `WorkerParkWaitEnd` tells you when Tokio's park wait returned. The request $\to$ park-return interval contains notification mechanics, kernel scheduling, condvar/mio wake, and lock reacquisition. Dial9's sampled `schedstat` (`sched_wait_ns`) is the signal that partially isolates Linux runqueue wait. Because upstream Tokio exposes no matching `Unparker::unpark()` dispatch timestamp, request $\to$ resume latency cannot be directly reconstructed.
+*Note on Park Return:* `WorkerParkWaitEnd` tells you when Tokio's park wait returned. The request $\to$ park-return interval contains notification mechanics, kernel scheduling, condvar/mio wake, and lock reacquisition. Dial9 has Linux `schedstat` support capable of exposing `sched_wait_ns` (isolating kernel runqueue wait), but in the WSL2 runs used here the field was unavailable/unsampled (`sched_wait=None`), so no empirical claim in this report relies on schedstat values. Because upstream Tokio exposes no matching `Unparker::unpark()` dispatch timestamp, request $\to$ resume latency cannot be directly reconstructed.
 
 ---
 
@@ -312,7 +312,7 @@ Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already 
 Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 arguments and fires *after* the thread has already resumed execution in user space. There is no timestamp for when the unpark was requested. Therefore, the interval $T(\text{resumed}) - T(\text{unpark\_requested})$ cannot be measured. Furthermore, an observer cannot correlate which task or I/O event caused the worker to resume.
 
 ### Finding 3: External I/O stimulus $\to$ Tokio driver service latency is invisible and can invert telemetry
-When workers are occupied by CPU-intensive cooperative tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.83\text{ ms}$. Once the driver finally turned, the reader task was scheduled and polled within $6\ \mu\text{s}$. Both stock Tokio's `TaskMeta::schedule_latency()` and Dial9's `wake_to_poll_delay` reported $0.007\text{ ms}$, hiding $29.83\text{ ms}$ of unserved latency.
+When workers are occupied by non-yielding CPU-bound tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.84\text{ ms}$ (p50). Once the driver finally turned, the reader task was scheduled and polled within $7\ \mu\text{s}$ (p50). Both stock Tokio's `TaskMeta::schedule_latency()` ($0.005\text{ ms}$ in representative run) and Dial9's `wake_to_poll_delay` ($0.009\text{ ms}$ in representative run) reported sub-10-microsecond schedule latency, hiding $\sim 29.85\text{ ms}$ of unserved latency.
 
 ### Finding 4: Task queue placement causality is not represented by `schedule_latency`
 When a task experiences high schedule latency, `TaskMeta::schedule_latency()` provides only a scalar duration. In our work-stealing benchmark, Subtask 52 waited $40.019\text{ ms}$ because it sat in Worker 1's LIFO slot behind a 40ms compute loop while Worker 0 was completely idle and parked. Current telemetry cannot distinguish whether this delay was caused by OS CPU starvation, thread unpark delays, or queue head-of-line blocking.
@@ -330,8 +330,8 @@ We systematically tested whether existing signals could reconstruct or infer the
    - **Tested:** Subtracted $T(\text{on\_thread\_park})$ from $T(\text{on\_thread\_unpark})$.
    - **Result:** Disproved. This difference measures the *total sleep duration* of the worker thread, not the notification latency. A worker sleeping for 5 seconds waiting for work will produce a 5000ms duration, completely conflating idle time with wake latency.
 3. **Can Linux `schedstat` (`sched_wait_ns`) isolate thread wakeup delay?**
-   - **Tested:** Dial9 samples `/proc/[pid]/task/[tid]/schedstat` on worker unpark.
-   - **Result:** Partial. `schedstat` measures how long a runnable OS thread sat on the Linux kernel runqueue waiting for a CPU core. However, it cannot measure:
+   - **Tested:** Dial9 has Linux `schedstat` support capable of exposing `sched_wait_ns` on worker unpark. In our WSL2 environment, this field was unavailable/unsampled (`sched_wait=None (unsupported/unsampled)`), so no empirical claims in this report rely on schedstat measurements.
+   - **Theoretical Capability & Limitations:** Even where Linux `schedstat` is active, it only measures how long a runnable OS thread sat on the Linux kernel runqueue waiting for a CPU core. It cannot measure:
      - The time Tokio spent evaluating whether to wake a worker ($S_1$).
      - The time Tokio spent in `Unparker::unpark()` acquiring mutexes/condvars ($S_2$).
      - The time Tokio spent executing driver loop maintenance before polling ($S_4$).
