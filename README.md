@@ -24,9 +24,9 @@ The complete technical report, architectural trace, empirical timelines, distrib
 ```
 
 The setup script automatically:
-1. Clones Tokio at exact tested SHA `b2636752450484955e7ad334bac678424d51bc4a` into `../tokio-probe`.
+1. Clones Tokio at exact tested SHA `b2636752450484955e7ad334bac678424d51bc4a` into `.repro/tokio`.
 2. Applies `patches/tokio-ground-truth.patch` cleanly.
-3. Clones Dial9 at exact tested SHA `33b2d780628b42251047909ff2b88fdb97e3c28b` into `../dial9`.
+3. Clones Dial9 at exact tested SHA `33b2d780628b42251047909ff2b88fdb97e3c28b` into `.repro/dial9`.
 
 ---
 
@@ -34,21 +34,21 @@ The setup script automatically:
 
 If you prefer to perform the setup manually:
 
-1. Clone Tokio and check out the exact commit:
+1. Clone Tokio and apply patch into `.repro/tokio`:
    ```bash
-   git clone https://github.com/tokio-rs/tokio.git ../tokio-probe
-   cd ../tokio-probe
+   git clone https://github.com/tokio-rs/tokio.git .repro/tokio
+   cd .repro/tokio
    git checkout b2636752450484955e7ad334bac678424d51bc4a
-   git apply ../tokio-test-app/patches/tokio-ground-truth.patch
-   cd ../tokio-test-app
+   git apply ../../patches/tokio-ground-truth.patch
+   cd ../..
    ```
 
-2. Clone Dial9 at the tested commit:
+2. Clone Dial9 into `.repro/dial9`:
    ```bash
-   git clone https://github.com/dial9-ai/dial9.git ../dial9
-   cd ../dial9
+   git clone https://github.com/dial9-rs/dial9.git .repro/dial9
+   cd .repro/dial9
    git checkout 33b2d780628b42251047909ff2b88fdb97e3c28b
-   cd ../tokio-test-app
+   cd ../..
    ```
 
 ---

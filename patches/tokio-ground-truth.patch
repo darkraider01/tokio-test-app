@@ -1,9 +1,9 @@
 diff --git a/tokio/src/runtime/ground_truth_probes.rs b/tokio/src/runtime/ground_truth_probes.rs
 new file mode 100644
-index 00000000..a88ea338
+index 00000000..4e80a89e
 --- /dev/null
 +++ b/tokio/src/runtime/ground_truth_probes.rs
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,156 @@
 +// TEMPORARY GROUND TRUTH INSTRUMENTATION FOR OBSERVABILITY INVESTIGATION
 +// NOT FOR PRODUCTION USE
 +
@@ -42,6 +42,7 @@ index 00000000..a88ea338
 +    },
 +    SchedulerWakeDecision {
 +        t_ns: u64,
++        task_id: Option<u64>,
 +        caller: &'static str,
 +        target_worker: Option<usize>,
 +        num_searching: usize,
@@ -93,6 +94,18 @@ index 00000000..a88ea338
 +static ENABLED: AtomicBool = AtomicBool::new(false);
 +static BASE_TIME: Mutex<Option<Instant>> = Mutex::new(None);
 +static EVENTS: Mutex<Vec<ProbeEvent>> = Mutex::new(Vec::new());
++
++thread_local! {
++    static CURRENT_TASK_ID: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
++}
++
++pub fn set_current_task_id(id: Option<u64>) {
++    CURRENT_TASK_ID.with(|c| c.set(id));
++}
++
++pub fn current_task_id() -> Option<u64> {
++    CURRENT_TASK_ID.with(|c| c.get())
++}
 +
 +pub fn enable() {
 +    let mut base = BASE_TIME.lock().unwrap();
@@ -201,10 +214,10 @@ index b4edd130..efc9f631 100644
  
      mod config;
 diff --git a/tokio/src/runtime/scheduler/multi_thread/idle.rs b/tokio/src/runtime/scheduler/multi_thread/idle.rs
-index e0b034c8..f11c46e7 100644
+index e0b034c8..fe32380a 100644
 --- a/tokio/src/runtime/scheduler/multi_thread/idle.rs
 +++ b/tokio/src/runtime/scheduler/multi_thread/idle.rs
-@@ -58,7 +58,18 @@ impl Idle {
+@@ -58,7 +58,19 @@ impl Idle {
          // provide sufficient guarantees, so this load is done with `SeqCst` and
          // will pair with the `fetch_sub(1)` when transitioning out of
          // searching.
@@ -213,6 +226,7 @@ index e0b034c8..f11c46e7 100644
 +            crate::runtime::ground_truth_probes::record(
 +                crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
 +                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    task_id: crate::runtime::ground_truth_probes::current_task_id(),
 +                    caller: "worker_to_notify",
 +                    target_worker: None,
 +                    num_searching: state.num_searching(),
@@ -223,7 +237,7 @@ index e0b034c8..f11c46e7 100644
              return None;
          }
  
-@@ -67,6 +78,17 @@ impl Idle {
+@@ -67,6 +79,18 @@ impl Idle {
  
          // Check again, now that the lock is acquired
          if !self.notify_should_wakeup() {
@@ -231,6 +245,7 @@ index e0b034c8..f11c46e7 100644
 +            crate::runtime::ground_truth_probes::record(
 +                crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
 +                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    task_id: crate::runtime::ground_truth_probes::current_task_id(),
 +                    caller: "worker_to_notify_locked",
 +                    target_worker: None,
 +                    num_searching: state.num_searching(),
@@ -241,13 +256,14 @@ index e0b034c8..f11c46e7 100644
              return None;
          }
  
-@@ -78,6 +100,17 @@ impl Idle {
+@@ -78,6 +102,18 @@ impl Idle {
          let ret = lock.idle.sleepers.pop();
          debug_assert!(ret.is_some());
  
 +        crate::runtime::ground_truth_probes::record(
 +            crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
 +                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                task_id: crate::runtime::ground_truth_probes::current_task_id(),
 +                caller: "worker_to_notify_selected",
 +                target_worker: ret,
 +                num_searching: state.num_searching() + 1,
@@ -419,7 +435,7 @@ index efe0ff06..bfef25bb 100644
      }
  
 diff --git a/tokio/src/runtime/scheduler/multi_thread/worker.rs b/tokio/src/runtime/scheduler/multi_thread/worker.rs
-index ac16dd36..86350f6b 100644
+index ac16dd36..efaac9f8 100644
 --- a/tokio/src/runtime/scheduler/multi_thread/worker.rs
 +++ b/tokio/src/runtime/scheduler/multi_thread/worker.rs
 @@ -284,10 +284,10 @@ pub(super) fn create(
@@ -513,11 +529,12 @@ index ac16dd36..86350f6b 100644
                  // Run regularly scheduled maintenance
                  core.maintenance(&self.worker);
  
-@@ -1357,18 +1398,33 @@ impl Handle {
+@@ -1357,22 +1398,39 @@ impl Handle {
              ));
          }
  
 +        let task_id = task.task_id().0.get();
++        crate::runtime::ground_truth_probes::set_current_task_id(Some(task_id));
          with_current(|maybe_cx| {
              if let Some(cx) = maybe_cx {
                  // Make sure the task is part of the **current** scheduler.
@@ -547,6 +564,11 @@ index ac16dd36..86350f6b 100644
              // Otherwise, use the inject queue.
              self.push_remote_task(task);
              self.notify_parked_remote();
+         });
++        crate::runtime::ground_truth_probes::set_current_task_id(None);
+     }
+ 
+     // Separated case to reduce LLVM codegen in `Handle::bind_new_task`.
 diff --git a/tokio/src/runtime/task/harness.rs b/tokio/src/runtime/task/harness.rs
 index 467449f7..f3188149 100644
 --- a/tokio/src/runtime/task/harness.rs

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
@@ -272,6 +273,7 @@ fn print_three_view_timeline(
             ),
             ProbeEvent::SchedulerWakeDecision {
                 t_ns,
+                task_id,
                 caller,
                 target_worker,
                 num_searching,
@@ -280,8 +282,8 @@ fn print_three_view_timeline(
             } => (
                 *t_ns,
                 format!(
-                    "SCHEDULER_WAKE_DECISION caller={} target={:?} searching={} unparked={}/{}",
-                    caller, target_worker, num_searching, num_unparked, total_workers
+                    "SCHEDULER_WAKE_DECISION caller={} task_id={:?} target={:?} searching={} unparked={}/{}",
+                    caller, task_id, target_worker, num_searching, num_unparked, total_workers
                 ),
             ),
             ProbeEvent::WorkerUnparkRequested {
@@ -784,46 +786,70 @@ fn test_adversarial_wake_coalescing(workers: usize) {
     let session = InstrumentedSession::new(workers);
     let stock_rec = session.stock_rec.clone();
 
+    let compute_started = Arc::new(AtomicBool::new(false));
+    let compute_stop = Arc::new(AtomicBool::new(false));
+    let tasks_registered = Arc::new(AtomicUsize::new(0));
+
+    let c_start = compute_started.clone();
+    let c_stop = compute_stop.clone();
+
     session.runtime.as_ref().unwrap().block_on(async {
         let notifies: Vec<Arc<Notify>> = (0..5).map(|_| Arc::new(Notify::new())).collect();
-        let mut tasks = Vec::new();
+        let mut notified_tasks = Vec::new();
 
-        // 1 blocker task keeping worker 1 busy
-        tasks.push(dial9_tokio_telemetry::spawn(async {
-            let start = Instant::now();
-            while start.elapsed() < Duration::from_millis(60) {
+        // 1 blocker task keeping worker 1 busy in controlled non-yielding compute until explicitly released
+        let compute_handle = dial9_tokio_telemetry::spawn(async move {
+            c_start.store(true, Ordering::SeqCst);
+            while !c_stop.load(Ordering::Relaxed) {
                 std::hint::spin_loop();
             }
-        }));
+        });
 
         for i in 0..5 {
             let n = notifies[i].clone();
-            tasks.push(dial9_tokio_telemetry::spawn(async move {
-                n.notified().await;
+            let reg = tasks_registered.clone();
+            notified_tasks.push(dial9_tokio_telemetry::spawn(async move {
+                let mut notified = std::pin::pin!(n.notified());
+                std::future::poll_fn(|cx| {
+                    let res = notified.as_mut().poll(cx);
+                    if res.is_pending() {
+                        reg.fetch_add(1, Ordering::SeqCst);
+                    }
+                    res
+                }).await;
             }));
         }
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Wait until blocker task is actively spinning AND all 5 tasks are confirmed pending on their Notify
+        while !compute_started.load(Ordering::SeqCst) || tasks_registered.load(Ordering::SeqCst) < 5 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+
+        // Allow worker 0 (which polled registration) to finish and park
+        tokio::time::sleep(Duration::from_millis(30)).await;
 
         stock_rec.reset();
         ground_truth_probes::reset_base_time();
         ground_truth_probes::enable();
 
-        // Signal task 0, then immediately signal tasks 1..5 in tight sequence
+        // Signal task 0, then immediately signal tasks 1..5 in tight sequence from off-thread
         let n_clones = notifies.clone();
         let handle = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(20));
             for n in n_clones {
                 n.notify_one();
             }
         });
 
         handle.join().unwrap();
-        for t in tasks {
+        for t in notified_tasks {
             let _ = t.await;
         }
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Release the compute worker now that all notified tasks completed
+        compute_stop.store(true, Ordering::SeqCst);
+        let _ = compute_handle.await;
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
         ground_truth_probes::disable();
     });
 
@@ -834,6 +860,16 @@ fn test_adversarial_wake_coalescing(workers: usize) {
         &stock_events,
         &dial9_events,
     );
+
+    println!("\n--- [EXACT CAUSAL TASK -> SCHEDULER WAKE DECISION TRACE] ---");
+    for ev in &gt_events {
+        if let ProbeEvent::SchedulerWakeDecision { task_id, caller, target_worker, num_searching, num_unparked, total_workers, .. } = ev {
+            match target_worker {
+                Some(w) => println!("  Task {:?} schedule -> SELECTED worker {} (searching={}, unparked={}/{}, caller={})", task_id, w, num_searching, num_unparked, total_workers, caller),
+                None => println!("  Task {:?} schedule -> NO worker selected / SUPPRESSED (searching={}, unparked={}/{}, caller={})", task_id, num_searching, num_unparked, total_workers, caller),
+            }
+        }
+    }
 }
 
 // -------------------------------------------------------------
@@ -1088,114 +1124,164 @@ fn run_distribution_benchmarks(runs: usize) {
     let mut coal_t1_delay = Stats::default();
     let mut coal_coalesced_delay = Stats::default();
 
-    for _ in 0..runs {
+    let mut valid_intended_runs = 0usize;
+    let mut other_topology_runs = 0usize;
+    let mut other_topology_details = Vec::new();
+
+    for run_idx in 0..runs {
         let session = InstrumentedSession::new(2);
         let stock_rec = session.stock_rec.clone();
 
-        session.runtime.as_ref().unwrap().block_on(async {
-            let notifies: Vec<Arc<Notify>> = (0..5).map(|_| Arc::new(Notify::new())).collect();
-            let mut tasks = Vec::new();
+        let compute_started = Arc::new(AtomicBool::new(false));
+        let compute_stop = Arc::new(AtomicBool::new(false));
+        let tasks_registered = Arc::new(AtomicUsize::new(0));
 
-            tasks.push(tokio::spawn(async {
-                let start = Instant::now();
-                while start.elapsed() < Duration::from_millis(40) {
+        let c_start = compute_started.clone();
+        let c_stop = compute_stop.clone();
+        let notifies: Vec<Arc<Notify>> = (0..5).map(|_| Arc::new(Notify::new())).collect();
+        let mut notified_tasks = Vec::new();
+
+        session.runtime.as_ref().unwrap().block_on(async {
+            let compute_handle = tokio::spawn(async move {
+                c_start.store(true, Ordering::SeqCst);
+                while !c_stop.load(Ordering::Relaxed) {
                     std::hint::spin_loop();
                 }
-            }));
+            });
 
             for i in 0..5 {
                 let n = notifies[i].clone();
-                tasks.push(tokio::spawn(async move {
-                    n.notified().await;
+                let reg = tasks_registered.clone();
+                notified_tasks.push(tokio::spawn(async move {
+                    let mut notified = std::pin::pin!(n.notified());
+                    std::future::poll_fn(|cx| {
+                        let res = notified.as_mut().poll(cx);
+                        if res.is_pending() {
+                            reg.fetch_add(1, Ordering::SeqCst);
+                        }
+                        res
+                    }).await;
                 }));
             }
 
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            while !compute_started.load(Ordering::SeqCst) || tasks_registered.load(Ordering::SeqCst) < 5 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            // Allow the worker that polled tasks to finish and park
+            tokio::time::sleep(Duration::from_millis(30)).await;
+
             stock_rec.reset();
             ground_truth_probes::reset_base_time();
             ground_truth_probes::enable();
 
             let n_clones = notifies.clone();
             let handle = std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(10));
                 for n in n_clones {
                     n.notify_one();
                 }
             });
 
             handle.join().unwrap();
-            for t in tasks {
+            for t in notified_tasks {
                 let _ = t.await;
             }
+            compute_stop.store(true, Ordering::SeqCst);
+            let _ = compute_handle.await;
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
             ground_truth_probes::disable();
         });
 
         let (gt, _, _) = session.finish();
-        let mut unparks_cnt = 0.0;
-        let mut total_suppressed_cnt = 0.0;
-        let mut task_suppressed_cnt = 0.0;
-        let mut first_task_id = None;
-        let mut t1_sched = 0u64;
-        let mut t1_poll = 0u64;
-        let mut other_delays = Vec::new();
-        let mut task_sched_map = std::collections::HashMap::new();
-        let mut expecting_task_decision = false;
+        let mut scheduled_tasks = Vec::new();
+        let mut task_sched_times = std::collections::HashMap::new();
 
         for ev in &gt {
-            match ev {
-                ProbeEvent::TaskScheduled { t_ns, task_id, .. } => {
-                    if first_task_id.is_none() {
-                        first_task_id = Some(*task_id);
-                        t1_sched = *t_ns;
-                    }
-                    task_sched_map.insert(*task_id, *t_ns);
-                    expecting_task_decision = true;
+            if let ProbeEvent::TaskScheduled { t_ns, task_id, .. } = ev {
+                if !scheduled_tasks.contains(task_id) {
+                    scheduled_tasks.push(*task_id);
                 }
-                ProbeEvent::SchedulerWakeDecision { target_worker, .. } => {
-                    if target_worker.is_some() {
-                        unparks_cnt += 1.0;
-                    } else {
-                        total_suppressed_cnt += 1.0;
-                        if expecting_task_decision {
-                            task_suppressed_cnt += 1.0;
-                        }
-                    }
-                    expecting_task_decision = false;
-                }
-                ProbeEvent::WorkerPollStart { t_ns, task_id, .. } => {
-                    if first_task_id == Some(*task_id) && t1_poll == 0 {
-                        t1_poll = *t_ns;
-                    } else if let Some(s_time) = task_sched_map.get(task_id) {
-                        other_delays.push(t_ns.saturating_sub(*s_time) as f64 / 1_000_000.0);
-                    }
-                }
-                _ => {}
+                task_sched_times.insert(*task_id, *t_ns);
             }
         }
 
-        coal_unparks.add(unparks_cnt);
-        coal_task_suppressed.add(task_suppressed_cnt);
-        coal_total_suppressed.add(total_suppressed_cnt);
-        if t1_sched > 0 && t1_poll > 0 {
-            coal_t1_delay.add(t1_poll.saturating_sub(t1_sched) as f64 / 1_000_000.0);
+        let mut task_unparks = 0usize;
+        let mut task_suppressions = 0usize;
+
+        for ev in &gt {
+            if let ProbeEvent::SchedulerWakeDecision { task_id: Some(tid), target_worker, .. } = ev {
+                if scheduled_tasks.contains(tid) {
+                    if target_worker.is_some() {
+                        task_unparks += 1;
+                    } else {
+                        task_suppressions += 1;
+                    }
+                }
+            }
         }
-        if !other_delays.is_empty() {
-            let avg: f64 = other_delays.iter().sum::<f64>() / other_delays.len() as f64;
-            coal_coalesced_delay.add(avg);
+
+        let total_none_decisions = gt.iter().filter(|ev| matches!(ev, ProbeEvent::SchedulerWakeDecision { target_worker: None, .. })).count();
+
+        let mut t1_poll = 0u64;
+        let mut other_delays = Vec::new();
+        let first_task_id = scheduled_tasks.first().copied();
+
+        for ev in &gt {
+            if let ProbeEvent::WorkerPollStart { t_ns, task_id, .. } = ev {
+                if Some(*task_id) == first_task_id && t1_poll == 0 {
+                    t1_poll = *t_ns;
+                } else if scheduled_tasks.contains(task_id) {
+                    if let Some(s_time) = task_sched_times.get(task_id) {
+                        other_delays.push(t_ns.saturating_sub(*s_time) as f64 / 1_000_000.0);
+                    }
+                }
+            }
+        }
+
+        let t1_sched = first_task_id.and_then(|id| task_sched_times.get(&id).copied()).unwrap_or(0);
+
+        let is_intended = task_unparks == 1 && task_suppressions == 4;
+        if is_intended {
+            valid_intended_runs += 1;
+            coal_unparks.add(task_unparks as f64);
+            coal_task_suppressed.add(task_suppressions as f64);
+            coal_total_suppressed.add(total_none_decisions as f64);
+            if t1_sched > 0 && t1_poll > 0 {
+                coal_t1_delay.add(t1_poll.saturating_sub(t1_sched) as f64 / 1_000_000.0);
+            }
+            if !other_delays.is_empty() {
+                let avg: f64 = other_delays.iter().sum::<f64>() / other_delays.len() as f64;
+                coal_coalesced_delay.add(avg);
+            }
+        } else {
+            other_topology_runs += 1;
+            other_topology_details.push(format!(
+                "run #{}: task_unparks={}, task_suppressions={}, total_none={}",
+                run_idx + 1, task_unparks, task_suppressions, total_none_decisions
+            ));
         }
     }
 
     println!("\n--- [ADVERSARIAL: Wake Coalescing Distribution (N={})] ---", runs);
-    let (u_min, u_p50, u_p95, u_max) = coal_unparks.summarize();
-    println!("  Unpark requests dispatched:      min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
-    let (ts_min, ts_p50, ts_p95, ts_max) = coal_task_suppressed.summarize();
-    println!("  Task-correlated wake suppressed: min={:.0}  p50={:.0}  p95={:.0}  max={:.0} (tasks 2-5 coalesced)", ts_min, ts_p50, ts_p95, ts_max);
-    let (sup_min, sup_p50, sup_p95, sup_max) = coal_total_suppressed.summarize();
-    println!("  Total target=None decisions:     min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", sup_min, sup_p50, sup_p95, sup_max);
-    let (t1_min, t1_p50, t1_p95, t1_max) = coal_t1_delay.summarize();
-    println!("  Task 1 Sched->Poll Latency:      min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", t1_min, t1_p50, t1_p95, t1_max);
-    let (co_min, co_p50, co_p95, co_max) = coal_coalesced_delay.summarize();
-    println!("  Coalesced Tasks Sched->Poll:     min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", co_min, co_p50, co_p95, co_max);
+    println!("  Attempted runs:                                {}", runs);
+    println!("  Runs matching intended scheduler precondition: {}", valid_intended_runs);
+    println!("  Runs with alternate scheduler topology:        {}", other_topology_runs);
+    if other_topology_runs > 0 {
+        println!("    Alternate topologies observed: {:?}", other_topology_details);
+    }
+    if valid_intended_runs > 0 {
+        println!("\n  [Metrics across {} Valid Intended-Precondition Runs]:", valid_intended_runs);
+        let (u_min, u_p50, u_p95, u_max) = coal_unparks.summarize();
+        println!("  Unpark requests dispatched:      min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
+        let (ts_min, ts_p50, ts_p95, ts_max) = coal_task_suppressed.summarize();
+        println!("  Task-correlated wake suppressed: min={:.0}  p50={:.0}  p95={:.0}  max={:.0} (tasks 2-5 coalesced)", ts_min, ts_p50, ts_p95, ts_max);
+        let (sup_min, sup_p50, sup_p95, sup_max) = coal_total_suppressed.summarize();
+        println!("  Total target=None decisions:     min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", sup_min, sup_p50, sup_p95, sup_max);
+        let (t1_min, t1_p50, t1_p95, t1_max) = coal_t1_delay.summarize();
+        println!("  Task 1 Sched->Poll Latency:      min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", t1_min, t1_p50, t1_p95, t1_max);
+        let (co_min, co_p50, co_p95, co_max) = coal_coalesced_delay.summarize();
+        println!("  Coalesced Tasks Sched->Poll:     min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", co_min, co_p50, co_p95, co_max);
+    }
 
     // Work Stealing Benchmark
     let mut steal_stolen_delay = Stats::default();

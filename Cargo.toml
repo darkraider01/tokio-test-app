@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { path = "../tokio-probe/tokio", features = ["full", "test-util", "schedule-latency"] }
-dial9 = { path = "../dial9/dial9" }
-dial9-tokio-telemetry = { path = "../dial9/dial9-tokio-telemetry", features = ["analysis"] }
-dial9-core = { path = "../dial9/dial9-core" }
-dial9-trace-format = { path = "../dial9/dial9-trace-format", features = ["serde", "serde-deserialize"] }
+tokio = { path = ".repro/tokio/tokio", features = ["full", "test-util", "schedule-latency"] }
+dial9 = { path = ".repro/dial9/dial9" }
+dial9-tokio-telemetry = { path = ".repro/dial9/dial9-tokio-telemetry", features = ["analysis"] }
+dial9-core = { path = ".repro/dial9/dial9-core" }
+dial9-trace-format = { path = ".repro/dial9/dial9-trace-format", features = ["serde", "serde-deserialize"] }
 
 [patch.crates-io]
-tokio = { path = "../tokio-probe/tokio" }
+tokio = { path = ".repro/tokio/tokio" }

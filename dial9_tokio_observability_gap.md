@@ -6,10 +6,10 @@
 - **OS:** Linux 6.18.33.2-2 x86_64 (WSL2 / Ubuntu 24.04 LTS) and Windows 11
 - **Rust Toolchain:** `rustc 1.97.1 (b8e5c0e76 2026-03-24)`
 - **Tokio Base Commit:** [`b2636752450484955e7ad334bac678424d51bc4a`](https://github.com/tokio-rs/tokio/tree/b2636752450484955e7ad334bac678424d51bc4a)
-- **Dial9 Base Commit:** [`33b2d780628b42251047909ff2b88fdb97e3c28b`](https://github.com/dial9-ai/dial9/tree/33b2d780628b42251047909ff2b88fdb97e3c28b)
+- **Dial9 Base Commit:** [`33b2d780628b42251047909ff2b88fdb97e3c28b`](https://github.com/dial9-rs/dial9/tree/33b2d780628b42251047909ff2b88fdb97e3c28b)
 - **tokio-probe Patch:** `patches/tokio-ground-truth.patch`
-  - Git object hash: `061bb9fd01986321a1d905cf698caec0367d28db`
-  - SHA-256: `1DBB1E632F2B7DA8071E44FCC9868B23A664977F3B7A898EAEC44ABFD73EE542`
+  - Git object hash: `c1280c9bf27a3b77fcf3de59714be3c2a137e3a8`
+  - SHA-256: `480B966EC16BFF334B6F477DCA59930CAFE5AFE42444C29F1D74A28DF082EB77`
 
 ---
 
@@ -83,7 +83,7 @@ Every ground-truth probe in `patches/tokio-ground-truth.patch` is anchored to To
 | **`ResourceWakeDispatched`**| `tokio/src/runtime/io/scheduled_io.rs` | `ScheduledIo::wake()` | [`scheduled_io.rs#L270-L290`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/io/scheduled_io.rs#L270-L290) | Timestamp, readiness mask | Internal resource waker invocation |
 | **`TaskWakeByVal`** / **`ByRef`** | `tokio/src/runtime/task/harness.rs` | `Harness::wake_by_val()` | [`harness.rs#L85-L105`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/task/harness.rs#L85-L105) | Timestamp, task ID, `submitted` | Task state transition to NOTIFIED |
 | **`TaskScheduled`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Handle::schedule_task()` | [`worker.rs#L1385-L1410`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L1385-L1410) | Timestamp, task ID, `is_local` | Task placed into local run queue vs remote injection queue |
-| **`SchedulerWakeDecision`** | `tokio/src/runtime/scheduler/multi_thread/idle.rs` | `Idle::worker_to_notify()` | [`idle.rs#L51-L82`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/idle.rs#L51-L82) | Timestamp, caller, target worker, searching/unparked counts | Decision to notify worker or coalesce/suppress wake |
+| **`SchedulerWakeDecision`** | `tokio/src/runtime/scheduler/multi_thread/idle.rs` | `Idle::worker_to_notify()` | [`idle.rs#L51-L82`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/idle.rs#L51-L82) | Timestamp, `task_id`, caller, target worker, searching/unparked counts | Decision to notify worker or coalesce/suppress wake, causally linked to scheduling task ID via thread-local binding |
 | **`WorkerUnparkRequested`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L305-L315`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L305-L315) | Timestamp, target worker, previous atomic state | Start of worker unpark request |
 | **`WorkerUnparkDispatched`**| `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L316-L330`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L316-L330) | Timestamp, target worker, notification mechanism (`condvar`/`mio_waker`) | Completion of atomic swap & OS notification dispatch |
 | **`WorkerParkWaitBegin`** / **`End`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Parker::park()` | [`park.rs#L160-L240`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L160-L240) | Timestamp, worker ID, park kind (`driver`/`condvar`), state after wake | Entry and exit of OS blocking syscall |
@@ -180,45 +180,61 @@ t=60.14ms   Reader Task Polled                     schedule_latency: 0.007 ms!  
 
 ### Adversarial Case 1: Wake Coalescing & Wake Suppression
 
-- **Workload:** Worker 1 is occupied with a 40ms CPU compute loop. Worker 0 is parked. 5 tasks waiting on `Notify` instances are signaled in tight succession by an off-runtime thread at $t=10\text{ ms}$.
+- **Workload & Precondition Synchronization:**
+  - Worker 0 is occupied in a controlled non-yielding CPU compute loop under an explicit atomic flag (`compute_stop`), preventing premature idle transitions.
+  - 5 tasks waiting on `Notify` instances are polled and confirmed pending via an atomic registration counter (`std::future::poll_fn`) before notifications are dispatched.
+  - Worker 1 is parked and available.
+  - Once setup is confirmed, an off-runtime thread fires all 5 `Notify::notify_one()` calls in tight succession.
+- **Causal Correlation Accounting:**
+  - `Handle::schedule_task()` binds the current task ID to a thread-local during scheduling, propagating `task_id` directly into `Idle::worker_to_notify()`'s `SchedulerWakeDecision`.
+  - This establishes an exact causal association between each scheduled task and the scheduler's resulting wake/suppress decision, without relying on temporal event adjacency.
 - **Tokio Scheduler Logic:**
-  - Task 1: `Idle::worker_to_notify()` selects Worker 0. An unpark request is dispatched (`condvar.notify_one()`). Worker 0 enters `searching` state.
-  - Tasks 2–5: When scheduled, `worker_to_notify()` evaluates `!state.notify_should_wakeup()`. Because `num_searching == 1` and Worker 1 is busy, Tokio intentionally **suppresses worker unparks**, returning `None`.
+  - Task 1: `Idle::worker_to_notify()` evaluates `!state.notify_should_wakeup()`. Since `num_searching == 0`, it selects Worker 1. An unpark request is dispatched (`condvar.notify_one()`). Worker 1 enters `searching` state (`num_searching = 1`).
+  - Tasks 2–5: When scheduled, `worker_to_notify()` evaluates `!state.notify_should_wakeup()`. Because `num_searching >= 1` and Worker 0 is busy, Tokio intentionally **suppresses worker unparks**, returning `None`.
 
-#### Distribution (N=30 Runs)
+#### Distribution & Precondition Validation (N=30 Runs)
 
-| Metric | Min | Median (p50) | p95 | Max |
+- **Attempted Runs:** 30
+- **Runs Matching Intended Scheduler Precondition:** 30 (100%)
+- **Runs with Alternate Scheduler Topology:** 0 (0%)
+
+| Metric (N=30 Valid Intended-Precondition Runs) | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **Unpark Requests Dispatched** | 0 | **1** | 1 | 1 |
-| **Task-Correlated Wake Suppressions (Tasks 2–5 Coalesced)** | 0 | **4** | 4 | 4 |
-| **Total `target=None` Scheduler Decisions in Window** | 0 | **5** | 5 | 5 |
-| **Task 1 Sched $\to$ Poll Latency** | 0.058 ms | **0.063 ms** | 0.077 ms | 0.091 ms |
-| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.035 ms | **0.042 ms** | 0.056 ms | 0.072 ms |
+| **Unpark Requests Dispatched** | **1** | **1** | 1 | 1 |
+| **Task-Correlated Wake Suppressions (Tasks 2–5 Coalesced)** | **4** | **4** | 4 | 4 |
+| **Total `target=None` Scheduler Decisions in Window** | **5** | **5** | 5 | 5 |
+| **Task 1 Sched $\to$ Poll Latency** | 0.045 ms | **0.058 ms** | 0.082 ms | 0.108 ms |
+| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.010 ms | **0.035 ms** | 0.044 ms | 0.115 ms |
 
-#### Ground Truth Timeline
+*Diagnostic Note on Earlier `min=0` Observations:*
+In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatched` reported `min=0` and `Task-Correlated Suppressions` reported `min=0`. Root-cause investigation showed this was a workload setup race: the blocker task was on an open-ended timer (40ms) while setup slept. If OS scheduling pauses delayed the setup thread, the blocker finished early, leaving Worker 0 idle, or if Worker 1 was still exiting searching mode when Task 1 arrived (`num_searching > 0`), Tokio suppressed Task 1's unpark too. Establishing explicit synchronization (atomic spin control on Worker 0, verified `poll_fn` registration on all 5 waiting tasks, and causal task tracking) eliminated setup nondeterminism across all 30 benchmark runs.
+
+#### Exact Causal Ground Truth Timeline
 
 ```text
-+  20.315 ms  TASK_SCHEDULED task_id=41 is_local=false
-+  20.316 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=1/2
-+  20.316 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_CONDVAR
-+  20.317 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=condvar
-+  20.318 ms  TASK_SCHEDULED task_id=42 is_local=false
-+  20.318 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2  <-- TASK SUPPRESSION 1
-+  20.319 ms  TASK_SCHEDULED task_id=43 is_local=false
-+  20.319 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2  <-- TASK SUPPRESSION 2
-+  20.320 ms  TASK_SCHEDULED task_id=44 is_local=false
-+  20.320 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2  <-- TASK SUPPRESSION 3
-+  20.321 ms  TASK_SCHEDULED task_id=45 is_local=false
-+  20.321 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2  <-- TASK SUPPRESSION 4
-+  20.375 ms  WORKER_RESUMED worker=0
-+  20.407 ms  WORKER_POLL_START worker=0 task_id=41
-+  20.430 ms  WORKER_POLL_START worker=0 task_id=42
-+  20.435 ms  WORKER_POLL_START worker=0 task_id=43
++   0.179 ms  TASK_SCHEDULED task_id=41 is_local=false
++   0.179 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected task_id=Some(41) target=Some(1) searching=1 unparked=2/2
++   0.180 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
++   0.180 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++   0.181 ms  TASK_SCHEDULED task_id=42 is_local=false
++   0.181 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify task_id=Some(42) target=None searching=1 unparked=2/2  <-- TASK 42 SUPPRESSION
++   0.182 ms  TASK_SCHEDULED task_id=43 is_local=false
++   0.182 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify task_id=Some(43) target=None searching=1 unparked=2/2  <-- TASK 43 SUPPRESSION
++   0.183 ms  TASK_SCHEDULED task_id=44 is_local=false
++   0.183 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify task_id=Some(44) target=None searching=1 unparked=2/2  <-- TASK 44 SUPPRESSION
++   0.184 ms  TASK_SCHEDULED task_id=45 is_local=false
++   0.184 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify task_id=Some(45) target=None searching=1 unparked=2/2  <-- TASK 45 SUPPRESSION
++   0.211 ms  WORKER_RESUMED worker=1
++   0.237 ms  WORKER_POLL_START worker=1 task_id=41
++   0.245 ms  WORKER_POLL_START worker=1 task_id=42
++   0.248 ms  WORKER_POLL_START worker=1 task_id=43
++   0.251 ms  WORKER_POLL_START worker=1 task_id=44
++   0.254 ms  WORKER_POLL_START worker=1 task_id=45
 ```
 
 - **Stock Tokio View:** Records 5 `on_task_spawn` calls and 1 `on_thread_unpark` call (which takes 0 arguments and provides no worker ID or reason).
-- **Dial9 View:** Records 5 `WakeEvent`s and 1 `WorkerUnparkEvent`. Dial9 computes `wake_to_poll_delays`: `[0.063ms, 0.042ms, 0.044ms, 0.048ms, 0.052ms]`.
-- **Finding:** Exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 0), while 5 total `target=None` scheduler decisions occurred in the measurement window (an additional decision occurs during worker loop maintenance). Neither stock Tokio nor Dial9 can see that the scheduler deliberately suppressed 4 worker wakes. To an external observer, there is a strict 1-to-many relationship between 1 worker unpark and 5 scheduled tasks. Dial9 cannot determine whether tasks 2–5 waited because workers were slow to resume, the OS runqueue was delayed, or Tokio intentionally coalesced them onto worker 0.
+- **Dial9 View:** Records 5 `WakeEvent`s and 1 `WorkerUnparkEvent`. Dial9 computes `wake_to_poll_delays`: `[0.058ms, 0.032ms, 0.032ms, 0.033ms, 0.035ms]`.
+- **Finding:** Under confirmed scheduler preconditions, exactly 1 unpark request was dispatched, exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window (an additional decision occurs during worker maintenance). Neither stock Tokio nor Dial9 can see that the scheduler deliberately suppressed 4 worker wakes. To an external observer, there is a strict 1-to-many relationship between 1 worker unpark and 5 scheduled tasks. Dial9 cannot determine whether tasks 2–5 waited because workers were slow to resume, the OS runqueue was delayed, or Tokio intentionally coalesced them onto worker 1.
 
 ---
 
@@ -290,7 +306,7 @@ t=60.14ms   Reader Task Polled                     schedule_latency: 0.007 ms!  
 ## Findings
 
 ### Finding 1: Wake suppression / coalescing is completely invisible externally
-Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks, exactly 1 unpark request was dispatched, 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 0), and 5 total `target=None` scheduler decisions occurred in the measurement window. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
+Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks under confirmed scheduler preconditions (30 attempted runs, 30 valid intended-precondition runs, 0 alternate topology runs), exactly 1 unpark request was dispatched, exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
 
 ### Finding 2: Worker notification $\to$ resume latency cannot be directly measured
 Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 arguments and fires *after* the thread has already resumed execution in user space. There is no timestamp for when the unpark was requested. Therefore, the interval $T(\text{resumed}) - T(\text{unpark\_requested})$ cannot be measured. Furthermore, an observer cannot correlate which task or I/O event caused the worker to resume.
