@@ -1,0 +1,991 @@
+===============================================================
+TOKIO / DIAL9 RUNTIME OBSERVABILITY GAP INVESTIGATION
+3-Way Empirical Observability Matrix (Ground Truth vs Stock vs Dial9)
+===============================================================
+
+>>> RUNNING CASE A: Task->Task Notify <<<
+
+=======================================================
+EXPERIMENT: CASE A: Task->Task Notify (workers=1)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.453 ms  TASK_WAKE_VAL task_id=2 submitted=true
++  20.454 ms  TASK_SCHEDULED task_id=2 is_local=false
++  20.454 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=1/1
++  20.455 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_DRIVER
++  20.455 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=mio_waker
++  20.517 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=notified
++  20.519 ms  WORKER_RESUMED worker=0
++  20.531 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=1/1
++  20.536 ms  WORKER_POLL_START worker=0 task_id=2
++  21.452 ms  WORKER_POLL_END worker=0 task_id=2
++  21.464 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  21.548 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  21.549 ms  WORKER_RESUMED worker=0
++  21.549 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  40.653 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  40.655 ms  WORKER_RESUMED worker=0
++  40.655 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  42.791 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  42.792 ms  WORKER_RESUMED worker=0
++  42.793 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.531 ms  on_thread_unpark
++  20.537 ms  on_before_task_poll task_id=2 schedule_latency=0.078ms
++  21.453 ms  on_task_terminate task_id=2
++  21.455 ms  on_after_task_poll task_id=2
++  21.464 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=2 (issuing_worker=255)
++  DIAL9 WORKER_PARK: worker=0 tid=3070 cpu_time_ns=183064
++  DIAL9 WORKER_UNPARK: worker=0 tid=3070 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=2 loc=src/main.rs:450:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3070 cpu_time_ns=471203
++  DIAL9 WORKER_UNPARK: worker=0 tid=3070 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=2 loc=src/main.rs:450:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3070 cpu_time_ns=741646
++  DIAL9 WORKER_UNPARK: worker=0 tid=3070 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.126ms"]
+
+=======================================================
+EXPERIMENT: CASE A: Task->Task Notify (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.355 ms  TASK_WAKE_VAL task_id=5 submitted=true
++  20.356 ms  TASK_SCHEDULED task_id=5 is_local=false
++  20.356 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(1) searching=1 unparked=1/2
++  20.357 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
++  20.357 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++  20.412 ms  WORKER_RESUMED worker=1
++  20.424 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=2/2
++  20.424 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_DRIVER
++  20.424 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=mio_waker
++  20.477 ms  WORKER_POLL_START worker=1 task_id=5
++  20.484 ms  WORKER_POLL_END worker=1 task_id=5
++  20.500 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=notified
++  20.500 ms  WORKER_RESUMED worker=0
++  20.509 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  20.512 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.512 ms  WORKER_RESUMED worker=0
++  20.513 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  41.652 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  41.654 ms  WORKER_RESUMED worker=0
++  41.654 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.424 ms  on_thread_unpark
++  20.478 ms  on_before_task_poll task_id=5 schedule_latency=0.107ms
++  20.485 ms  on_task_terminate task_id=5
++  20.488 ms  on_after_task_poll task_id=5
++  20.495 ms  on_thread_park
++  20.508 ms  on_thread_unpark
++  20.511 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=5 (issuing_worker=255)
++  DIAL9 WORKER_PARK: worker=0 tid=3074 cpu_time_ns=127197
++  DIAL9 WORKER_UNPARK: worker=0 tid=3074 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=5 loc=src/main.rs:450:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3074 cpu_time_ns=188543
++  DIAL9 WORKER_UNPARK: worker=0 tid=3074 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3074 cpu_time_ns=282702
++  DIAL9 WORKER_UNPARK: worker=0 tid=3074 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3075 cpu_time_ns=118971
++  DIAL9 WORKER_UNPARK: worker=1 tid=3075 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=5 loc=src/main.rs:450:20
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3075 cpu_time_ns=243658
++  DIAL9 WORKER_UNPARK: worker=1 tid=3075 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.151ms"]
+
+>>> RUNNING CASE B: Timer Sleep <<<
+
+=======================================================
+EXPERIMENT: CASE B: Timer Sleep (workers=1)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.100 ms  TASK_WAKE_VAL task_id=7 submitted=true
++  20.101 ms  TASK_SCHEDULED task_id=7 is_local=true
++  20.101 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.102 ms  WORKER_RESUMED worker=0
++  20.116 ms  WORKER_POLL_START worker=0 task_id=7
++  20.151 ms  WORKER_POLL_END worker=0 task_id=7
++  20.159 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  20.213 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.214 ms  WORKER_RESUMED worker=0
++  20.214 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  41.355 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  41.358 ms  WORKER_RESUMED worker=0
++  41.359 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.112 ms  on_thread_unpark
++  20.117 ms  on_before_task_poll task_id=7 schedule_latency=0.011ms
++  20.151 ms  on_task_terminate task_id=7
++  20.153 ms  on_after_task_poll task_id=7
++  20.159 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 POLL_START: worker=0 task_id=7 loc=src/main.rs:489:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3080 cpu_time_ns=104859
++  DIAL9 WAKE_EVENT: waker_task=6 -> woken_task=7 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3080 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=7 loc=src/main.rs:489:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3080 cpu_time_ns=260025
++  DIAL9 WORKER_UNPARK: worker=0 tid=3080 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.021ms"]
+
+=======================================================
+EXPERIMENT: CASE B: Timer Sleep (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.103 ms  TASK_WAKE_VAL task_id=10 submitted=true
++  20.104 ms  TASK_SCHEDULED task_id=10 is_local=true
++  20.104 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.105 ms  WORKER_RESUMED worker=0
++  20.117 ms  WORKER_POLL_START worker=0 task_id=10
++  20.156 ms  WORKER_POLL_END worker=0 task_id=10
++  20.163 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  20.220 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.221 ms  WORKER_RESUMED worker=0
++  20.221 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  41.356 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  41.357 ms  WORKER_RESUMED worker=0
++  41.358 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.113 ms  on_thread_unpark
++  20.117 ms  on_before_task_poll task_id=10 schedule_latency=0.010ms
++  20.156 ms  on_task_terminate task_id=10
++  20.158 ms  on_after_task_poll task_id=10
++  20.164 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3083 cpu_time_ns=84390
++  DIAL9 WORKER_UNPARK: worker=0 tid=3083 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=10 loc=src/main.rs:489:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3083 cpu_time_ns=109427
++  DIAL9 WAKE_EVENT: waker_task=8 -> woken_task=10 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3083 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=10 loc=src/main.rs:489:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3083 cpu_time_ns=257117
++  DIAL9 WORKER_UNPARK: worker=0 tid=3083 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3084 cpu_time_ns=81393
++  DIAL9 WORKER_UNPARK: worker=1 tid=3084 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.018ms"]
+
+>>> RUNNING CASE C: TCP I/O Readiness <<<
+
+=======================================================
+EXPERIMENT: CASE C: TCP I/O Readiness (workers=1)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   0.191 ms  IO_READINESS token=108797799692800 ready=0x1 total_events=2
++   0.192 ms  RESOURCE_WAKE ready=0x1
++   0.234 ms  TASK_WAKE_VAL task_id=12 submitted=true
++   0.235 ms  TASK_SCHEDULED task_id=12 is_local=true
++   0.235 ms  IO_READINESS token=108797799693184 ready=0x2 total_events=2
++   0.236 ms  RESOURCE_WAKE ready=0x2
++   0.264 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++   0.264 ms  WORKER_RESUMED worker=0
++   0.283 ms  WORKER_POLL_START worker=0 task_id=12
++   0.323 ms  WORKER_POLL_END worker=0 task_id=12
++   0.331 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++   0.334 ms  IO_READINESS token=128277520855040 ready=0x2 total_events=2
++   0.334 ms  RESOURCE_WAKE ready=0x2
++   0.335 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++   0.335 ms  WORKER_RESUMED worker=0
++   0.335 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.475 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.481 ms  WORKER_RESUMED worker=0
++  31.482 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.602 ms  IO_READINESS token=128277520855040 ready=0x3 total_events=1
++  31.602 ms  RESOURCE_WAKE ready=0x3
++  31.608 ms  TASK_WAKE_VAL task_id=12 submitted=true
++  31.609 ms  TASK_SCHEDULED task_id=12 is_local=true
++  31.610 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.610 ms  WORKER_RESUMED worker=0
++  31.806 ms  WORKER_POLL_START worker=0 task_id=12
++  31.818 ms  WORKER_POLL_END worker=0 task_id=12
++  31.828 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.831 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.831 ms  WORKER_RESUMED worker=0
++  31.831 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  43.009 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  43.010 ms  WORKER_RESUMED worker=0
++  43.029 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  43.186 ms  IO_READINESS token=128277520855040 ready=0x3 total_events=1
++  43.186 ms  RESOURCE_WAKE ready=0x3
++  43.194 ms  TASK_WAKE_VAL task_id=12 submitted=true
++  43.195 ms  TASK_SCHEDULED task_id=12 is_local=true
++  43.197 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  43.197 ms  WORKER_RESUMED worker=0
++  43.215 ms  WORKER_POLL_START worker=0 task_id=12
++  43.335 ms  WORKER_POLL_END worker=0 task_id=12
++  43.342 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  43.343 ms  RESOURCE_WAKE ready=0x3f
++  43.343 ms  RESOURCE_WAKE ready=0x3f
++  43.345 ms  IO_READINESS token=108797799693184 ready=0x7 total_events=1
++  43.345 ms  RESOURCE_WAKE ready=0x7
++  43.345 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  43.345 ms  WORKER_RESUMED worker=0
++  43.345 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  43.352 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  43.353 ms  WORKER_RESUMED worker=0
++  43.353 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  64.488 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  64.489 ms  WORKER_RESUMED worker=0
++  64.490 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   0.278 ms  on_thread_unpark
++   0.284 ms  on_before_task_poll task_id=12 schedule_latency=0.043ms
++   0.327 ms  on_after_task_poll task_id=12
++   0.333 ms  on_thread_park
++  31.799 ms  on_thread_unpark
++  31.807 ms  on_before_task_poll task_id=12 schedule_latency=0.191ms
++  31.822 ms  on_after_task_poll task_id=12
++  31.829 ms  on_thread_park
++  43.208 ms  on_thread_unpark
++  43.217 ms  on_before_task_poll task_id=12 schedule_latency=0.014ms
++  43.336 ms  on_task_terminate task_id=12
++  43.338 ms  on_after_task_poll task_id=12
++  43.344 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 POLL_START: worker=0 task_id=12 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3087 cpu_time_ns=234521
++  DIAL9 WAKE_EVENT: waker_task=11 -> woken_task=12 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3087 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=12 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3087 cpu_time_ns=461502
++  DIAL9 WAKE_EVENT: waker_task=11 -> woken_task=12 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3087 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=12 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3087 cpu_time_ns=774318
++  DIAL9 WAKE_EVENT: waker_task=11 -> woken_task=12 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3087 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=12 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3087 cpu_time_ns=1044551
++  DIAL9 WORKER_UNPARK: worker=0 tid=3087 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.021ms", "0.084ms", "0.197ms"]
+
+=======================================================
+EXPERIMENT: CASE C: TCP I/O Readiness (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   0.177 ms  IO_READINESS token=108797799698560 ready=0x1 total_events=2
++   0.179 ms  RESOURCE_WAKE ready=0x1
++   0.186 ms  TASK_WAKE_VAL task_id=15 submitted=true
++   0.187 ms  TASK_SCHEDULED task_id=15 is_local=true
++   0.187 ms  IO_READINESS token=108797799702784 ready=0x2 total_events=2
++   0.188 ms  RESOURCE_WAKE ready=0x2
++   0.215 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++   0.215 ms  WORKER_RESUMED worker=0
++   0.231 ms  WORKER_POLL_START worker=0 task_id=15
++   0.255 ms  WORKER_POLL_END worker=0 task_id=15
++   0.261 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++   0.264 ms  IO_READINESS token=128277520847872 ready=0x2 total_events=2
++   0.264 ms  RESOURCE_WAKE ready=0x2
++   0.264 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++   0.264 ms  WORKER_RESUMED worker=0
++   0.264 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.404 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.406 ms  WORKER_RESUMED worker=0
++  31.407 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.508 ms  IO_READINESS token=128277520847872 ready=0x3 total_events=1
++  31.508 ms  RESOURCE_WAKE ready=0x3
++  31.513 ms  TASK_WAKE_VAL task_id=15 submitted=true
++  31.513 ms  TASK_SCHEDULED task_id=15 is_local=true
++  31.514 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.514 ms  WORKER_RESUMED worker=0
++  31.525 ms  WORKER_POLL_START worker=0 task_id=15
++  31.534 ms  WORKER_POLL_END worker=0 task_id=15
++  31.539 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  31.542 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  31.542 ms  WORKER_RESUMED worker=0
++  31.542 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  42.689 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  42.690 ms  WORKER_RESUMED worker=0
++  42.693 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  42.802 ms  IO_READINESS token=128277520847872 ready=0x3 total_events=1
++  42.803 ms  RESOURCE_WAKE ready=0x3
++  42.808 ms  TASK_WAKE_VAL task_id=15 submitted=true
++  42.809 ms  TASK_SCHEDULED task_id=15 is_local=true
++  42.810 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  42.810 ms  WORKER_RESUMED worker=0
++  42.822 ms  WORKER_POLL_START worker=0 task_id=15
++  42.903 ms  WORKER_POLL_END worker=0 task_id=15
++  42.909 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  42.909 ms  RESOURCE_WAKE ready=0x3f
++  42.910 ms  RESOURCE_WAKE ready=0x3f
++  42.911 ms  IO_READINESS token=108797799702784 ready=0x7 total_events=1
++  42.911 ms  RESOURCE_WAKE ready=0x7
++  42.912 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  42.912 ms  WORKER_RESUMED worker=0
++  42.912 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  42.950 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  42.950 ms  WORKER_RESUMED worker=0
++  42.950 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  64.080 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  64.081 ms  WORKER_RESUMED worker=0
++  64.082 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   0.225 ms  on_thread_unpark
++   0.234 ms  on_before_task_poll task_id=15 schedule_latency=0.037ms
++   0.259 ms  on_after_task_poll task_id=15
++   0.263 ms  on_thread_park
++  31.523 ms  on_thread_unpark
++  31.527 ms  on_before_task_poll task_id=15 schedule_latency=0.008ms
++  31.537 ms  on_after_task_poll task_id=15
++  31.542 ms  on_thread_park
++  42.819 ms  on_thread_unpark
++  42.824 ms  on_before_task_poll task_id=15 schedule_latency=0.010ms
++  42.904 ms  on_task_terminate task_id=15
++  42.906 ms  on_after_task_poll task_id=15
++  42.911 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3090 cpu_time_ns=95491
++  DIAL9 WORKER_UNPARK: worker=0 tid=3090 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3090 cpu_time_ns=121460
++  DIAL9 WAKE_EVENT: waker_task=13 -> woken_task=15 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3090 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=15 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3090 cpu_time_ns=282658
++  DIAL9 WAKE_EVENT: waker_task=13 -> woken_task=15 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3090 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=15 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3090 cpu_time_ns=386997
++  DIAL9 WAKE_EVENT: waker_task=13 -> woken_task=15 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3090 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=15 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3090 cpu_time_ns=577079
++  DIAL9 WORKER_UNPARK: worker=0 tid=3090 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=15 loc=src/main.rs:525:27
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3091 cpu_time_ns=111232
++  DIAL9 WORKER_UNPARK: worker=1 tid=3091 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.011ms", "0.015ms", "0.042ms"]
+
+>>> RUNNING CASE D: I/O Readiness While Workers Parked <<<
+
+=======================================================
+EXPERIMENT: CASE D: I/O While Workers Parked (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.254 ms  EXTERNAL_IO_STIMULUS phase=WRITE_BEGIN details=Off-thread write to TCP socket
++  20.354 ms  EXTERNAL_IO_STIMULUS phase=WRITE_DONE details=TCP packet sent
++  20.356 ms  IO_READINESS token=108797799699840 ready=0x3 total_events=1
++  20.356 ms  RESOURCE_WAKE ready=0x3
++  20.364 ms  TASK_WAKE_VAL task_id=18 submitted=true
++  20.365 ms  TASK_SCHEDULED task_id=18 is_local=true
++  20.368 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.369 ms  WORKER_RESUMED worker=0
++  20.385 ms  WORKER_POLL_START worker=0 task_id=18
++  20.466 ms  WORKER_POLL_END worker=0 task_id=18
++  20.472 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  20.473 ms  RESOURCE_WAKE ready=0x3f
++  20.536 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.536 ms  WORKER_RESUMED worker=0
++  20.536 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  26.634 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  26.636 ms  WORKER_RESUMED worker=0
++  26.637 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  71.804 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  71.806 ms  WORKER_RESUMED worker=0
++  71.807 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.379 ms  on_thread_unpark
++  20.387 ms  on_before_task_poll task_id=18 schedule_latency=0.012ms
++  20.468 ms  on_task_terminate task_id=18
++  20.469 ms  on_after_task_poll task_id=18
++  20.474 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3094 cpu_time_ns=142416
++  DIAL9 WORKER_UNPARK: worker=0 tid=3094 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3094 cpu_time_ns=167033
++  DIAL9 WAKE_EVENT: waker_task=16 -> woken_task=18 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3094 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=18 loc=src/main.rs:588:25
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3094 cpu_time_ns=406228
++  DIAL9 WORKER_UNPARK: worker=0 tid=3094 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3095 cpu_time_ns=79831
++  DIAL9 WORKER_UNPARK: worker=1 tid=3095 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=18 loc=src/main.rs:588:25
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3095 cpu_time_ns=204910
++  DIAL9 WORKER_UNPARK: worker=1 tid=3095 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.019ms"]
+
+--- [CASE D INTERVAL BREAKDOWN] ---
+  T(external_write):       +  20.254 ms
+  T(tokio_io_readiness):   +  20.356 ms
+  T(task_scheduled):       +  20.365 ms
+  T(task_polled):          +  20.385 ms
+  Δio_driver (Ext -> Tokio):    0.102 ms
+  Δschedule (Ready -> Sched):   0.009 ms
+  Δpoll (Sched -> Poll):        0.019 ms
+  Δend_to_end (Ext -> Poll):    0.131 ms
+
+=======================================================
+EXPERIMENT: CASE D: I/O While Workers Parked (workers=4)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++  20.356 ms  EXTERNAL_IO_STIMULUS phase=WRITE_BEGIN details=Off-thread write to TCP socket
++  20.446 ms  EXTERNAL_IO_STIMULUS phase=WRITE_DONE details=TCP packet sent
++  20.462 ms  IO_READINESS token=108797800836992 ready=0x3 total_events=1
++  20.463 ms  RESOURCE_WAKE ready=0x3
++  20.471 ms  TASK_WAKE_VAL task_id=23 submitted=true
++  20.473 ms  TASK_SCHEDULED task_id=23 is_local=true
++  20.476 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.476 ms  WORKER_RESUMED worker=0
++  20.493 ms  WORKER_POLL_START worker=0 task_id=23
++  20.573 ms  WORKER_POLL_END worker=0 task_id=23
++  20.579 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  20.583 ms  RESOURCE_WAKE ready=0x3f
++  20.585 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  20.586 ms  WORKER_RESUMED worker=0
++  20.586 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  26.617 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  26.618 ms  WORKER_RESUMED worker=0
++  26.619 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  71.774 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  71.775 ms  WORKER_RESUMED worker=0
++  71.776 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++  20.486 ms  on_thread_unpark
++  20.495 ms  on_before_task_poll task_id=23 schedule_latency=0.013ms
++  20.574 ms  on_task_terminate task_id=23
++  20.576 ms  on_after_task_poll task_id=23
++  20.581 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3099 cpu_time_ns=106038
++  DIAL9 WAKE_EVENT: waker_task=19 -> woken_task=23 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3099 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=23 loc=src/main.rs:588:25
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3099 cpu_time_ns=389949
++  DIAL9 WORKER_UNPARK: worker=0 tid=3099 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3100 cpu_time_ns=95172
++  DIAL9 WORKER_UNPARK: worker=1 tid=3100 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=2 tid=3101 cpu_time_ns=100197
++  DIAL9 WORKER_UNPARK: worker=2 tid=3101 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=2 tid=3101 cpu_time_ns=126578
++  DIAL9 WORKER_UNPARK: worker=2 tid=3101 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=3 tid=3102 cpu_time_ns=103338
++  DIAL9 WORKER_UNPARK: worker=3 tid=3102 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=3 task_id=23 loc=src/main.rs:588:25
++  DIAL9 POLL_END: worker=3
++  DIAL9 WORKER_PARK: worker=3 tid=3102 cpu_time_ns=162761
++  DIAL9 WORKER_UNPARK: worker=3 tid=3102 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.021ms"]
+
+--- [CASE D INTERVAL BREAKDOWN] ---
+  T(external_write):       +  20.356 ms
+  T(tokio_io_readiness):   +  20.462 ms
+  T(task_scheduled):       +  20.473 ms
+  T(task_polled):          +  20.493 ms
+  Δio_driver (Ext -> Tokio):    0.106 ms
+  Δschedule (Ready -> Sched):   0.011 ms
+  Δpoll (Sched -> Poll):        0.020 ms
+  Δend_to_end (Ext -> Poll):    0.138 ms
+
+>>> RUNNING CASE E: High Load with I/O Readiness <<<
+
+=======================================================
+EXPERIMENT: CASE E: I/O Under Scheduler/CPU Saturation (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   0.017 ms  TASK_SCHEDULED task_id=27 is_local=false
++   0.018 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=1/2
++   0.018 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_DRIVER
++   0.018 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=mio_waker
++   0.060 ms  TASK_SCHEDULED task_id=28 is_local=false
++   0.076 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2
++   0.088 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=notified
++   0.088 ms  WORKER_RESUMED worker=0
++   0.099 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(1) searching=1 unparked=2/2
++   0.100 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
++   0.100 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++   0.138 ms  WORKER_POLL_START worker=0 task_id=27
++   0.156 ms  WORKER_RESUMED worker=1
++   0.163 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=2/2
++   0.168 ms  WORKER_POLL_START worker=1 task_id=28
++  15.394 ms  EXTERNAL_IO_STIMULUS phase=WRITE_BEGIN details=Off-thread write while workers saturated
++  15.451 ms  EXTERNAL_IO_STIMULUS phase=WRITE_DONE details=TCP packet sent
++  60.181 ms  WORKER_POLL_END worker=1 task_id=28
++  60.181 ms  WORKER_POLL_END worker=0 task_id=27
++  60.193 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  60.201 ms  IO_READINESS token=108797800837760 ready=0x7 total_events=1
++  60.201 ms  RESOURCE_WAKE ready=0x7
++  60.216 ms  TASK_WAKE_VAL task_id=26 submitted=true
++  60.216 ms  TASK_SCHEDULED task_id=26 is_local=true
++  60.218 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  60.218 ms  WORKER_RESUMED worker=0
++  60.224 ms  WORKER_POLL_START worker=0 task_id=26
++  60.330 ms  WORKER_POLL_END worker=0 task_id=26
++  60.336 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  60.336 ms  RESOURCE_WAKE ready=0x3f
++  60.381 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  60.381 ms  WORKER_RESUMED worker=0
++  60.381 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  76.722 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  76.724 ms  WORKER_RESUMED worker=0
++  76.725 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++ 110.894 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++ 110.896 ms  WORKER_RESUMED worker=0
++ 110.897 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   0.018 ms  on_task_spawn task_id=27 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.060 ms  on_task_spawn task_id=28 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.099 ms  on_thread_unpark
++   0.139 ms  on_before_task_poll task_id=27 schedule_latency=0.113ms
++   0.163 ms  on_thread_unpark
++   0.168 ms  on_before_task_poll task_id=28 schedule_latency=0.104ms
++  60.180 ms  on_task_terminate task_id=28
++  60.181 ms  on_task_terminate task_id=27
++  60.184 ms  on_after_task_poll task_id=28
++  60.184 ms  on_after_task_poll task_id=27
++  60.193 ms  on_thread_park
++  60.193 ms  on_thread_park
++  60.221 ms  on_thread_unpark
++  60.225 ms  on_before_task_poll task_id=26 schedule_latency=0.004ms
++  60.330 ms  on_task_terminate task_id=26
++  60.331 ms  on_after_task_poll task_id=26
++  60.335 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3106 cpu_time_ns=81610
++  DIAL9 WORKER_UNPARK: worker=0 tid=3106 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3106 cpu_time_ns=139049
++  DIAL9 WORKER_UNPARK: worker=0 tid=3106 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=27 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3106 cpu_time_ns=60353595
++  DIAL9 WAKE_EVENT: waker_task=24 -> woken_task=26 (issuing_worker=0)
++  DIAL9 WORKER_UNPARK: worker=0 tid=3106 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=26 loc=src/main.rs:689:25
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3106 cpu_time_ns=60497589
++  DIAL9 WORKER_UNPARK: worker=0 tid=3106 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3107 cpu_time_ns=76724
++  DIAL9 WORKER_UNPARK: worker=1 tid=3107 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=26 loc=src/main.rs:689:25
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3107 cpu_time_ns=106000
++  DIAL9 WORKER_UNPARK: worker=1 tid=3107 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=28 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3107 cpu_time_ns=60158360
++  DIAL9 WORKER_UNPARK: worker=1 tid=3107 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.019ms"]
+
+--- [CASE E CRITICAL DISCREPANCY ANALYSIS] ---
+  T(external_stimulus):       +  15.394 ms
+  T(tokio_io_readiness):       +  60.201 ms
+  T(task_scheduled):           +  60.216 ms
+  T(task_polled):              +  60.224 ms
+  --------------------------------------------------
+  Δio_driver (Driver Service Delay):   44.807 ms <=== INVISIBLE TO TOKIO & DIAL9!
+  Δschedule (Ready -> Sched):           0.016 ms
+  Δpoll (Sched -> Poll):                0.007 ms
+  Δend_to_end (Total Real Delay):      44.830 ms
+
+=======================================================
+EXPERIMENT: CASE E: I/O Under Scheduler/CPU Saturation (workers=4)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   0.014 ms  TASK_SCHEDULED task_id=34 is_local=false
++   0.015 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(3) searching=1 unparked=1/4
++   0.015 ms  WORKER_UNPARK_REQUESTED target_worker=3 prev_state=PARKED_CONDVAR
++   0.015 ms  WORKER_UNPARK_DISPATCHED target_worker=3 mechanism=condvar
++   0.047 ms  TASK_SCHEDULED task_id=35 is_local=false
++   0.048 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/4
++   0.049 ms  TASK_SCHEDULED task_id=36 is_local=false
++   0.049 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/4
++   0.050 ms  TASK_SCHEDULED task_id=37 is_local=false
++   0.050 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/4
++   0.065 ms  WORKER_RESUMED worker=3
++   0.074 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(1) searching=1 unparked=2/4
++   0.074 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
++   0.074 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++   0.105 ms  WORKER_POLL_START worker=3 task_id=34
++   0.121 ms  WORKER_RESUMED worker=1
++   0.126 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(2) searching=1 unparked=3/4
++   0.127 ms  WORKER_UNPARK_REQUESTED target_worker=2 prev_state=PARKED_CONDVAR
++   0.127 ms  WORKER_UNPARK_DISPATCHED target_worker=2 mechanism=condvar
++   0.160 ms  WORKER_POLL_START worker=1 task_id=36
++   0.170 ms  WORKER_RESUMED worker=2
++   0.178 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=4/4
++   0.178 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_DRIVER
++   0.178 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=mio_waker
++   0.213 ms  WORKER_POLL_START worker=2 task_id=37
++   0.222 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=notified
++   0.223 ms  WORKER_RESUMED worker=0
++   0.229 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=4/4
++   0.232 ms  WORKER_POLL_START worker=0 task_id=35
++  15.310 ms  EXTERNAL_IO_STIMULUS phase=WRITE_BEGIN details=Off-thread write while workers saturated
++  15.390 ms  EXTERNAL_IO_STIMULUS phase=WRITE_DONE details=TCP packet sent
++  60.149 ms  WORKER_POLL_END worker=3 task_id=34
++  60.163 ms  WORKER_PARK_WAIT_BEGIN worker=3 kind=driver
++  60.187 ms  IO_READINESS token=108797799699328 ready=0x7 total_events=1
++  60.187 ms  RESOURCE_WAKE ready=0x7
++  60.169 ms  WORKER_POLL_END worker=1 task_id=36
++  60.189 ms  TASK_WAKE_VAL task_id=33 submitted=true
++  60.190 ms  TASK_SCHEDULED task_id=33 is_local=true
++  60.192 ms  WORKER_PARK_WAIT_END worker=3 kind=driver state_after=no_notification
++  60.192 ms  WORKER_RESUMED worker=3
++  60.198 ms  WORKER_POLL_START worker=3 task_id=33
++  60.202 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
++  60.220 ms  WORKER_POLL_END worker=2 task_id=37
++  60.265 ms  WORKER_POLL_END worker=0 task_id=35
++  60.310 ms  WORKER_POLL_END worker=3 task_id=33
++  60.362 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=no_notification
++  60.363 ms  WORKER_RESUMED worker=1
++  60.363 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
++  60.364 ms  RESOURCE_WAKE ready=0x3f
++  76.475 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=no_notification
++  76.476 ms  WORKER_RESUMED worker=1
++  76.477 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
++ 111.637 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=no_notification
++ 111.639 ms  WORKER_RESUMED worker=1
++ 111.639 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   0.015 ms  on_task_spawn task_id=34 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.047 ms  on_task_spawn task_id=35 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.050 ms  on_task_spawn task_id=36 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.051 ms  on_task_spawn task_id=37 (spawned_at=Location { file: "src/main.rs", line: 704, column: 34 })
++   0.074 ms  on_thread_unpark
++   0.106 ms  on_before_task_poll task_id=34 schedule_latency=0.086ms
++   0.127 ms  on_thread_unpark
++   0.161 ms  on_before_task_poll task_id=36 schedule_latency=0.105ms
++   0.179 ms  on_thread_unpark
++   0.214 ms  on_before_task_poll task_id=37 schedule_latency=0.158ms
++   0.229 ms  on_thread_unpark
++   0.233 ms  on_before_task_poll task_id=35 schedule_latency=0.182ms
++  60.149 ms  on_task_terminate task_id=34
++  60.153 ms  on_after_task_poll task_id=34
++  60.163 ms  on_thread_park
++  60.169 ms  on_task_terminate task_id=36
++  60.191 ms  on_after_task_poll task_id=36
++  60.196 ms  on_thread_unpark
++  60.199 ms  on_before_task_poll task_id=33 schedule_latency=0.007ms
++  60.202 ms  on_thread_park
++  60.220 ms  on_task_terminate task_id=37
++  60.223 ms  on_after_task_poll task_id=37
++  60.229 ms  on_thread_park
++  60.266 ms  on_task_terminate task_id=35
++  60.268 ms  on_after_task_poll task_id=35
++  60.272 ms  on_thread_park
++  60.310 ms  on_task_terminate task_id=33
++  60.311 ms  on_after_task_poll task_id=33
++  60.315 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=3 tid=3113 cpu_time_ns=105420
++  DIAL9 WORKER_UNPARK: worker=3 tid=3113 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=3 task_id=33 loc=src/main.rs:689:25
++  DIAL9 POLL_END: worker=3
++  DIAL9 WORKER_PARK: worker=3 tid=3113 cpu_time_ns=169361
++  DIAL9 WORKER_UNPARK: worker=3 tid=3113 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=3 task_id=34 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=3
++  DIAL9 WORKER_PARK: worker=3 tid=3113 cpu_time_ns=60279021
++  DIAL9 WAKE_EVENT: waker_task=32 -> woken_task=33 (issuing_worker=3)
++  DIAL9 WORKER_UNPARK: worker=3 tid=3113 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=3 task_id=33 loc=src/main.rs:689:25
++  DIAL9 POLL_END: worker=3
++  DIAL9 WORKER_PARK: worker=3 tid=3113 cpu_time_ns=60432774
++  DIAL9 WORKER_UNPARK: worker=3 tid=3113 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3112 cpu_time_ns=149951
++  DIAL9 WORKER_UNPARK: worker=1 tid=3112 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3112 cpu_time_ns=171772
++  DIAL9 WORKER_UNPARK: worker=1 tid=3112 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=36 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3112 cpu_time_ns=59840511
++  DIAL9 WORKER_UNPARK: worker=1 tid=3112 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3111 cpu_time_ns=109103
++  DIAL9 WORKER_UNPARK: worker=0 tid=3111 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=35 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3111 cpu_time_ns=60271026
++  DIAL9 WORKER_UNPARK: worker=0 tid=3111 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=2 tid=3114 cpu_time_ns=99504
++  DIAL9 WORKER_UNPARK: worker=2 tid=3114 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=2 task_id=37 loc=src/main.rs:704:34
++  DIAL9 POLL_END: worker=2
++  DIAL9 WORKER_PARK: worker=2 tid=3114 cpu_time_ns=60158300
++  DIAL9 WORKER_UNPARK: worker=2 tid=3114 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.009ms"]
+
+--- [CASE E CRITICAL DISCREPANCY ANALYSIS] ---
+  T(external_stimulus):       +  15.310 ms
+  T(tokio_io_readiness):       +  60.187 ms
+  T(task_scheduled):           +  60.190 ms
+  T(task_polled):              +  60.198 ms
+  --------------------------------------------------
+  Δio_driver (Driver Service Delay):   44.876 ms <=== INVISIBLE TO TOKIO & DIAL9!
+  Δschedule (Ready -> Sched):           0.003 ms
+  Δpoll (Sched -> Poll):                0.008 ms
+  Δend_to_end (Total Real Delay):      44.887 ms
+
+>>> RUNNING ADVERSARIAL CASES <<<
+
+=======================================================
+EXPERIMENT: ADVERSARIAL: Wake Coalescing (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   8.827 ms  WORKER_POLL_END worker=0 task_id=40
++  20.264 ms  TASK_WAKE_VAL task_id=41 submitted=true
++  20.265 ms  TASK_SCHEDULED task_id=41 is_local=false
++  20.265 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=1/2
++  20.266 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_CONDVAR
++  20.267 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=condvar
++  20.299 ms  TASK_WAKE_VAL task_id=42 submitted=true
++  20.299 ms  TASK_SCHEDULED task_id=42 is_local=false
++  20.299 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2
++  20.300 ms  TASK_WAKE_VAL task_id=43 submitted=true
++  20.300 ms  TASK_SCHEDULED task_id=43 is_local=false
++  20.300 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2
++  20.301 ms  TASK_WAKE_VAL task_id=44 submitted=true
++  20.301 ms  TASK_SCHEDULED task_id=44 is_local=false
++  20.301 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2
++  20.302 ms  TASK_WAKE_VAL task_id=45 submitted=true
++  20.302 ms  TASK_SCHEDULED task_id=45 is_local=false
++  20.302 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=1/2
++  20.317 ms  WORKER_RESUMED worker=0
++  20.325 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(1) searching=1 unparked=2/2
++  20.326 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_DRIVER
++  20.326 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=mio_waker
++  20.359 ms  WORKER_POLL_START worker=0 task_id=41
++  20.363 ms  WORKER_POLL_END worker=0 task_id=41
++  20.365 ms  WORKER_POLL_START worker=0 task_id=42
++  20.365 ms  WORKER_POLL_END worker=0 task_id=42
++  20.366 ms  WORKER_POLL_START worker=0 task_id=43
++  20.366 ms  WORKER_POLL_END worker=0 task_id=43
++  20.366 ms  WORKER_POLL_START worker=0 task_id=44
++  20.367 ms  WORKER_POLL_END worker=0 task_id=44
++  20.367 ms  WORKER_POLL_START worker=0 task_id=45
++  20.367 ms  WORKER_POLL_END worker=0 task_id=45
++  20.380 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=notified
++  20.391 ms  WORKER_RESUMED worker=1
++  20.401 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
++  20.405 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=no_notification
++  20.405 ms  WORKER_RESUMED worker=1
++  20.405 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
++  71.568 ms  WORKER_PARK_WAIT_END worker=1 kind=driver state_after=no_notification
++  71.570 ms  WORKER_RESUMED worker=1
++  71.570 ms  WORKER_PARK_WAIT_BEGIN worker=1 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   8.828 ms  on_task_terminate task_id=40
++   8.832 ms  on_after_task_poll task_id=40
++   8.842 ms  on_thread_park
++  20.327 ms  on_thread_unpark
++  20.362 ms  on_before_task_poll task_id=41 schedule_latency=0.089ms
++  20.366 ms  on_task_terminate task_id=41
++  20.367 ms  on_after_task_poll task_id=41
++  20.367 ms  on_before_task_poll task_id=42 schedule_latency=0.065ms
++  20.367 ms  on_task_terminate task_id=42
++  20.368 ms  on_after_task_poll task_id=42
++  20.368 ms  on_before_task_poll task_id=43 schedule_latency=0.065ms
++  20.368 ms  on_task_terminate task_id=43
++  20.368 ms  on_after_task_poll task_id=43
++  20.369 ms  on_before_task_poll task_id=44 schedule_latency=0.065ms
++  20.369 ms  on_task_terminate task_id=44
++  20.369 ms  on_after_task_poll task_id=44
++  20.370 ms  on_before_task_poll task_id=45 schedule_latency=0.065ms
++  20.370 ms  on_task_terminate task_id=45
++  20.370 ms  on_after_task_poll task_id=45
++  20.375 ms  on_thread_park
++  20.401 ms  on_thread_unpark
++  20.403 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=41 (issuing_worker=255)
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=42 (issuing_worker=255)
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=43 (issuing_worker=255)
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=44 (issuing_worker=255)
++  DIAL9 WAKE_EVENT: waker_task=0 -> woken_task=45 (issuing_worker=255)
++  DIAL9 WORKER_PARK: worker=0 tid=3118 cpu_time_ns=107375
++  DIAL9 WORKER_UNPARK: worker=0 tid=3118 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=40 loc=src/main.rs:792:20
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3118 cpu_time_ns=60154651
++  DIAL9 WORKER_UNPARK: worker=0 tid=3118 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=41 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=42 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=43 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=44 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=45 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3118 cpu_time_ns=60231859
++  DIAL9 WORKER_UNPARK: worker=0 tid=3118 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=44 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=45 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=42 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=41 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=43 loc=src/main.rs:801:24
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3119 cpu_time_ns=124376
++  DIAL9 WORKER_UNPARK: worker=1 tid=3119 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3119 cpu_time_ns=219788
++  DIAL9 WORKER_UNPARK: worker=1 tid=3119 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.065ms", "0.066ms", "0.066ms", "0.066ms", "0.098ms"]
+
+=======================================================
+EXPERIMENT: ADVERSARIAL: Work Stealing (workers=2)
+=======================================================
+
+--- [VIEW A] INTERNAL TOKIO GROUND TRUTH ---
++   0.029 ms  TASK_SCHEDULED task_id=48 is_local=false
++   0.029 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(1) searching=1 unparked=1/2
++   0.030 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
++   0.030 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++   0.090 ms  WORKER_RESUMED worker=1
++   0.104 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=2/2
++   0.104 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=PARKED_DRIVER
++   0.104 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=mio_waker
++   0.112 ms  WORKER_POLL_START worker=1 task_id=48
++   0.112 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=notified
++   0.114 ms  WORKER_RESUMED worker=0
++   0.123 ms  TASK_SCHEDULED task_id=49 is_local=true
++   0.125 ms  TASK_SCHEDULED task_id=50 is_local=true
++   0.125 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=2/2
++   0.125 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected target=Some(0) searching=1 unparked=2/2
++   0.125 ms  WORKER_UNPARK_REQUESTED target_worker=0 prev_state=EMPTY
++   0.125 ms  WORKER_UNPARK_DISPATCHED target_worker=0 mechanism=none_empty
++   0.126 ms  TASK_SCHEDULED task_id=51 is_local=true
++   0.126 ms  WORKER_RESUMED worker=0
++   0.126 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=2/2
++   0.128 ms  TASK_SCHEDULED task_id=52 is_local=true
++   0.128 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=1 unparked=2/2
++   0.129 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=2/2
++   0.133 ms  WORKER_POLL_START worker=0 task_id=49
++   0.138 ms  WORKER_POLL_END worker=0 task_id=49
++   0.142 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=2/2
++   0.143 ms  WORKER_POLL_START worker=0 task_id=50
++   0.144 ms  WORKER_POLL_END worker=0 task_id=50
++   0.144 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify target=None searching=0 unparked=2/2
++   0.162 ms  WORKER_POLL_START worker=0 task_id=51
++   0.163 ms  WORKER_POLL_END worker=0 task_id=51
++   0.166 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  50.141 ms  WORKER_POLL_END worker=1 task_id=48
++  50.157 ms  WORKER_POLL_START worker=1 task_id=52
++  50.165 ms  TASK_WAKE_VAL task_id=48 submitted=true
++  50.166 ms  TASK_SCHEDULED task_id=48 is_local=true
++  50.168 ms  WORKER_POLL_END worker=1 task_id=52
++  50.168 ms  WORKER_POLL_START worker=1 task_id=48
++  50.171 ms  WORKER_POLL_END worker=1 task_id=48
++  77.304 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  77.305 ms  WORKER_RESUMED worker=0
++  77.306 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
++  81.469 ms  WORKER_PARK_WAIT_END worker=0 kind=driver state_after=no_notification
++  81.470 ms  WORKER_RESUMED worker=0
++  81.471 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver
+
+--- [VIEW B] STOCK TOKIO OBSERVABILITY ---
++   0.028 ms  on_task_spawn task_id=48 (spawned_at=Location { file: "src/main.rs", line: 853, column: 9 })
++   0.103 ms  on_thread_unpark
++   0.113 ms  on_before_task_poll task_id=48 schedule_latency=0.078ms
++   0.122 ms  on_thread_unpark
++   0.123 ms  on_task_spawn task_id=49 (spawned_at=Location { file: "src/main.rs", line: 856, column: 30 })
++   0.125 ms  on_task_spawn task_id=50 (spawned_at=Location { file: "src/main.rs", line: 856, column: 30 })
++   0.126 ms  on_thread_park
++   0.127 ms  on_task_spawn task_id=51 (spawned_at=Location { file: "src/main.rs", line: 856, column: 30 })
++   0.129 ms  on_thread_unpark
++   0.129 ms  on_task_spawn task_id=52 (spawned_at=Location { file: "src/main.rs", line: 856, column: 30 })
++   0.134 ms  on_before_task_poll task_id=49 schedule_latency=0.006ms
++   0.139 ms  on_task_terminate task_id=49
++   0.141 ms  on_after_task_poll task_id=49
++   0.144 ms  on_before_task_poll task_id=50 schedule_latency=0.018ms
++   0.145 ms  on_task_terminate task_id=50
++   0.145 ms  on_after_task_poll task_id=50
++   0.146 ms  on_before_task_poll task_id=51 schedule_latency=0.019ms
++   0.164 ms  on_task_terminate task_id=51
++   0.164 ms  on_after_task_poll task_id=51
++   0.166 ms  on_thread_park
++  50.156 ms  on_after_task_poll task_id=48
++  50.161 ms  on_before_task_poll task_id=52 schedule_latency=50.028ms
++  50.168 ms  on_task_terminate task_id=52
++  50.169 ms  on_after_task_poll task_id=52
++  50.169 ms  on_before_task_poll task_id=48 schedule_latency=0.002ms
++  50.171 ms  on_task_terminate task_id=48
++  50.172 ms  on_after_task_poll task_id=48
++  50.192 ms  on_thread_park
+
+--- [VIEW C] ACTUAL DIAL9 OBSERVABILITY ---
++  DIAL9 WORKER_PARK: worker=0 tid=3123 cpu_time_ns=90085
++  DIAL9 WORKER_UNPARK: worker=0 tid=3123 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=0 tid=3123 cpu_time_ns=206496
++  DIAL9 WORKER_UNPARK: worker=0 tid=3123 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=0 task_id=49 loc=src/main.rs:856:30
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=50 loc=src/main.rs:856:30
++  DIAL9 POLL_END: worker=0
++  DIAL9 POLL_START: worker=0 task_id=51 loc=src/main.rs:856:30
++  DIAL9 POLL_END: worker=0
++  DIAL9 WORKER_PARK: worker=0 tid=3123 cpu_time_ns=247865
++  DIAL9 WORKER_UNPARK: worker=0 tid=3123 sched_wait=None (unsupported/unsampled)
++  DIAL9 WORKER_PARK: worker=1 tid=3124 cpu_time_ns=85051
++  DIAL9 WORKER_UNPARK: worker=1 tid=3124 sched_wait=None (unsupported/unsampled)
++  DIAL9 POLL_START: worker=1 task_id=48 loc=src/main.rs:853:9
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=52 loc=src/main.rs:856:30
++  DIAL9 WAKE_EVENT: waker_task=47 -> woken_task=48 (issuing_worker=1)
++  DIAL9 POLL_END: worker=1
++  DIAL9 POLL_START: worker=1 task_id=48 loc=src/main.rs:853:9
++  DIAL9 POLL_END: worker=1
++  DIAL9 WORKER_PARK: worker=1 tid=3124 cpu_time_ns=50201842
++  DIAL9 WORKER_UNPARK: worker=1 tid=3124 sched_wait=None (unsupported/unsampled)
++  DIAL9 COMPUTED WAKE-TO-POLL DELAYS: ["0.005ms"]
+
+===============================================================
+INVESTIGATION RUN COMPLETED
+Run with `--benchmark` to compute 30-run statistical distributions.
+===============================================================
