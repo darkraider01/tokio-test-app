@@ -1006,6 +1006,7 @@ dependencies = [
  "dial9",
  "dial9-core",
  "dial9-tokio-telemetry",
+ "dial9-trace-format",
  "tokio",
 ]
 

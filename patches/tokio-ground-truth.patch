@@ -1,0 +1,647 @@
+diff --git a/tokio/src/runtime/ground_truth_probes.rs b/tokio/src/runtime/ground_truth_probes.rs
+new file mode 100644
+index 00000000..a88ea338
+--- /dev/null
++++ b/tokio/src/runtime/ground_truth_probes.rs
+@@ -0,0 +1,143 @@
++// TEMPORARY GROUND TRUTH INSTRUMENTATION FOR OBSERVABILITY INVESTIGATION
++// NOT FOR PRODUCTION USE
++
++#![allow(missing_docs)]
++
++use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::Mutex;
++use std::time::Instant;
++
++#[derive(Clone, Debug)]
++pub enum ProbeEvent {
++    IoReadinessObserved {
++        t_ns: u64,
++        token: usize,
++        ready: usize,
++        count: usize,
++    },
++    ResourceWakeDispatched {
++        t_ns: u64,
++        ready: usize,
++    },
++    TaskWakeByVal {
++        t_ns: u64,
++        task_id: u64,
++        submitted: bool,
++    },
++    TaskWakeByRef {
++        t_ns: u64,
++        task_id: u64,
++        submitted: bool,
++    },
++    TaskScheduled {
++        t_ns: u64,
++        task_id: u64,
++        is_local: bool,
++    },
++    SchedulerWakeDecision {
++        t_ns: u64,
++        caller: &'static str,
++        target_worker: Option<usize>,
++        num_searching: usize,
++        num_unparked: usize,
++        total_workers: usize,
++    },
++    WorkerUnparkRequested {
++        t_ns: u64,
++        target_worker: usize,
++        prev_state: &'static str,
++    },
++    WorkerUnparkDispatched {
++        t_ns: u64,
++        target_worker: usize,
++        mechanism: &'static str,
++    },
++    WorkerParkWaitBegin {
++        t_ns: u64,
++        worker_id: usize,
++        kind: &'static str,
++    },
++    WorkerParkWaitEnd {
++        t_ns: u64,
++        worker_id: usize,
++        kind: &'static str,
++        state_after: &'static str,
++    },
++    WorkerResumed {
++        t_ns: u64,
++        worker_id: usize,
++    },
++    WorkerPollStart {
++        t_ns: u64,
++        worker_id: usize,
++        task_id: u64,
++    },
++    WorkerPollEnd {
++        t_ns: u64,
++        worker_id: usize,
++        task_id: u64,
++    },
++    ExternalIoStimulus {
++        t_ns: u64,
++        phase: &'static str,
++        details: &'static str,
++    },
++}
++
++static ENABLED: AtomicBool = AtomicBool::new(false);
++static BASE_TIME: Mutex<Option<Instant>> = Mutex::new(None);
++static EVENTS: Mutex<Vec<ProbeEvent>> = Mutex::new(Vec::new());
++
++pub fn enable() {
++    let mut base = BASE_TIME.lock().unwrap();
++    if base.is_none() {
++        *base = Some(Instant::now());
++    }
++    EVENTS.lock().unwrap().clear();
++    ENABLED.store(true, Ordering::SeqCst);
++}
++
++pub fn disable() {
++    ENABLED.store(false, Ordering::SeqCst);
++}
++
++pub fn reset_base_time() {
++    let mut base = BASE_TIME.lock().unwrap();
++    *base = Some(Instant::now());
++    EVENTS.lock().unwrap().clear();
++}
++
++pub fn now_ns() -> u64 {
++    let base = BASE_TIME.lock().unwrap();
++    match *base {
++        Some(b) => b.elapsed().as_nanos() as u64,
++        None => 0,
++    }
++}
++
++pub fn is_enabled() -> bool {
++    ENABLED.load(Ordering::Relaxed)
++}
++
++pub fn record(event: ProbeEvent) {
++    if !is_enabled() {
++        return;
++    }
++    let mut events = EVENTS.lock().unwrap();
++    events.push(event);
++}
++
++pub fn record_external_stimulus(phase: &'static str, details: &'static str) {
++    if is_enabled() {
++        record(ProbeEvent::ExternalIoStimulus {
++            t_ns: now_ns(),
++            phase,
++            details,
++        });
++    }
++}
++
++pub fn take_events() -> Vec<ProbeEvent> {
++    let mut events = EVENTS.lock().unwrap();
++    std::mem::take(&mut *events)
++}
+diff --git a/tokio/src/runtime/io/driver.rs b/tokio/src/runtime/io/driver.rs
+index 40e65814..d5d90419 100644
+--- a/tokio/src/runtime/io/driver.rs
++++ b/tokio/src/runtime/io/driver.rs
+@@ -225,6 +225,16 @@ impl Driver {
+                 // an `Arc<ScheduledIo>` so we can safely cast this to a ref.
+                 let io: &ScheduledIo = unsafe { &*ptr };
+ 
++                #[cfg(feature = "rt")]
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::IoReadinessObserved {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        token: token.0,
++                        ready: ready.as_usize(),
++                        count: events.iter().count(),
++                    }
++                );
++
+                 io.set_readiness(Tick::Set, |curr| curr | ready);
+                 io.wake(ready);
+ 
+diff --git a/tokio/src/runtime/io/scheduled_io.rs b/tokio/src/runtime/io/scheduled_io.rs
+index 66dc6dae..0a75e0f5 100644
+--- a/tokio/src/runtime/io/scheduled_io.rs
++++ b/tokio/src/runtime/io/scheduled_io.rs
+@@ -249,6 +249,14 @@ impl ScheduledIo {
+     /// than 32 wakers to notify, if the stack array fills up, the lock is
+     /// released, the array is cleared, and the iteration continues.
+     pub(super) fn wake(&self, ready: Ready) {
++        #[cfg(feature = "rt")]
++        crate::runtime::ground_truth_probes::record(
++            crate::runtime::ground_truth_probes::ProbeEvent::ResourceWakeDispatched {
++                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                ready: ready.as_usize(),
++            }
++        );
++
+         let mut wakers = WakeList::new();
+ 
+         let mut waiters = self.waiters.lock();
+diff --git a/tokio/src/runtime/mod.rs b/tokio/src/runtime/mod.rs
+index b4edd130..efc9f631 100644
+--- a/tokio/src/runtime/mod.rs
++++ b/tokio/src/runtime/mod.rs
+@@ -555,6 +555,8 @@ cfg_signal_internal_and_unix! {
+ }
+ 
+ cfg_rt! {
++    pub mod ground_truth_probes;
++
+     pub(crate) mod task;
+ 
+     mod config;
+diff --git a/tokio/src/runtime/scheduler/multi_thread/idle.rs b/tokio/src/runtime/scheduler/multi_thread/idle.rs
+index e0b034c8..f11c46e7 100644
+--- a/tokio/src/runtime/scheduler/multi_thread/idle.rs
++++ b/tokio/src/runtime/scheduler/multi_thread/idle.rs
+@@ -58,7 +58,18 @@ impl Idle {
+         // provide sufficient guarantees, so this load is done with `SeqCst` and
+         // will pair with the `fetch_sub(1)` when transitioning out of
+         // searching.
++        let state = State::load(&self.state, SeqCst);
+         if !self.notify_should_wakeup() {
++            crate::runtime::ground_truth_probes::record(
++                crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
++                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    caller: "worker_to_notify",
++                    target_worker: None,
++                    num_searching: state.num_searching(),
++                    num_unparked: state.num_unparked(),
++                    total_workers: self.num_workers,
++                },
++            );
+             return None;
+         }
+ 
+@@ -67,6 +78,17 @@ impl Idle {
+ 
+         // Check again, now that the lock is acquired
+         if !self.notify_should_wakeup() {
++            let state = State::load(&self.state, SeqCst);
++            crate::runtime::ground_truth_probes::record(
++                crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
++                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    caller: "worker_to_notify_locked",
++                    target_worker: None,
++                    num_searching: state.num_searching(),
++                    num_unparked: state.num_unparked(),
++                    total_workers: self.num_workers,
++                },
++            );
+             return None;
+         }
+ 
+@@ -78,6 +100,17 @@ impl Idle {
+         let ret = lock.idle.sleepers.pop();
+         debug_assert!(ret.is_some());
+ 
++        crate::runtime::ground_truth_probes::record(
++            crate::runtime::ground_truth_probes::ProbeEvent::SchedulerWakeDecision {
++                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                caller: "worker_to_notify_selected",
++                target_worker: ret,
++                num_searching: state.num_searching() + 1,
++                num_unparked: state.num_unparked() + 1,
++                total_workers: self.num_workers,
++            },
++        );
++
+         ret
+     }
+ 
+diff --git a/tokio/src/runtime/scheduler/multi_thread/park.rs b/tokio/src/runtime/scheduler/multi_thread/park.rs
+index efe0ff06..bfef25bb 100644
+--- a/tokio/src/runtime/scheduler/multi_thread/park.rs
++++ b/tokio/src/runtime/scheduler/multi_thread/park.rs
+@@ -29,6 +29,8 @@ pub(crate) enum HadDriver {
+ }
+ 
+ struct Inner {
++    worker_id: usize,
++
+     /// Avoids entering the park if possible
+     state: AtomicUsize,
+ 
+@@ -57,6 +59,7 @@ impl Parker {
+     pub(crate) fn new(driver: Driver) -> Parker {
+         Parker {
+             inner: Arc::new(Inner {
++                worker_id: 0,
+                 state: AtomicUsize::new(EMPTY),
+                 mutex: Mutex::new(()),
+                 condvar: Condvar::new(),
+@@ -67,6 +70,18 @@ impl Parker {
+         }
+     }
+ 
++    pub(crate) fn for_worker(&self, worker_id: usize) -> Parker {
++        Parker {
++            inner: Arc::new(Inner {
++                worker_id,
++                state: AtomicUsize::new(EMPTY),
++                mutex: Mutex::new(()),
++                condvar: Condvar::new(),
++                shared: self.inner.shared.clone(),
++            }),
++        }
++    }
++
+     pub(crate) fn unpark(&self) -> Unparker {
+         Unparker {
+             inner: self.inner.clone(),
+@@ -112,6 +127,7 @@ impl Clone for Parker {
+     fn clone(&self) -> Parker {
+         Parker {
+             inner: Arc::new(Inner {
++                worker_id: self.inner.worker_id,
+                 state: AtomicUsize::new(EMPTY),
+                 mutex: Mutex::new(()),
+                 condvar: Condvar::new(),
+@@ -258,6 +274,14 @@ impl Inner {
+             Err(actual) => panic!("inconsistent park state; actual = {actual}"),
+         }
+ 
++        crate::runtime::ground_truth_probes::record(
++            crate::runtime::ground_truth_probes::ProbeEvent::WorkerParkWaitBegin {
++                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                worker_id: self.worker_id,
++                kind: "driver",
++            },
++        );
++
+         if let Some(duration) = duration {
+             debug_assert_ne!(duration, Duration::ZERO);
+             driver.park_timeout(handle, duration);
+@@ -265,27 +289,81 @@ impl Inner {
+             driver.park(handle);
+         }
+ 
+-        match self.state.swap(EMPTY, SeqCst) {
+-            NOTIFIED => {}      // got a notification, hurray!
+-            PARKED_DRIVER => {} // no notification, alas
++        let state_after = match self.state.swap(EMPTY, SeqCst) {
++            NOTIFIED => "notified",
++            PARKED_DRIVER => "no_notification",
+             n => panic!("inconsistent park_timeout state: {n}"),
+-        }
++        };
++
++        crate::runtime::ground_truth_probes::record(
++            crate::runtime::ground_truth_probes::ProbeEvent::WorkerParkWaitEnd {
++                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                worker_id: self.worker_id,
++                kind: "driver",
++                state_after,
++            },
++        );
+ 
+         HadDriver::Yes
+     }
+ 
+     fn unpark(&self, driver: &driver::Handle) {
+-        // To ensure the unparked thread will observe any writes we made before
+-        // this call, we must perform a release operation that `park` can
+-        // synchronize with. To do that we must write `NOTIFIED` even if `state`
+-        // is already `NOTIFIED`. That is why this must be a swap rather than a
+-        // compare-and-swap that returns if it reads `NOTIFIED` on failure.
+-        match self.state.swap(NOTIFIED, SeqCst) {
+-            EMPTY => {}    // no one was waiting
+-            NOTIFIED => {} // already unparked
+-            PARKED_CONDVAR => self.unpark_condvar(),
+-            PARKED_DRIVER => driver.unpark(),
++        let prev = match self.state.swap(NOTIFIED, SeqCst) {
++            EMPTY => "EMPTY",
++            NOTIFIED => "NOTIFIED",
++            PARKED_CONDVAR => "PARKED_CONDVAR",
++            PARKED_DRIVER => "PARKED_DRIVER",
+             actual => panic!("inconsistent state in unpark; actual = {actual}"),
++        };
++
++        crate::runtime::ground_truth_probes::record(
++            crate::runtime::ground_truth_probes::ProbeEvent::WorkerUnparkRequested {
++                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                target_worker: self.worker_id,
++                prev_state: prev,
++            },
++        );
++
++        match prev {
++            "EMPTY" => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerUnparkDispatched {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        target_worker: self.worker_id,
++                        mechanism: "none_empty",
++                    },
++                );
++            }
++            "NOTIFIED" => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerUnparkDispatched {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        target_worker: self.worker_id,
++                        mechanism: "none_already_notified",
++                    },
++                );
++            }
++            "PARKED_CONDVAR" => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerUnparkDispatched {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        target_worker: self.worker_id,
++                        mechanism: "condvar",
++                    },
++                );
++                self.unpark_condvar();
++            }
++            "PARKED_DRIVER" => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerUnparkDispatched {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        target_worker: self.worker_id,
++                        mechanism: "mio_waker",
++                    },
++                );
++                driver.unpark();
++            }
++            _ => unreachable!(),
+         }
+     }
+ 
+diff --git a/tokio/src/runtime/scheduler/multi_thread/worker.rs b/tokio/src/runtime/scheduler/multi_thread/worker.rs
+index ac16dd36..86350f6b 100644
+--- a/tokio/src/runtime/scheduler/multi_thread/worker.rs
++++ b/tokio/src/runtime/scheduler/multi_thread/worker.rs
+@@ -284,10 +284,10 @@ pub(super) fn create(
+     let mut worker_metrics = Vec::with_capacity(size);
+ 
+     // Create the local queues
+-    for _ in 0..size {
++    for i in 0..size {
+         let (steal, run_queue) = queue::local();
+ 
+-        let park = park.clone();
++        let park = park.for_worker(i);
+         let unpark = park.unpark();
+         let metrics = WorkerMetrics::from_config(&config);
+         let stats = Stats::new(&metrics);
+@@ -691,6 +691,7 @@ impl Context {
+         // Make the core available to the runtime context
+         *self.core.borrow_mut() = Some(core);
+ 
++        let task_id_u64 = task.task_id().0.get();
+         // Run the task
+         coop::budget(|| {
+             // Unlike the poll time above, poll start callback is attached to the task id,
+@@ -701,8 +702,24 @@ impl Context {
+                 .task_hooks
+                 .poll_start_callback(&task_meta);
+ 
++            crate::runtime::ground_truth_probes::record(
++                crate::runtime::ground_truth_probes::ProbeEvent::WorkerPollStart {
++                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    worker_id: self.worker.index,
++                    task_id: task_id_u64,
++                },
++            );
++
+             task.run();
+ 
++            crate::runtime::ground_truth_probes::record(
++                crate::runtime::ground_truth_probes::ProbeEvent::WorkerPollEnd {
++                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    worker_id: self.worker.index,
++                    task_id: task_id_u64,
++                },
++            );
++
+             #[cfg(tokio_unstable)]
+             self.worker.handle.task_hooks.poll_stop_callback(&task_meta);
+ 
+@@ -781,6 +798,15 @@ impl Context {
+                 #[cfg(tokio_unstable)]
+                 let task_meta = task.task_meta(_task_schedule_latency);
+ 
++                let task_id_u64 = task.task_id().0.get();
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerPollStart {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        worker_id: self.worker.index,
++                        task_id: task_id_u64,
++                    },
++                );
++
+                 #[cfg(tokio_unstable)]
+                 self.worker
+                     .handle
+@@ -789,6 +815,14 @@ impl Context {
+ 
+                 task.run();
+ 
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerPollEnd {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        worker_id: self.worker.index,
++                        task_id: task_id_u64,
++                    },
++                );
++
+                 #[cfg(tokio_unstable)]
+                 self.worker.handle.task_hooks.poll_stop_callback(&task_meta);
+             }
+@@ -851,6 +885,13 @@ impl Context {
+ 
+                 core.stats.unparked();
+ 
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::WorkerResumed {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        worker_id: self.worker.index,
++                    },
++                );
++
+                 // Run regularly scheduled maintenance
+                 core.maintenance(&self.worker);
+ 
+@@ -1357,18 +1398,33 @@ impl Handle {
+             ));
+         }
+ 
++        let task_id = task.task_id().0.get();
+         with_current(|maybe_cx| {
+             if let Some(cx) = maybe_cx {
+                 // Make sure the task is part of the **current** scheduler.
+                 if self.ptr_eq(&cx.worker.handle) {
+                     // And the current thread still holds a core
+                     if let Some(core) = cx.core.borrow_mut().as_mut() {
++                        crate::runtime::ground_truth_probes::record(
++                            crate::runtime::ground_truth_probes::ProbeEvent::TaskScheduled {
++                                t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                                task_id,
++                                is_local: true,
++                            },
++                        );
+                         self.schedule_local(core, task, is_yield);
+                         return;
+                     }
+                 }
+             }
+ 
++            crate::runtime::ground_truth_probes::record(
++                crate::runtime::ground_truth_probes::ProbeEvent::TaskScheduled {
++                    t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                    task_id,
++                    is_local: false,
++                },
++            );
+             // Otherwise, use the inject queue.
+             self.push_remote_task(task);
+             self.notify_parked_remote();
+diff --git a/tokio/src/runtime/task/harness.rs b/tokio/src/runtime/task/harness.rs
+index 467449f7..f3188149 100644
+--- a/tokio/src/runtime/task/harness.rs
++++ b/tokio/src/runtime/task/harness.rs
+@@ -68,8 +68,16 @@ impl RawTask {
+     pub(super) fn wake_by_val(&self) {
+         use super::state::TransitionToNotifiedByVal;
+ 
++        let task_id = unsafe { super::core::Header::get_id(self.header_ptr()) }.0.get();
+         match self.state().transition_to_notified_by_val() {
+             TransitionToNotifiedByVal::Submit => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::TaskWakeByVal {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        task_id,
++                        submitted: true,
++                    },
++                );
+                 // The caller has given us a ref-count, and the transition has
+                 // created a new ref-count, so we now hold two. We turn the new
+                 // ref-count Notified and pass it to the call to `schedule`.
+@@ -86,7 +94,15 @@ impl RawTask {
+             TransitionToNotifiedByVal::Dealloc => {
+                 self.dealloc();
+             }
+-            TransitionToNotifiedByVal::DoNothing => {}
++            TransitionToNotifiedByVal::DoNothing => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::TaskWakeByVal {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        task_id,
++                        submitted: false,
++                    },
++                );
++            }
+         }
+     }
+ 
+@@ -96,15 +112,31 @@ impl RawTask {
+     pub(super) fn wake_by_ref(&self) {
+         use super::state::TransitionToNotifiedByRef;
+ 
++        let task_id = unsafe { super::core::Header::get_id(self.header_ptr()) }.0.get();
+         match self.state().transition_to_notified_by_ref() {
+             TransitionToNotifiedByRef::Submit => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::TaskWakeByRef {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        task_id,
++                        submitted: true,
++                    },
++                );
+                 // The transition above incremented the ref-count for a new task
+                 // and the caller also holds a ref-count. The caller's ref-count
+                 // ensures that the task is not destroyed even if the new task
+                 // is dropped before `schedule` returns.
+                 self.schedule();
+             }
+-            TransitionToNotifiedByRef::DoNothing => {}
++            TransitionToNotifiedByRef::DoNothing => {
++                crate::runtime::ground_truth_probes::record(
++                    crate::runtime::ground_truth_probes::ProbeEvent::TaskWakeByRef {
++                        t_ns: crate::runtime::ground_truth_probes::now_ns(),
++                        task_id,
++                        submitted: false,
++                    },
++                );
++            }
+         }
+     }
+ 
+diff --git a/tokio/src/runtime/task/mod.rs b/tokio/src/runtime/task/mod.rs
+index 63f64933..2e0dc092 100644
+--- a/tokio/src/runtime/task/mod.rs
++++ b/tokio/src/runtime/task/mod.rs
+@@ -281,6 +281,10 @@ impl<S> LocalNotified<S> {
+     pub(crate) fn get_scheduled_at(&self) -> ScheduleLatencyInstant {
+         self.task.header().get_scheduled_at()
+     }
++
++    pub(crate) fn task_id(&self) -> crate::task::Id {
++        unsafe { Header::get_id(self.task.raw.header_ptr()) }
++    }
+ }
+ 
+ /// A task that is not owned by any `OwnedTasks`. Used for blocking tasks.
+@@ -482,10 +486,8 @@ impl<S: 'static> Notified<S> {
+         self.0.header()
+     }
+ 
+-    #[cfg(tokio_unstable)]
+-    #[allow(dead_code)]
+     pub(crate) fn task_id(&self) -> crate::task::Id {
+-        self.0.id()
++        unsafe { Header::get_id(self.0.raw.header_ptr()) }
+     }
+ }
+ 
