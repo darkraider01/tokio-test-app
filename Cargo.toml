@@ -1,0 +1,13 @@
+[package]
+name = "tokio-test-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { path = "../tokio-probe/tokio", features = ["full", "test-util", "schedule-latency"] }
+dial9 = { path = "../dial9/dial9" }
+dial9-tokio-telemetry = { path = "../dial9/dial9-tokio-telemetry" }
+dial9-core = { path = "../dial9/dial9-core" }
+
+[patch.crates-io]
+tokio = { path = "../tokio-probe/tokio" }
