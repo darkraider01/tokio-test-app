@@ -390,8 +390,8 @@ We classify each causal boundary independently:
 | Boundary | Classification | Verdict Summary |
 | :--- | :--- | :--- |
 | **Boundary A: External I/O Stimulus $\to$ Tokio Driver Observation** | **REAL GAP** | **Proven.** Under worker compute saturation, driver service delay can reach tens of milliseconds while `TaskMeta::schedule_latency` and Dial9 report microseconds. |
-| **Boundary B: Runnable Work $\to$ Wake / Coalesce Decision** | **REAL GAP** | **Proven.** Wake suppression in `Idle::worker_to_notify()` is completely invisible. 1 unpark request frequently services $N$ scheduled tasks with zero telemetry visibility into the coalescing decision. |
-| **Boundary C: Worker Notification $\to$ Worker Resume** | **REAL GAP** | **Proven.** `on_thread_unpark` fires after resumption with 0 arguments. The duration between unpark dispatch and worker loop resumption cannot be measured or attributed to a cause. |
+| **Boundary B: Runnable Work $\to$ Wake / Coalesce Decision** | **REAL GAP** | **Proven.** Wake suppression in `Idle::worker_to_notify()` is invisible externally. One task-correlated worker wake selection can correspond to multiple scheduled tasks, while the wake/coalesce decisions themselves are not exposed. |
+| **Boundary C: Worker Notification $\to$ Worker Resume** | **REAL GAP** | **Proven.** `on_thread_unpark` fires after resumption with 0 arguments. The duration between unpark dispatch and worker loop resumption cannot be reconstructed from current external Tokio/Dial9 telemetry or attributed to a cause. |
 | **Boundary D: Task Placement / Work Stealing $\to$ Poll** | **PARTIAL GAP** | **Partially Addressed.** `TaskMeta::schedule_latency()` measures the total delay, but does not expose queue placement (local vs injected vs LIFO) or work-stealing causality. |
 
 ---
