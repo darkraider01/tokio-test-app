@@ -20,6 +20,7 @@ This investigation establishes a strict 3-way empirical comparison across three 
 1. **`tokio-probe` (Internal Tokio Ground Truth):**
    A temporary, minimal set of research probes instrumented directly inside Tokio scheduler internals (`driver.rs`, `scheduled_io.rs`, `harness.rs`, `worker.rs`, `idle.rs`, `park.rs`). It captures monotonic timestamps expressed in nanoseconds (generated via `Instant::elapsed().as_nanos()`), recorded into a mutex-protected in-memory event vector (`Mutex<Vec<ProbeEvent>>`). **It is used strictly as ground truth to expose internal state transitions and causal control flow, not as a proposed production design.**
    - *Measurement Characteristics:* Timestamps use nanosecond units (`as_nanos()`), which does not imply guaranteed nanosecond hardware clock resolution. The global `Mutex<Vec<_>>` lock introduces minor overhead that can perturb microsecond-scale scheduler timings; microsecond figures should therefore be treated as experimental timing measurements rather than zero-overhead production telemetry. Macroscopic effects (such as the ~30 ms Case E driver starvation gap) are orders of magnitude larger than any probe instrumentation overhead.
+   - *Dispatch Measurement:* `WorkerUnparkDispatchBegin` records dispatch-stage entry after the Parker state swap: immediately before notification for `PARKED_CONDVAR` / `PARKED_DRIVER`, or the no-op dispatch path for `EMPTY` / `NOTIFIED`. A dispatch-stage event alone does not imply a notification primitive was invoked.
 2. **`stock recorder` (Maximum Stock Tokio Observability):**
    Uses only public and unstable Tokio hooks currently available in upstream Tokio (`tokio_unstable`): `on_task_spawn`, `on_before_task_poll`, `on_after_task_poll`, `on_task_terminate`, `on_thread_park`, `on_thread_unpark`, and `TaskMeta::schedule_latency()`.
 3. **`Dial9` (Actual Current Telemetry Consumer):**
@@ -68,7 +69,7 @@ We decompose the runtime execution lifecycle into four distinct causal boundarie
 - **Interval:** `Unparker::unpark()` initiates notification $\to$ target worker thread unblocks from kernel park and resumes user space.
 - **Internal Stages Dissected:**
   - `WorkerUnparkRequested`: State transition / notification decision (atomic state swap to NOTIFIED).
-  - `WorkerUnparkDispatchBegin`: Immediately before invoking the kernel notification primitive (`condvar.notify_one()` or `mio::Waker::wake()`).
+  - `WorkerUnparkDispatchBegin`: Records entry into the dispatch stage after the Parker state swap. For `PARKED_CONDVAR` / `PARKED_DRIVER`, this occurs immediately before invoking `condvar.notify_one()` / `mio::Waker::wake()`. For `EMPTY` / `NOTIFIED`, it records the no-op dispatch path (`none_empty` / `none_already_notified`).
   - `WorkerResumed`: Worker has unblocked, re-acquired execution context, and returned to user-space scheduling loop.
 - **Core Question:** Can an observer measure the true latency of waking a worker thread and correlate the wakeup with the task or event that requested it?
 
@@ -90,7 +91,7 @@ Every ground-truth probe in `patches/tokio-ground-truth.patch` is anchored to To
 | **`TaskScheduled`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Handle::schedule_task()` | [`worker.rs#L1385-L1410`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L1385-L1410) | Timestamp, task ID, `is_local` | Task placed into local run queue vs remote injection queue |
 | **`SchedulerWakeDecision`** | `tokio/src/runtime/scheduler/multi_thread/idle.rs` | `Idle::worker_to_notify()` | [`idle.rs#L51-L82`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/idle.rs#L51-L82) | Timestamp, `task_id`, caller, target worker, searching/unparked counts | Decision to notify worker or coalesce/suppress wake, causally linked to scheduling task ID via thread-local binding |
 | **`WorkerUnparkRequested`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L305-L315`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L305-L315) | Timestamp, target worker, previous atomic state | Start of worker unpark request |
-| **`WorkerUnparkDispatchBegin`**| `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L316-L330`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L316-L330) | Timestamp, target worker, notification mechanism (`condvar`/`mio_waker`) | Immediately before `condvar.notify_one()` or Mio waker invocation |
+| **`WorkerUnparkDispatchBegin`**| `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L316-L330`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L316-L330) | Timestamp, target worker, dispatch mechanism (`condvar`/`mio_waker`/`none_empty`/`none_already_notified`) | Dispatch-stage entry after the Parker state swap: before notification for parked states; no-op path for `EMPTY` / `NOTIFIED` |
 | **`WorkerParkWaitBegin`** / **`End`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Parker::park()` | [`park.rs#L160-L240`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L160-L240) | Timestamp, worker ID, park kind (`driver`/`condvar`), state after wake | Entry and exit of OS blocking syscall |
 | **`WorkerResumed`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Context::run()` | [`worker.rs#L535-L545`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L535-L545) | Timestamp, worker ID | Worker exits park routine and resumes active execution loop |
 | **`WorkerPollStart`** / **`End`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Context::run_task()` & `lifo_slot` | [`worker.rs#L705-L720`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L705-L720) & [`L800-L815`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L800-L815) | Timestamp, worker ID, task ID | Wraps task poll invocation including in LIFO slot |
@@ -139,7 +140,7 @@ All experiments were executed on Linux in release mode (`cargo run --release`). 
 +  20.497 ms  on_before_task_poll task_id=23 schedule_latency=0.026ms
 
 [DIAL9 OBSERVABILITY]
-+  DIAL9 WORKER_UNPARK: worker=0 tid=7606 sched_wait=None
++  DIAL9 WORKER_UNPARK: worker=0 tid=7606 sched_wait=None (unsupported/unsampled)
 +  DIAL9 POLL_START: worker=0 task_id=23 loc=src/main.rs:589:25
 +  DIAL9 COMPUTED WAKE-TO-POLL DELAY: 0.026ms
 ```
@@ -260,28 +261,31 @@ In earlier un-synchronized prototype runs, occasionally `Task-Correlated Worker 
 | **Stolen Tasks Sched $\to$ Poll (Worker 0)** | 0.002 ms | **0.003 ms** | 0.004 ms | 0.005 ms |
 | **Stranded Task Sched $\to$ Poll (Worker 1 LIFO slot)** | 40.017 ms | **40.019 ms** | 40.037 ms | 40.044 ms |
 
-#### Ground Truth Timeline
+#### Representative Ground Truth Timeline
+
+The representative run in `linux_run_output.txt` uses a 50 ms compute loop: Task 52 is scheduled at approximately 0.114 ms and polled at 50.131 ms, giving a stranded-task delay of approximately **50.017 ms**. The statistical table above comes from the separate 40 ms variant in `linux_benchmark_output.txt` (**N=30, p50 40.019 ms**).
 
 ```text
-+   0.117 ms  TASK_SCHEDULED task_id=49 is_local=true  (Worker 1 queue)
-+   0.120 ms  TASK_SCHEDULED task_id=50 is_local=true  (Worker 1 queue)
-+   0.121 ms  TASK_SCHEDULED task_id=51 is_local=true  (Worker 1 queue)
-+   0.123 ms  TASK_SCHEDULED task_id=52 is_local=true  (Worker 1 LIFO slot)
-+   0.129 ms  WORKER_POLL_START worker=0 task_id=49   <-- STOLEN by Worker 0
-+   0.148 ms  WORKER_POLL_END   worker=0 task_id=49
-+   0.152 ms  WORKER_POLL_START worker=0 task_id=50   <-- STOLEN by Worker 0
-+   0.153 ms  WORKER_POLL_END   worker=0 task_id=50
-+   0.154 ms  WORKER_POLL_START worker=0 task_id=51   <-- STOLEN by Worker 0
-+   0.154 ms  WORKER_POLL_END   worker=0 task_id=51
-+   0.158 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver <-- Worker 0 goes idle!
-... [Worker 1 computes for 40 ms while Worker 0 sleeps] ...
-+  40.134 ms  WORKER_POLL_END   worker=1 task_id=48   (Parent compute finishes)
-+  40.148 ms  WORKER_POLL_START worker=1 task_id=52   (Stranded task finally runs!)
++   0.109 ms  TASK_SCHEDULED task_id=49 is_local=true  (Worker 1 queue)
++   0.111 ms  TASK_SCHEDULED task_id=50 is_local=true  (Worker 1 queue)
++   0.113 ms  TASK_SCHEDULED task_id=51 is_local=true  (Worker 1 queue)
++   0.114 ms  TASK_SCHEDULED task_id=52 is_local=true  (Worker 1 LIFO slot)
++   0.122 ms  WORKER_POLL_START worker=0 task_id=50   <-- STOLEN by Worker 0
++   0.127 ms  WORKER_POLL_END   worker=0 task_id=50
++   0.130 ms  WORKER_POLL_START worker=0 task_id=49   <-- STOLEN by Worker 0
++   0.130 ms  WORKER_POLL_END   worker=0 task_id=49
++   0.133 ms  WORKER_POLL_START worker=0 task_id=51   <-- STOLEN by Worker 0
++   0.134 ms  WORKER_POLL_END   worker=0 task_id=51
++   0.151 ms  WORKER_PARK_WAIT_BEGIN worker=0 kind=driver <-- Worker 0 goes idle!
+... [Worker 1 computes for 50 ms while Worker 0 sleeps] ...
++  50.123 ms  WORKER_POLL_END   worker=1 task_id=48   (Parent compute finishes)
++  50.131 ms  WORKER_POLL_START worker=1 task_id=52   (Stranded task finally runs!)
 ```
 
-- **Stock Tokio View:** Reports `on_before_task_poll task_id=52 schedule_latency=40.019ms`.
-- **Dial9 View:** Captures `POLL_START: worker=1 task_id=52` and computes `wake_to_poll_delay = 40.019ms`. Dial9 notes `sched_wait=None` (not an OS runqueue delay).
-- **Finding:** Both stock Tokio and Dial9 accurately observe that Task 52 had a 40ms delay, but **neither can explain why**. The telemetry provides no visibility into queue placement (local run queue vs LIFO slot vs injection queue), nor the fact that Worker 0 was idle and parked while Task 52 sat stranded on Worker 1.
+- **Stock Tokio View:** Stock Tokio reports Task 52's approximately 50.017 ms schedule latency directly via `TaskMeta::schedule_latency()` (`on_before_task_poll task_id=52 schedule_latency=50.017ms`).
+- **Dial9 View:** Dial9 records Task 52's eventual `PollStart`, but the current Dial9 trace contains no matching `WakeEvent` for Task 52, so `compute_wake_to_poll_delays()` does not produce the long stranded-task interval for this execution. The computed list is `["0.007ms"]`; the trace contains a wake for Task 48, not Task 52. The trace does not establish why Task 52's WakeEvent is absent.
+- **OS Scheduling Signal:** `sched_wait` was unavailable/unsampled in this WSL2 run (`sched_wait=None`), so no conclusion about kernel runqueue delay is drawn from this field.
+- **Finding:** Stock Tokio observes the long schedule latency but cannot explain the local/LIFO queue stranding. Dial9 observes Task 52 being polled but does not reconstruct its long delay; its current wake-to-poll analysis does not explain the stranding either. Neither view exposes queue placement (local run queue vs LIFO slot vs injection queue) or correlates Worker 0's idle period with Task 52 waiting on Worker 1.
 
 ---
 
@@ -301,8 +305,8 @@ In earlier un-synchronized prototype runs, occasionally `Task-Correlated Worker 
 | **Tokio park wait returns (`Parker::park` exit)** | `WorkerParkWaitEnd` (return timestamp & state) | **Invisible** | Sampled Linux `schedstat` | **Partial / Ambiguous** |
 | **Worker thread resumes execution** | `WorkerResumed` (worker ID recorded) | `on_thread_unpark()` (0 args) | `WorkerUnparkEvent` | **Ambiguous** |
 | **Task poll start** | `WorkerPollStart` (worker + task ID) | `on_before_task_poll` | `PollStartEvent` | **Observable** |
-| **Task schedule latency** | Nanosecond math ($T(\text{poll}) - T(\text{sched})$) | `TaskMeta::schedule_latency()` | `compute_wake_to_poll_delays` | **Observable** |
-| **Work-stealing head-of-line blocking** | Worker idle vs stranded queue trace | High schedule latency, zero context | High delay, zero context | **REAL GAP** |
+| **Task schedule latency** | Nanosecond math ($T(\text{poll}) - T(\text{sched})$) | `TaskMeta::schedule_latency()` | `compute_wake_to_poll_delays` where matching wake/poll events exist; no long interval for Task 52 in this trace | **Observable in stock; conditional in Dial9 analysis** |
+| **Work-stealing head-of-line blocking** | Worker idle vs stranded queue trace | High schedule latency, zero context | Task 52 poll observed; long delay not reconstructed | **REAL GAP** |
 
 *Note on Park Return:* `WorkerParkWaitEnd` tells you when Tokio's park wait returned. The request $\to$ park-return interval contains notification mechanics, kernel scheduling, condvar/mio wake, and lock reacquisition. Dial9 has Linux `schedstat` support capable of exposing `sched_wait_ns` (isolating kernel runqueue wait), but in the WSL2 runs used here the field was unavailable/unsampled (`sched_wait=None`), so no empirical claim in this report relies on schedstat values. Because upstream Tokio exposes no matching `Unparker::unpark()` dispatch timestamp, request $\to$ resume latency cannot be directly reconstructed.
 
@@ -311,7 +315,7 @@ In earlier un-synchronized prototype runs, occasionally `Task-Correlated Worker 
 ## Findings
 
 ### Finding 1: Wake suppression / coalescing is completely invisible externally
-Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks under confirmed scheduler preconditions (30 attempted runs, 30 valid intended-precondition runs, 0 alternate topology runs), exactly 1 worker wake was selected by the scheduler (and dispatched), exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
+Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks under confirmed scheduler preconditions (30 attempted runs, 30 valid intended-precondition runs, 0 alternate topology runs), exactly 1 task-correlated worker wake selection occurred, exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window. The selection metric counts `SchedulerWakeDecision { target_worker: Some(...) }`, not Unparker dispatch events. Separately, the representative trace shows the corresponding unpark request and dispatch stage. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
 
 ### Finding 2: Worker notification $\to$ resume latency cannot be directly measured
 Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 arguments and fires *after* the thread has already resumed execution in user space. There is no timestamp for when the unpark was requested. Therefore, the interval $T(\text{resumed}) - T(\text{unpark\_requested})$ cannot be measured. Furthermore, an observer cannot correlate which task or I/O event caused the worker to resume.
@@ -320,7 +324,7 @@ Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 argument
 When workers are occupied by non-yielding CPU-bound tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.84\text{ ms}$ (p50). Once the driver finally turned, the reader task was scheduled and polled within $7\ \mu\text{s}$ (p50). Both stock Tokio's `TaskMeta::schedule_latency()` ($0.003\text{ ms}$ in representative run) and Dial9's `wake_to_poll_delay` ($0.004\text{ ms}$ in representative run) reported sub-5-microsecond schedule latency, hiding $\sim 29.82\text{ ms}$ of unserved latency.
 
 ### Finding 4: Task queue placement causality is not represented by `schedule_latency`
-When a task experiences high schedule latency, `TaskMeta::schedule_latency()` provides only a scalar duration. In our work-stealing benchmark, Subtask 52 waited $40.019\text{ ms}$ because it sat in Worker 1's LIFO slot behind a 40ms compute loop while Worker 0 was completely idle and parked. Current telemetry cannot distinguish whether this delay was caused by OS CPU starvation, thread unpark delays, or queue head-of-line blocking.
+When a task experiences high schedule latency, `TaskMeta::schedule_latency()` provides only a scalar duration. In the representative work-stealing run, Task 52 waited approximately $50.017\text{ ms}$ in Worker 1's LIFO slot behind a 50 ms compute loop while Worker 0 was idle and parked. The separate 40 ms benchmark variant reports a stranded-task p50 of $40.019\text{ ms}$ across 30 runs. Stock telemetry does not explain the queue placement; Dial9's current wake-to-poll analysis does not reconstruct Task 52's long interval. `sched_wait=None` supplies no evidence for or against kernel runqueue delay.
 
 ---
 
