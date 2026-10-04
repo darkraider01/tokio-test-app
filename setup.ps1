@@ -17,6 +17,7 @@ if (-not (Test-Path $TokioProbeDir)) {
 Push-Location $TokioProbeDir
 Write-Host "Checking out exact tested SHA: $TOKIO_SHA..."
 git checkout -f $TOKIO_SHA
+git clean -fd
 
 Write-Host "Applying minimal ground-truth instrumentation patch..."
 $PatchPath = Join-Path $ScriptDir "patches\tokio-ground-truth.patch"

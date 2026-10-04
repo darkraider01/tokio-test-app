@@ -1083,7 +1083,8 @@ fn run_distribution_benchmarks(runs: usize) {
 
     // Wake Coalescing Benchmark
     let mut coal_unparks = Stats::default();
-    let mut coal_suppressed = Stats::default();
+    let mut coal_task_suppressed = Stats::default();
+    let mut coal_total_suppressed = Stats::default();
     let mut coal_t1_delay = Stats::default();
     let mut coal_coalesced_delay = Stats::default();
 
@@ -1131,28 +1132,35 @@ fn run_distribution_benchmarks(runs: usize) {
 
         let (gt, _, _) = session.finish();
         let mut unparks_cnt = 0.0;
-        let mut suppressed_cnt = 0.0;
+        let mut total_suppressed_cnt = 0.0;
+        let mut task_suppressed_cnt = 0.0;
         let mut first_task_id = None;
         let mut t1_sched = 0u64;
         let mut t1_poll = 0u64;
         let mut other_delays = Vec::new();
         let mut task_sched_map = std::collections::HashMap::new();
+        let mut expecting_task_decision = false;
 
         for ev in &gt {
             match ev {
-                ProbeEvent::SchedulerWakeDecision { target_worker, .. } => {
-                    if target_worker.is_some() {
-                        unparks_cnt += 1.0;
-                    } else {
-                        suppressed_cnt += 1.0;
-                    }
-                }
                 ProbeEvent::TaskScheduled { t_ns, task_id, .. } => {
                     if first_task_id.is_none() {
                         first_task_id = Some(*task_id);
                         t1_sched = *t_ns;
                     }
                     task_sched_map.insert(*task_id, *t_ns);
+                    expecting_task_decision = true;
+                }
+                ProbeEvent::SchedulerWakeDecision { target_worker, .. } => {
+                    if target_worker.is_some() {
+                        unparks_cnt += 1.0;
+                    } else {
+                        total_suppressed_cnt += 1.0;
+                        if expecting_task_decision {
+                            task_suppressed_cnt += 1.0;
+                        }
+                    }
+                    expecting_task_decision = false;
                 }
                 ProbeEvent::WorkerPollStart { t_ns, task_id, .. } => {
                     if first_task_id == Some(*task_id) && t1_poll == 0 {
@@ -1166,7 +1174,8 @@ fn run_distribution_benchmarks(runs: usize) {
         }
 
         coal_unparks.add(unparks_cnt);
-        coal_suppressed.add(suppressed_cnt);
+        coal_task_suppressed.add(task_suppressed_cnt);
+        coal_total_suppressed.add(total_suppressed_cnt);
         if t1_sched > 0 && t1_poll > 0 {
             coal_t1_delay.add(t1_poll.saturating_sub(t1_sched) as f64 / 1_000_000.0);
         }
@@ -1178,13 +1187,15 @@ fn run_distribution_benchmarks(runs: usize) {
 
     println!("\n--- [ADVERSARIAL: Wake Coalescing Distribution (N={})] ---", runs);
     let (u_min, u_p50, u_p95, u_max) = coal_unparks.summarize();
-    println!("  Unpark requests dispatched: min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
-    let (sup_min, sup_p50, sup_p95, sup_max) = coal_suppressed.summarize();
-    println!("  Wake decisions suppressed:   min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", sup_min, sup_p50, sup_p95, sup_max);
+    println!("  Unpark requests dispatched:      min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
+    let (ts_min, ts_p50, ts_p95, ts_max) = coal_task_suppressed.summarize();
+    println!("  Task-correlated wake suppressed: min={:.0}  p50={:.0}  p95={:.0}  max={:.0} (tasks 2-5 coalesced)", ts_min, ts_p50, ts_p95, ts_max);
+    let (sup_min, sup_p50, sup_p95, sup_max) = coal_total_suppressed.summarize();
+    println!("  Total target=None decisions:     min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", sup_min, sup_p50, sup_p95, sup_max);
     let (t1_min, t1_p50, t1_p95, t1_max) = coal_t1_delay.summarize();
-    println!("  Task 1 Sched->Poll Latency:  min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", t1_min, t1_p50, t1_p95, t1_max);
+    println!("  Task 1 Sched->Poll Latency:      min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", t1_min, t1_p50, t1_p95, t1_max);
     let (co_min, co_p50, co_p95, co_max) = coal_coalesced_delay.summarize();
-    println!("  Coalesced Tasks Sched->Poll: min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", co_min, co_p50, co_p95, co_max);
+    println!("  Coalesced Tasks Sched->Poll:     min={:.3}ms  p50={:.3}ms  p95={:.3}ms  max={:.3}ms", co_min, co_p50, co_p95, co_max);
 
     // Work Stealing Benchmark
     let mut steal_stolen_delay = Stats::default();

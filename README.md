@@ -75,8 +75,8 @@ cargo run --release -- --benchmark
 
 ## Causal Boundaries Tested
 
-- **Boundary A: I/O Readiness $\to$ Driver Observation:**
-  External stimulus timestamping vs Tokio `Driver::turn()` discovery under worker CPU saturation.
+- **Boundary A: External I/O Stimulus $\to$ Tokio Driver Observation:**
+  External stimulus timestamping (`WRITE_BEGIN`) vs Tokio `Driver::turn()` discovery under worker CPU saturation.
 - **Boundary B: Runnable Work $\to$ Wake / Coalesce Decision:**
   Multi-task wake bursts and intentional wake suppression via `Idle::worker_to_notify()`.
 - **Boundary C: Worker Notification $\to$ Worker Resume:**

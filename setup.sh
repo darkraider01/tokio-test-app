@@ -18,6 +18,7 @@ fi
 cd "${PARENT_DIR}/tokio-probe"
 echo "Checking out exact tested SHA: ${TOKIO_SHA}..."
 git checkout -f "${TOKIO_SHA}"
+git clean -fd
 
 echo "Applying minimal ground-truth instrumentation patch..."
 git apply "${SCRIPT_DIR}/patches/tokio-ground-truth.patch"
