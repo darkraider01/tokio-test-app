@@ -297,14 +297,14 @@ fn print_three_view_timeline(
                     target_worker, prev_state
                 ),
             ),
-            ProbeEvent::WorkerUnparkDispatched {
+            ProbeEvent::WorkerUnparkDispatchBegin {
                 t_ns,
                 target_worker,
                 mechanism,
             } => (
                 *t_ns,
                 format!(
-                    "WORKER_UNPARK_DISPATCHED target_worker={} mechanism={}",
+                    "WORKER_UNPARK_DISPATCH_BEGIN target_worker={} mechanism={}",
                     target_worker, mechanism
                 ),
             ),
@@ -1295,7 +1295,7 @@ fn run_distribution_benchmarks(runs: usize) {
     if valid_intended_runs > 0 {
         println!("\n  [Metrics across {} Valid Intended-Precondition Runs]:", valid_intended_runs);
         let (u_min, u_p50, u_p95, u_max) = coal_unparks.summarize();
-        println!("  Unpark requests dispatched:      min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
+        println!("  Task-correlated worker wake selections: min={:.0}  p50={:.0}  p95={:.0}  max={:.0}", u_min, u_p50, u_p95, u_max);
         let (ts_min, ts_p50, ts_p95, ts_max) = coal_task_suppressed.summarize();
         println!("  Task-correlated wake suppressed: min={:.0}  p50={:.0}  p95={:.0}  max={:.0} (tasks 2-5 coalesced)", ts_min, ts_p50, ts_p95, ts_max);
         let (sup_min, sup_p50, sup_p95, sup_max) = coal_total_suppressed.summarize();

@@ -18,7 +18,8 @@
 This investigation establishes a strict 3-way empirical comparison across three observation tiers under identical controlled workloads:
 
 1. **`tokio-probe` (Internal Tokio Ground Truth):**
-   A temporary, minimal set of research probes instrumented directly inside Tokio scheduler internals (`driver.rs`, `scheduled_io.rs`, `harness.rs`, `worker.rs`, `idle.rs`, `park.rs`). It records nano-precision monotonic timestamps into an in-memory ring buffer. **It is used strictly as ground truth to expose actual internal state transitions and is not a proposed production design.**
+   A temporary, minimal set of research probes instrumented directly inside Tokio scheduler internals (`driver.rs`, `scheduled_io.rs`, `harness.rs`, `worker.rs`, `idle.rs`, `park.rs`). It captures monotonic timestamps expressed in nanoseconds (generated via `Instant::elapsed().as_nanos()`), recorded into a mutex-protected in-memory event vector (`Mutex<Vec<ProbeEvent>>`). **It is used strictly as ground truth to expose internal state transitions and causal control flow, not as a proposed production design.**
+   - *Measurement Characteristics:* Timestamps use nanosecond units (`as_nanos()`), which does not imply guaranteed nanosecond hardware clock resolution. The global `Mutex<Vec<_>>` lock introduces minor overhead that can perturb microsecond-scale scheduler timings; microsecond figures should therefore be treated as experimental timing measurements rather than zero-overhead production telemetry. Macroscopic effects (such as the ~30 ms Case E driver starvation gap) are orders of magnitude larger than any probe instrumentation overhead.
 2. **`stock recorder` (Maximum Stock Tokio Observability):**
    Uses only public and unstable Tokio hooks currently available in upstream Tokio (`tokio_unstable`): `on_task_spawn`, `on_before_task_poll`, `on_after_task_poll`, `on_task_terminate`, `on_thread_park`, `on_thread_unpark`, and `TaskMeta::schedule_latency()`.
 3. **`Dial9` (Actual Current Telemetry Consumer):**
@@ -56,7 +57,7 @@ We decompose the runtime execution lifecycle into four distinct causal boundarie
 
 ### Boundary A: External I/O Stimulus $\to$ Tokio Driver Observation
 - **Interval:** External I/O stimulus initiated (`WRITE_BEGIN`/`WRITE_DONE`) $\to$ Tokio `driver.turn()` (`mio::Poll::poll`) returns readiness.
-- **Methodological Note:** Our start timestamp is `WRITE_BEGIN`/`WRITE_DONE` on the sending thread, not the exact instant the receiving socket became kernel-readable in the OS network stack. (Proving the exact kernel-readiness timestamp would require kernel/eBPF instrumentation). However, comparing the parked-worker control ($\Delta_{\text{io\_driver}} \approx 0.102\text{ ms}$) against worker CPU saturation ($\Delta_{\text{io\_driver}} \approx 29.844\text{ ms}$) definitively demonstrates a ~30 ms pre-scheduling blind spot where the runtime fails to service the driver while workers are occupied.
+- **Methodological Note:** Our start timestamp is `WRITE_BEGIN`/`WRITE_DONE` on the sending thread, not the exact instant the receiving socket became kernel-readable in the OS network stack. (Proving the exact kernel-readiness timestamp would require kernel/eBPF instrumentation). However, comparing the parked-worker control ($\Delta_{\text{io\_driver}} \approx 0.101\text{ ms}$) against worker CPU saturation ($\Delta_{\text{io\_driver}} \approx 29.844\text{ ms}$) definitively demonstrates a ~30 ms pre-scheduling blind spot where the runtime fails to service the driver while workers are occupied.
 - **Core Question:** Can current Tokio hooks or Dial9 detect when an application is waiting for Tokio to service the I/O driver while worker threads are saturated by CPU-bound tasks?
 
 ### Boundary B: Runnable Work $\to$ Wake / Coalesce Decision
@@ -65,6 +66,10 @@ We decompose the runtime execution lifecycle into four distinct causal boundarie
 
 ### Boundary C: Worker Notification $\to$ Worker Resume
 - **Interval:** `Unparker::unpark()` initiates notification $\to$ target worker thread unblocks from kernel park and resumes user space.
+- **Internal Stages Dissected:**
+  - `WorkerUnparkRequested`: State transition / notification decision (atomic state swap to NOTIFIED).
+  - `WorkerUnparkDispatchBegin`: Immediately before invoking the kernel notification primitive (`condvar.notify_one()` or `mio::Waker::wake()`).
+  - `WorkerResumed`: Worker has unblocked, re-acquired execution context, and returned to user-space scheduling loop.
 - **Core Question:** Can an observer measure the true latency of waking a worker thread and correlate the wakeup with the task or event that requested it?
 
 ### Boundary D: Task Placement / Work Stealing $\to$ Poll
@@ -85,7 +90,7 @@ Every ground-truth probe in `patches/tokio-ground-truth.patch` is anchored to To
 | **`TaskScheduled`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Handle::schedule_task()` | [`worker.rs#L1385-L1410`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L1385-L1410) | Timestamp, task ID, `is_local` | Task placed into local run queue vs remote injection queue |
 | **`SchedulerWakeDecision`** | `tokio/src/runtime/scheduler/multi_thread/idle.rs` | `Idle::worker_to_notify()` | [`idle.rs#L51-L82`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/idle.rs#L51-L82) | Timestamp, `task_id`, caller, target worker, searching/unparked counts | Decision to notify worker or coalesce/suppress wake, causally linked to scheduling task ID via thread-local binding |
 | **`WorkerUnparkRequested`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L305-L315`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L305-L315) | Timestamp, target worker, previous atomic state | Start of worker unpark request |
-| **`WorkerUnparkDispatched`**| `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L316-L330`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L316-L330) | Timestamp, target worker, notification mechanism (`condvar`/`mio_waker`) | Completion of atomic swap & OS notification dispatch |
+| **`WorkerUnparkDispatchBegin`**| `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Unparker::unpark()` | [`park.rs#L316-L330`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L316-L330) | Timestamp, target worker, notification mechanism (`condvar`/`mio_waker`) | Immediately before `condvar.notify_one()` or Mio waker invocation |
 | **`WorkerParkWaitBegin`** / **`End`** | `tokio/src/runtime/scheduler/multi_thread/park.rs` | `Parker::park()` | [`park.rs#L160-L240`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/park.rs#L160-L240) | Timestamp, worker ID, park kind (`driver`/`condvar`), state after wake | Entry and exit of OS blocking syscall |
 | **`WorkerResumed`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Context::run()` | [`worker.rs#L535-L545`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L535-L545) | Timestamp, worker ID | Worker exits park routine and resumes active execution loop |
 | **`WorkerPollStart`** / **`End`** | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | `Context::run_task()` & `lifo_slot` | [`worker.rs#L705-L720`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L705-L720) & [`L800-L815`](https://github.com/tokio-rs/tokio/blob/b2636752450484955e7ad334bac678424d51bc4a/tokio/src/runtime/scheduler/multi_thread/worker.rs#L800-L815) | Timestamp, worker ID, task ID | Wraps task poll invocation including in LIFO slot |
@@ -106,14 +111,14 @@ All experiments were executed on Linux in release mode (`cargo run --release`). 
   - $\Delta_{\text{poll}} = T(\text{task\_polled}) - T(\text{task\_scheduled})$
   - $\Delta_{\text{end\_to\_end}} = T(\text{task\_polled}) - T(\text{external\_write\_begin})$
 
-#### Distribution (N=30 Runs)
+#### Distribution (N=30 Runs, 30 Valid)
 
 | Interval | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **$\Delta_{\text{io\_driver}}$** (External Stimulus $\to$ Tokio Driver Observation) | 0.081 ms | **0.103 ms** | 0.148 ms | 0.152 ms |
-| **$\Delta_{\text{schedule}}$** (Tokio Driver Observation $\to$ Task Scheduled) | 0.002 ms | **0.003 ms** | 0.004 ms | 0.004 ms |
-| **$\Delta_{\text{poll}}$** (Task Scheduled $\to$ Worker Poll Start) | 0.019 ms | **0.023 ms** | 0.034 ms | 0.047 ms |
-| **$\Delta_{\text{end\_to\_end}}$** (External Stimulus $\to$ Worker Poll Start) | 0.103 ms | **0.130 ms** | 0.178 ms | 0.180 ms |
+| **$\Delta_{\text{io\_driver}}$** (External Stimulus $\to$ Tokio Driver Observation) | 0.076 ms | **0.101 ms** | 0.140 ms | 0.169 ms |
+| **$\Delta_{\text{schedule}}$** (Tokio Driver Observation $\to$ Task Scheduled) | 0.003 ms | **0.003 ms** | 0.004 ms | 0.005 ms |
+| **$\Delta_{\text{poll}}$** (Task Scheduled $\to$ Worker Poll Start) | 0.018 ms | **0.024 ms** | 0.035 ms | 0.053 ms |
+| **$\Delta_{\text{end\_to\_end}}$** (External Stimulus $\to$ Worker Poll Start) | 0.099 ms | **0.128 ms** | 0.176 ms | 0.205 ms |
 
 #### Representative Trace
 
@@ -144,16 +149,16 @@ All experiments were executed on Linux in release mode (`cargo run --release`). 
 ### Case E: External I/O Stimulus Under Scheduler / CPU Saturation
 
 - **Workload & Synchronization:** An async reader task is registered on a TCP stream. All $N$ workers ($N=2$, canonical) are occupied with non-yielding CPU compute loops (spin loops) for 40 ms. Each compute task increments an atomic barrier (`compute_started.fetch_add(1, SeqCst)`); only after all $N$ workers are confirmed executing the spin loop does an external writer thread initiate a 10 ms delay and send a TCP packet at $t \approx 10.36\text{ ms}$.
-- **Key Observation:** Because all workers are executing non-yielding compute loops, **no worker turns the I/O driver**. The TCP packet sits in the OS kernel receive buffer for ~30 ms before Tokio discovers it.
+- **Key Observation:** Because all workers are executing non-yielding compute loops, **no worker turns the I/O driver**. After the external write, Tokio does not service the driver and observe socket readiness until roughly 30 ms later while all runtime workers remain occupied.
 
 #### Distribution (N=30 Runs, 30 Valid)
 
 | Interval | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **$\Delta_{\text{io\_driver}}$ (Driver Service Delay: Stimulus $\to$ Observation)** | 29.675 ms | **29.844 ms** | 31.308 ms | 31.667 ms |
+| **$\Delta_{\text{io\_driver}}$ (Driver Service Delay: Stimulus $\to$ Observation)** | 29.787 ms | **29.844 ms** | 29.871 ms | 29.879 ms |
 | **$\Delta_{\text{schedule}}$ (Tokio Observation $\to$ Task Scheduled)** | 0.001 ms | **0.002 ms** | 0.003 ms | 0.003 ms |
-| **$\Delta_{\text{poll}}$ (Task Scheduled $\to$ Worker Poll Start)** | 0.004 ms | **0.007 ms** | 0.013 ms | 0.014 ms |
-| **$\Delta_{\text{end\_to\_end}}$ (Total Physical Real Latency)** | 29.689 ms | **29.851 ms** | 31.324 ms | 31.682 ms |
+| **$\Delta_{\text{poll}}$ (Task Scheduled $\to$ Worker Poll Start)** | 0.004 ms | **0.007 ms** | 0.012 ms | 0.028 ms |
+| **$\Delta_{\text{end\_to\_end}}$ (Total Physical Real Latency)** | 29.795 ms | **29.855 ms** | 29.881 ms | 29.889 ms |
 
 #### The Critical Observability Inversion
 
@@ -163,18 +168,18 @@ Timeline of Real Events vs Telemetry Views in Case E:
 Time        Physical Reality                       Stock Tokio View                Dial9 View
 ---------   --------------------------------       ----------------------------    ----------------------------
 t=10.36ms   External TCP Write Sent (WRITE_BEGIN)
-            [Packet in kernel socket buffer]       (completely invisible)          (completely invisible)
-            ... 29.85 ms driver service delay ...  (completely invisible)          (completely invisible)
-t=40.21ms   Compute ends; Driver::turn() called    (no event emitted)              (no event emitted)
-t=40.22ms   Reader Task Scheduled                  set_scheduled_at(40.22ms)       WakeEvent captured
-t=40.22ms   Reader Task Polled                     schedule_latency: 0.005 ms!     wake_to_poll: 0.009 ms!
+            [External write unobserved by Tokio]   (completely invisible)          (completely invisible)
+            ... 29.82 ms driver service delay ...  (completely invisible)          (completely invisible)
+t=40.18ms   Compute ends; Driver::turn() called    (no event emitted)              (no event emitted)
+t=40.19ms   Reader Task Scheduled                  set_scheduled_at(40.19ms)       WakeEvent captured
+t=40.19ms   Reader Task Polled                     schedule_latency: 0.003 ms!     wake_to_poll: 0.004 ms!
 ```
 
-- **Reported `TaskMeta::schedule_latency()`:** **$0.005\text{ ms (5 \mu s)}$**
-- **Reported Dial9 `wake_to_poll_delay`:** **$0.009\text{ ms (9 \mu s)}$**
-- **Actual Application-Experienced Delay:** **$29.865\text{ ms}$** (representative run) / **$29.851\text{ ms}$** (benchmark p50)
+- **Reported `TaskMeta::schedule_latency()`:** **$0.003\text{ ms (3 \mu s)}$**
+- **Reported Dial9 `wake_to_poll_delay`:** **$0.004\text{ ms (4 \mu s)}$**
+- **Actual Application-Experienced Delay:** **$29.830\text{ ms}$** (representative run) / **$29.855\text{ ms}$** (benchmark p50)
 
-**Result:** Both stock Tokio and Dial9 report sub-10-microsecond schedule latency, hiding **over 99.9% of the real latency**. The delay occurred entirely before Tokio serviced the I/O driver, rendering the driver service starvation completely invisible to application telemetry.
+**Result:** Both stock Tokio and Dial9 report sub-5-microsecond schedule latency, hiding **over 99.9% of the real latency**. The delay occurred entirely before Tokio serviced the I/O driver, rendering the driver service starvation completely invisible to application telemetry.
 
 ---
 
@@ -200,14 +205,14 @@ t=40.22ms   Reader Task Polled                     schedule_latency: 0.005 ms!  
 
 | Metric (N=30 Valid Intended-Precondition Runs) | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **Unpark Requests Dispatched** | **1** | **1** | 1 | 1 |
+| **Task-Correlated Worker Wake Selections** | **1** | **1** | 1 | 1 |
 | **Task-Correlated Wake Suppressions (Tasks 2–5 Coalesced)** | **4** | **4** | 4 | 4 |
 | **Total `target=None` Scheduler Decisions in Window** | **5** | **5** | 5 | 5 |
-| **Task 1 Sched $\to$ Poll Latency** | 0.051 ms | **0.060 ms** | 0.081 ms | 0.141 ms |
-| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.018 ms | **0.034 ms** | 0.044 ms | 0.095 ms |
+| **Task 1 Sched $\to$ Poll Latency** | 0.051 ms | **0.060 ms** | 0.095 ms | 0.096 ms |
+| **Coalesced Tasks Sched $\to$ Poll Latency** | 0.027 ms | **0.035 ms** | 0.064 ms | 0.072 ms |
 
 *Diagnostic Note on Earlier `min=0` Observations:*
-In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatched` reported `min=0` and `Task-Correlated Suppressions` reported `min=0`. Root-cause investigation showed this was a workload setup race: the blocker task was on an open-ended timer (40ms) while setup slept. If OS scheduling pauses delayed the setup thread, the blocker finished early, leaving Worker 0 idle, or if Worker 1 was still exiting searching mode when Task 1 arrived (`num_searching > 0`), Tokio suppressed Task 1's unpark too. Establishing explicit synchronization (atomic spin control on Worker 0, verified `poll_fn` registration on all 5 waiting tasks, and causal task tracking) eliminated setup nondeterminism across all 30 benchmark runs.
+In earlier un-synchronized prototype runs, occasionally `Task-Correlated Worker Wake Selections` reported `min=0` and `Task-Correlated Suppressions` reported `min=0`. Root-cause investigation showed this was a workload setup race: the blocker task was on an open-ended timer (40ms) while setup slept. If OS scheduling pauses delayed the setup thread, the blocker finished early, leaving Worker 0 idle, or if Worker 1 was still exiting searching mode when Task 1 arrived (`num_searching > 0`), Tokio suppressed Task 1's unpark too. Establishing explicit synchronization (atomic spin control on Worker 0, verified `poll_fn` registration on all 5 waiting tasks, and causal task tracking) eliminated setup nondeterminism across all 30 benchmark runs.
 
 #### Exact Causal Ground Truth Timeline
 
@@ -215,7 +220,7 @@ In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatc
 +   0.179 ms  TASK_SCHEDULED task_id=41 is_local=false
 +   0.179 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify_selected task_id=Some(41) target=Some(1) searching=1 unparked=2/2
 +   0.180 ms  WORKER_UNPARK_REQUESTED target_worker=1 prev_state=PARKED_CONDVAR
-+   0.180 ms  WORKER_UNPARK_DISPATCHED target_worker=1 mechanism=condvar
++   0.180 ms  WORKER_UNPARK_DISPATCH_BEGIN target_worker=1 mechanism=condvar
 +   0.181 ms  TASK_SCHEDULED task_id=42 is_local=false
 +   0.181 ms  SCHEDULER_WAKE_DECISION caller=worker_to_notify task_id=Some(42) target=None searching=1 unparked=2/2  <-- TASK 42 SUPPRESSION
 +   0.182 ms  TASK_SCHEDULED task_id=43 is_local=false
@@ -248,12 +253,12 @@ In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatc
   - Subtask 4 remains stranded in Worker 1's LIFO slot behind the 40–50ms compute loop.
   - Worker 0 finishes running the stolen tasks, finds no more tasks to steal, and **parks on the driver**, becoming idle while Subtask 4 is still waiting!
 
-#### Distribution (N=30 Runs)
+#### Distribution (N=30 Runs, 30 Valid)
 
 | Metric | Min | Median (p50) | p95 | Max |
 | :--- | :--- | :--- | :--- | :--- |
-| **Stolen Tasks Sched $\to$ Poll (Worker 0)** | 0.002 ms | **0.002 ms** | 0.004 ms | 0.005 ms |
-| **Stranded Task Sched $\to$ Poll (Worker 1 LIFO slot)** | 40.015 ms | **40.019 ms** | 40.036 ms | 41.201 ms |
+| **Stolen Tasks Sched $\to$ Poll (Worker 0)** | 0.002 ms | **0.003 ms** | 0.004 ms | 0.005 ms |
+| **Stranded Task Sched $\to$ Poll (Worker 1 LIFO slot)** | 40.017 ms | **40.019 ms** | 40.037 ms | 40.044 ms |
 
 #### Ground Truth Timeline
 
@@ -292,11 +297,11 @@ In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatc
 | **Task queue placement (Local vs Injected)** | `is_local: bool` | **Invisible** | **Invisible** | **REAL GAP** |
 | **Scheduler wake decision (Notify vs Coalesce)**| `SchedulerWakeDecision` (`target`/`None`)| **Invisible** | **Invisible** | **REAL GAP** |
 | **Worker unpark requested** | `WorkerUnparkRequested` | **Invisible** | **Invisible** | **REAL GAP** |
-| **Worker unpark dispatched** | `WorkerUnparkDispatched` (mechanism) | **Invisible** | **Invisible** | **REAL GAP** |
+| **Worker unpark dispatch begins** | `WorkerUnparkDispatchBegin` (mechanism) | **Invisible** | **Invisible** | **REAL GAP** |
 | **Tokio park wait returns (`Parker::park` exit)** | `WorkerParkWaitEnd` (return timestamp & state) | **Invisible** | Sampled Linux `schedstat` | **Partial / Ambiguous** |
 | **Worker thread resumes execution** | `WorkerResumed` (worker ID recorded) | `on_thread_unpark()` (0 args) | `WorkerUnparkEvent` | **Ambiguous** |
 | **Task poll start** | `WorkerPollStart` (worker + task ID) | `on_before_task_poll` | `PollStartEvent` | **Observable** |
-| **Task schedule latency** | Nano-precision math | `TaskMeta::schedule_latency()` | `compute_wake_to_poll_delays` | **Observable** |
+| **Task schedule latency** | Nanosecond math ($T(\text{poll}) - T(\text{sched})$) | `TaskMeta::schedule_latency()` | `compute_wake_to_poll_delays` | **Observable** |
 | **Work-stealing head-of-line blocking** | Worker idle vs stranded queue trace | High schedule latency, zero context | High delay, zero context | **REAL GAP** |
 
 *Note on Park Return:* `WorkerParkWaitEnd` tells you when Tokio's park wait returned. The request $\to$ park-return interval contains notification mechanics, kernel scheduling, condvar/mio wake, and lock reacquisition. Dial9 has Linux `schedstat` support capable of exposing `sched_wait_ns` (isolating kernel runqueue wait), but in the WSL2 runs used here the field was unavailable/unsampled (`sched_wait=None`), so no empirical claim in this report relies on schedstat values. Because upstream Tokio exposes no matching `Unparker::unpark()` dispatch timestamp, request $\to$ resume latency cannot be directly reconstructed.
@@ -306,13 +311,13 @@ In earlier un-synchronized prototype runs, occasionally `Unpark Requests Dispatc
 ## Findings
 
 ### Finding 1: Wake suppression / coalescing is completely invisible externally
-Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks under confirmed scheduler preconditions (30 attempted runs, 30 valid intended-precondition runs, 0 alternate topology runs), exactly 1 unpark request was dispatched, exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
+Tokio's scheduler intentionally coalesces wakeups: if an idle worker is already in the `searching` state, `Idle::worker_to_notify()` returns `None`. In our 30-run benchmark across 5 sequentially notified tasks under confirmed scheduler preconditions (30 attempted runs, 30 valid intended-precondition runs, 0 alternate topology runs), exactly 1 worker wake was selected by the scheduler (and dispatched), exactly 4 task-correlated wakes were suppressed (tasks 2–5 coalesced onto worker 1), and 5 total `target=None` scheduler decisions occurred in the measurement window. External observers see 5 tasks awaken and 1 unpark event, with no mechanism to determine whether later tasks were intentionally batched onto the running worker or delayed by contention.
 
 ### Finding 2: Worker notification $\to$ resume latency cannot be directly measured
 Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 arguments and fires *after* the thread has already resumed execution in user space. There is no timestamp for when the unpark was requested. Therefore, the interval $T(\text{resumed}) - T(\text{unpark\_requested})$ cannot be measured. Furthermore, an observer cannot correlate which task or I/O event caused the worker to resume.
 
 ### Finding 3: External I/O stimulus $\to$ Tokio driver service latency is invisible and can invert telemetry
-When workers are occupied by non-yielding CPU-bound tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.84\text{ ms}$ (p50). Once the driver finally turned, the reader task was scheduled and polled within $7\ \mu\text{s}$ (p50). Both stock Tokio's `TaskMeta::schedule_latency()` ($0.005\text{ ms}$ in representative run) and Dial9's `wake_to_poll_delay` ($0.009\text{ ms}$ in representative run) reported sub-10-microsecond schedule latency, hiding $\sim 29.85\text{ ms}$ of unserved latency.
+When workers are occupied by non-yielding CPU-bound tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.84\text{ ms}$ (p50). Once the driver finally turned, the reader task was scheduled and polled within $7\ \mu\text{s}$ (p50). Both stock Tokio's `TaskMeta::schedule_latency()` ($0.003\text{ ms}$ in representative run) and Dial9's `wake_to_poll_delay` ($0.004\text{ ms}$ in representative run) reported sub-5-microsecond schedule latency, hiding $\sim 29.82\text{ ms}$ of unserved latency.
 
 ### Finding 4: Task queue placement causality is not represented by `schedule_latency`
 When a task experiences high schedule latency, `TaskMeta::schedule_latency()` provides only a scalar duration. In our work-stealing benchmark, Subtask 52 waited $40.019\text{ ms}$ because it sat in Worker 1's LIFO slot behind a 40ms compute loop while Worker 0 was completely idle and parked. Current telemetry cannot distinguish whether this delay was caused by OS CPU starvation, thread unpark delays, or queue head-of-line blocking.
