@@ -1127,21 +1127,17 @@ fn correlate_unambiguous_readiness(
     }
 }
 
-fn extract_identified_task_telemetry(
-    stock_events: &[StockEvent],
-    dial9_events: &[Dial9Event],
-    target_tid: u64,
-) -> (Option<u64>, Option<u64>) {
-    extract_identified_task_telemetry_for_cycle(stock_events, dial9_events, target_tid, None)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dial9Interval {
+    Available(u64),
+    Unavailable,
+    Ambiguous,
 }
 
-fn extract_identified_task_telemetry_for_cycle(
-    stock_events: &[StockEvent],
+pub fn extract_dial9_task_intervals(
     dial9_events: &[Dial9Event],
     target_tid: u64,
-    cycle_index: Option<usize>,
-) -> (Option<u64>, Option<u64>) {
-    // ── Dial9 Telemetry ──────────────────────────────────────────────────────────
+) -> Vec<Dial9Interval> {
     // Dial9 encoders flush per-worker buffers independently, so `dial9_events`
     // may have reversed or interleaved segment chunks across worker migration.
     // Sort events by layer-native timestamp_ns.
@@ -1179,13 +1175,11 @@ fn extract_identified_task_telemetry_for_cycle(
 
     // Group wakes within intervals between consecutive polls.
     // Never carry a wake past the first poll that follows it.
-    // Each poll defines a stable cycle index.
-    let mut dial9_cycles: Vec<Option<u64>> = Vec::with_capacity(dial9_polls.len());
-    let mut has_dial9_ambiguous = false;
+    // Each poll defines an independent layer interval.
+    let mut intervals = Vec::with_capacity(dial9_polls.len());
     let mut prev_poll_ts = 0u64;
 
     for (i, &poll_ts) in dial9_polls.iter().enumerate() {
-        // Interval: for i == 0, wakes <= poll_ts; for i > 0, prev_poll_ts < wakes <= poll_ts
         let candidate_wakes: Vec<u64> = dial9_wakes
             .iter()
             .copied()
@@ -1193,43 +1187,42 @@ fn extract_identified_task_telemetry_for_cycle(
             .collect();
 
         match candidate_wakes.len() {
-            0 => {
-                // Poll without intervening wake: unavailable for wake-to-poll measurement
-                dial9_cycles.push(None);
-            }
-            1 => {
-                let delay = poll_ts.saturating_sub(candidate_wakes[0]);
-                dial9_cycles.push(Some(delay));
-            }
-            _ => {
-                // Multiple candidate wakes: ambiguous attribution
-                has_dial9_ambiguous = true;
-                dial9_cycles.push(None);
-            }
+            0 => intervals.push(Dial9Interval::Unavailable),
+            1 => intervals.push(Dial9Interval::Available(
+                poll_ts.saturating_sub(candidate_wakes[0]),
+            )),
+            _ => intervals.push(Dial9Interval::Ambiguous),
         }
         prev_poll_ts = poll_ts;
     }
 
-    let dial9_sample = match cycle_index {
-        Some(idx) => dial9_cycles.get(idx).copied().flatten(),
-        None => {
-            if dial9_cycles.len() == 1 {
-                dial9_cycles[0]
-            } else if !has_dial9_ambiguous {
-                let valid: Vec<u64> = dial9_cycles.iter().filter_map(|c| *c).collect();
-                if valid.len() == 1 {
-                    Some(valid[0])
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-    };
+    intervals
+}
 
-    // ── Stock Tokio Observability ────────────────────────────────────────────────
-    // Filter Stock events for target_tid and sort by layer-native t_ns.
+pub fn extract_dial9_unique_sample(dial9_events: &[Dial9Event], target_tid: u64) -> Option<u64> {
+    let intervals = extract_dial9_task_intervals(dial9_events, target_tid);
+    // If any interval has ambiguous wake attribution, conservative extraction must reject attribution.
+    if intervals.iter().any(|&i| i == Dial9Interval::Ambiguous) {
+        return None;
+    }
+    let valid: Vec<u64> = intervals
+        .into_iter()
+        .filter_map(|i| match i {
+            Dial9Interval::Available(d) => Some(d),
+            _ => None,
+        })
+        .collect();
+    if valid.len() == 1 {
+        Some(valid[0])
+    } else {
+        None
+    }
+}
+
+pub fn extract_stock_task_intervals(
+    stock_events: &[StockEvent],
+    target_tid: u64,
+) -> Vec<Option<u64>> {
     let mut stock_filtered: Vec<&StockEvent> = stock_events
         .iter()
         .filter(|ev| ev.task_id == Some(target_tid))
@@ -1257,23 +1250,28 @@ fn extract_identified_task_telemetry_for_cycle(
         }
     }
 
-    let stock_sample = match cycle_index {
-        Some(idx) => stock_polls.get(idx).copied().flatten(),
-        None => {
-            if stock_polls.len() == 1 {
-                stock_polls[0]
-            } else {
-                let valid: Vec<u64> = stock_polls.iter().filter_map(|c| *c).collect();
-                if valid.len() == 1 {
-                    Some(valid[0])
-                } else {
-                    None
-                }
-            }
-        }
-    };
+    stock_polls
+}
 
-    (stock_sample, dial9_sample)
+pub fn extract_stock_unique_sample(stock_events: &[StockEvent], target_tid: u64) -> Option<u64> {
+    let polls = extract_stock_task_intervals(stock_events, target_tid);
+    let valid: Vec<u64> = polls.into_iter().flatten().collect();
+    if valid.len() == 1 {
+        Some(valid[0])
+    } else {
+        None
+    }
+}
+
+pub fn extract_identified_task_telemetry(
+    stock_events: &[StockEvent],
+    dial9_events: &[Dial9Event],
+    target_tid: u64,
+) -> (Option<u64>, Option<u64>) {
+    (
+        extract_stock_unique_sample(stock_events, target_tid),
+        extract_dial9_unique_sample(dial9_events, target_tid),
+    )
 }
 
 #[derive(Clone, Debug, Default)]
@@ -2804,14 +2802,13 @@ mod tests {
     #[test]
     fn test_telemetry_ordering_and_cycle_selection() {
         let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let stock_empty: Vec<StockEvent> = vec![];
 
         // ── Regression Test 1: Two wakes before one poll, followed by poll without wake ──
         // Confirmed reproduction from review:
         // - Wake(task=42, t=100)
         // - Wake(task=42, t=110)
-        // - PollStart(task=42, t=120)  [Cycle 0: multiple wakes -> ambiguous (None)]
-        // - PollStart(task=42, t=210)  [Cycle 1: no intervening wake -> unavailable (None)]
+        // - PollStart(task=42, t=120)  [Cycle 0: multiple wakes -> ambiguous]
+        // - PollStart(task=42, t=210)  [Cycle 1: no intervening wake -> unavailable]
         let dial9_coalesced = vec![
             make_dial9_wake(100, 42, 1, 0),
             make_dial9_wake(110, 42, 1, 0),
@@ -2819,40 +2816,20 @@ mod tests {
             make_dial9_poll_start(210, 42, 0),
         ];
 
-        // Cycle 0: multiple wakes before poll without distinguishing evidence -> ambiguous
-        let (_, d9_coal_c0) = extract_identified_task_telemetry_for_cycle(
-            &stock_empty,
-            &dial9_coalesced,
-            42,
-            Some(0),
+        let intervals = extract_dial9_task_intervals(&dial9_coalesced, 42);
+        assert_eq!(
+            intervals,
+            vec![Dial9Interval::Ambiguous, Dial9Interval::Unavailable],
+            "cycle 0 must be Ambiguous and cycle 1 must be Unavailable without carrying wakes past polls"
         );
         assert_eq!(
-            d9_coal_c0, None,
-            "two wakes before one poll must be treated as ambiguous attribution"
-        );
-
-        // Cycle 1: wake=110 must NEVER carry past poll=120 into poll=210; poll=210 has no intervening wake -> unavailable
-        let (_, d9_coal_c1) = extract_identified_task_telemetry_for_cycle(
-            &stock_empty,
-            &dial9_coalesced,
-            42,
-            Some(1),
-        );
-        assert_eq!(
-            d9_coal_c1, None,
-            "wake must not carry past earlier poll; subsequent poll without wake is unavailable"
-        );
-
-        // Unspecified cycle selection on ambiguous/multi-poll sequence
-        let (_, d9_coal_unspec) =
-            extract_identified_task_telemetry(&stock_empty, &dial9_coalesced, 42);
-        assert_eq!(
-            d9_coal_unspec, None,
-            "unspecified cycle on ambiguous coalesced sequence must return None"
+            extract_dial9_unique_sample(&dial9_coalesced, 42),
+            None,
+            "presence of ambiguous intervals must reject unique sample extraction"
         );
 
         // ── Regression Test 2: Poll without intervening wake, followed by valid wake/poll ──
-        // - PollStart(task=42, t=50)   [Cycle 0: initial poll without preceding wake -> unavailable (None)]
+        // - PollStart(task=42, t=50)   [Cycle 0: initial poll without preceding wake -> unavailable]
         // - Wake(task=42, t=100)
         // - PollStart(task=42, t=120)  [Cycle 1: valid wake/poll cycle -> delay 20ns]
         let dial9_spawn_then_wake = vec![
@@ -2861,27 +2838,16 @@ mod tests {
             make_dial9_poll_start(120, 42, 0),
         ];
 
-        let (_, d9_spawn_c0) = extract_identified_task_telemetry_for_cycle(
-            &stock_empty,
-            &dial9_spawn_then_wake,
-            42,
-            Some(0),
+        let intervals_spawn = extract_dial9_task_intervals(&dial9_spawn_then_wake, 42);
+        assert_eq!(
+            intervals_spawn,
+            vec![Dial9Interval::Unavailable, Dial9Interval::Available(20)],
+            "poll without intervening wake must be unavailable, followed by available wake-to-poll delay"
         );
         assert_eq!(
-            d9_spawn_c0, None,
-            "poll without intervening wake must be unavailable"
-        );
-
-        let (_, d9_spawn_c1) = extract_identified_task_telemetry_for_cycle(
-            &stock_empty,
-            &dial9_spawn_then_wake,
-            42,
-            Some(1),
-        );
-        assert_eq!(
-            d9_spawn_c1,
+            extract_dial9_unique_sample(&dial9_spawn_then_wake, 42),
             Some(20),
-            "poll following wake must yield exact wake-to-poll delay (120 - 100 = 20ns)"
+            "single valid cycle must extract unique sample"
         );
 
         // ── Regression Test 3: Reversed segment order ──
@@ -2905,11 +2871,11 @@ mod tests {
         );
         assert_eq!(stock_lat, Some(18_000));
 
-        // ── Regression Test 4: Ambiguous and unavailable cycle selection without index shifting ──
-        // - Wake(10), Wake(20) -> PollStart(30)   [Cycle 0: ambiguous -> None]
-        // - PollStart(50)                         [Cycle 1: unavailable -> None]
+        // ── Regression Test 4: Ambiguous and unavailable intervals without index shifting ──
+        // - Wake(10), Wake(20) -> PollStart(30)   [Cycle 0: ambiguous]
+        // - PollStart(50)                         [Cycle 1: unavailable]
         // - Wake(70) -> PollStart(85)             [Cycle 2: valid -> Some(15ns)]
-        // - PollStart(110)                        [Cycle 3: unavailable -> None]
+        // - PollStart(110)                        [Cycle 3: unavailable]
         let dial9_complex = vec![
             make_dial9_wake(10, 42, 1, 0),
             make_dial9_wake(20, 42, 1, 0),
@@ -2920,43 +2886,24 @@ mod tests {
             make_dial9_poll_start(110, 42, 0),
         ];
 
-        let (_, c0) =
-            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(0));
-        assert_eq!(c0, None, "cycle 0 must be None (ambiguous)");
-
-        let (_, c1) =
-            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(1));
-        assert_eq!(c1, None, "cycle 1 must be None (unavailable)");
-
-        let (_, c2) =
-            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(2));
+        let complex_intervals = extract_dial9_task_intervals(&dial9_complex, 42);
         assert_eq!(
-            c2,
-            Some(15),
-            "cycle 2 must remain at stable index 2 without shifting from preceding missing cycles"
+            complex_intervals,
+            vec![
+                Dial9Interval::Ambiguous,
+                Dial9Interval::Unavailable,
+                Dial9Interval::Available(15),
+                Dial9Interval::Unavailable,
+            ],
+            "stable cycle indices must not shift when preceding cycles are ambiguous or unavailable"
+        );
+        assert_eq!(
+            extract_dial9_unique_sample(&dial9_complex, 42),
+            None,
+            "presence of ambiguous intervals must reject unique sample extraction"
         );
 
-        let (_, c3) =
-            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(3));
-        assert_eq!(c3, None, "cycle 3 must be None (unavailable)");
-
-        let (_, c4) =
-            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(4));
-        assert_eq!(c4, None, "cycle 4 must be None (out of range)");
-
-        let (_, c_unspec) = extract_identified_task_telemetry(&stock_empty, &dial9_complex, 42);
-        assert_eq!(
-            c_unspec, None,
-            "unspecified cycle must be None when ambiguous cycles exist"
-        );
-
-        // ── Multiple task cycles in both layers ──
-        let dial9_multi = vec![
-            make_dial9_wake(100, 42, 1, 0),
-            make_dial9_poll_start(120, 42, 0),
-            make_dial9_wake(200, 42, 1, 1),
-            make_dial9_poll_start(215, 42, 1),
-        ];
+        // ── Independent layer testing for multiple task cycles ──
         let stock_multi = vec![
             StockEvent {
                 task_id: Some(42),
@@ -2971,36 +2918,82 @@ mod tests {
                 ..Default::default()
             },
         ];
-
-        // Ambiguity check: Without a specified cycle, multiple valid cycles must return None
-        let (stock_ambig, dial9_ambig) =
-            extract_identified_task_telemetry(&stock_multi, &dial9_multi, 42);
+        let stock_intervals = extract_stock_task_intervals(&stock_multi, 42);
+        assert_eq!(stock_intervals, vec![Some(18_000), Some(12_000)]);
         assert_eq!(
-            dial9_ambig, None,
-            "multiple cycles without cycle selection must return None (ambiguous)"
-        );
-        assert_eq!(
-            stock_ambig, None,
-            "multiple cycles without cycle selection must return None (ambiguous)"
+            extract_stock_unique_sample(&stock_multi, 42),
+            None,
+            "multiple valid cycles in Stock must return None (ambiguous without unique sample)"
         );
 
-        // Cycle 0 selection
-        let (stock_c0, dial9_c0) =
-            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(0));
-        assert_eq!(stock_c0, Some(18_000));
-        assert_eq!(dial9_c0, Some(20));
+        let dial9_multi = vec![
+            make_dial9_wake(100, 42, 1, 0),
+            make_dial9_poll_start(120, 42, 0),
+            make_dial9_wake(200, 42, 1, 1),
+            make_dial9_poll_start(215, 42, 1),
+        ];
+        let dial9_multi_intervals = extract_dial9_task_intervals(&dial9_multi, 42);
+        assert_eq!(
+            dial9_multi_intervals,
+            vec![Dial9Interval::Available(20), Dial9Interval::Available(15)]
+        );
+        assert_eq!(
+            extract_dial9_unique_sample(&dial9_multi, 42),
+            None,
+            "multiple valid cycles in Dial9 must return None (ambiguous without unique sample)"
+        );
+    }
 
-        // Cycle 1 selection
-        let (stock_c1, dial9_c1) =
-            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(1));
-        assert_eq!(stock_c1, Some(12_000));
-        assert_eq!(dial9_c1, Some(15));
+    #[test]
+    fn test_different_capture_start_points_independent_cycle_extraction() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-        // Non-existent Cycle 2 selection
-        let (stock_c2, dial9_c2) =
-            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(2));
-        assert_eq!(stock_c2, None);
-        assert_eq!(dial9_c2, None);
+        // Confirmed reproduction from review:
+        // - Stock capture starts after setup (StockRecorder.reset drops setup poll).
+        //   Stock contains only the request poll (cycle 0).
+        // - Dial9 retains entire session including setup poll.
+        //   Dial9 contains setup poll (t=50), then request wake (t=100) and request poll (t=120).
+        //   The request is Dial9 cycle 1.
+        let dial9_events = vec![
+            make_dial9_poll_start(50, 42, 0), // Setup poll without wake -> Unavailable (cycle 0)
+            make_dial9_wake(100, 42, 1, 0),   // Request wake
+            make_dial9_poll_start(120, 42, 0), // Request poll -> Available(20ns) (cycle 1)
+        ];
+        let stock_events = vec![StockEvent {
+            task_id: Some(42),
+            event_type: "on_before_task_poll",
+            schedule_latency_ns: Some(18_000), // Request poll -> Some(18_000ns) (cycle 0)
+            ..Default::default()
+        }];
+
+        // Layer-independent interval evaluation
+        let dial9_intervals = extract_dial9_task_intervals(&dial9_events, 42);
+        assert_eq!(
+            dial9_intervals,
+            vec![Dial9Interval::Unavailable, Dial9Interval::Available(20)],
+            "Dial9 setup poll is cycle 0 (Unavailable); request poll is cycle 1 (Available)"
+        );
+
+        let stock_intervals = extract_stock_task_intervals(&stock_events, 42);
+        assert_eq!(
+            stock_intervals,
+            vec![Some(18_000)],
+            "Stock capture contains only request poll at cycle 0"
+        );
+
+        // Cross-layer unique-sample extraction must succeed without assuming matching ordinal indices
+        let (stock_sample, dial9_sample) =
+            extract_identified_task_telemetry(&stock_events, &dial9_events, 42);
+        assert_eq!(
+            stock_sample,
+            Some(18_000),
+            "Stock unique sample must be extracted from Stock cycle 0"
+        );
+        assert_eq!(
+            dial9_sample,
+            Some(20),
+            "Dial9 unique sample must be extracted from Dial9 cycle 1 despite cycle index mismatch"
+        );
     }
 
     #[test]
