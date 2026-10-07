@@ -1,0 +1,270 @@
+[
+  {
+    "tier": "c1",
+    "concurrency": 1,
+    "duration_s": 8.05,
+    "total_requests": 97,
+    "completed_ok": 97,
+    "failed": 0,
+    "ops_per_sec": 12.05,
+    "throughput_mbs": 12.05,
+    "latency_total_ms": {
+      "p50": 82.714,
+      "p90": 84.276,
+      "p95": 85.288,
+      "p99": 87.379,
+      "min": 81.298,
+      "max": 87.379,
+      "mean": 82.947
+    },
+    "latency_ttfb_ms": {
+      "p50": 81.727,
+      "p90": 83.255,
+      "p95": 84.151,
+      "p99": 86.24,
+      "min": 80.351,
+      "max": 86.24,
+      "mean": 81.928
+    },
+    "latency_write_ms": {
+      "p50": 0.332,
+      "p90": 0.386,
+      "p95": 0.406,
+      "p99": 0.493,
+      "min": 0.307,
+      "max": 0.493,
+      "mean": 0.345
+    }
+  },
+  {
+    "tier": "c2",
+    "concurrency": 2,
+    "duration_s": 8.04,
+    "total_requests": 184,
+    "completed_ok": 184,
+    "failed": 0,
+    "ops_per_sec": 22.88,
+    "throughput_mbs": 22.88,
+    "latency_total_ms": {
+      "p50": 86.743,
+      "p90": 89.155,
+      "p95": 90.704,
+      "p99": 96.967,
+      "min": 84.928,
+      "max": 100.236,
+      "mean": 87.303
+    },
+    "latency_ttfb_ms": {
+      "p50": 85.614,
+      "p90": 87.965,
+      "p95": 89.58,
+      "p99": 95.711,
+      "min": 83.898,
+      "max": 99.033,
+      "mean": 86.183
+    },
+    "latency_write_ms": {
+      "p50": 0.409,
+      "p90": 0.511,
+      "p95": 0.552,
+      "p99": 0.629,
+      "min": 0.283,
+      "max": 0.637,
+      "mean": 0.42
+    }
+  },
+  {
+    "tier": "c4",
+    "concurrency": 4,
+    "duration_s": 8.09,
+    "total_requests": 186,
+    "completed_ok": 186,
+    "failed": 0,
+    "ops_per_sec": 23.0,
+    "throughput_mbs": 23.0,
+    "latency_total_ms": {
+      "p50": 167.423,
+      "p90": 243.634,
+      "p95": 253.941,
+      "p99": 285.065,
+      "min": 92.255,
+      "max": 287.519,
+      "mean": 172.549
+    },
+    "latency_ttfb_ms": {
+      "p50": 166.325,
+      "p90": 242.535,
+      "p95": 252.868,
+      "p99": 284.119,
+      "min": 91.115,
+      "max": 286.414,
+      "mean": 171.449
+    },
+    "latency_write_ms": {
+      "p50": 0.346,
+      "p90": 0.432,
+      "p95": 0.473,
+      "p99": 0.515,
+      "min": 0.272,
+      "max": 0.763,
+      "mean": 0.36
+    }
+  },
+  {
+    "tier": "c8",
+    "concurrency": 8,
+    "duration_s": 8.13,
+    "total_requests": 189,
+    "completed_ok": 189,
+    "failed": 0,
+    "ops_per_sec": 23.24,
+    "throughput_mbs": 23.24,
+    "latency_total_ms": {
+      "p50": 344.717,
+      "p90": 417.417,
+      "p95": 471.315,
+      "p99": 556.859,
+      "min": 108.569,
+      "max": 568.135,
+      "mean": 340.809
+    },
+    "latency_ttfb_ms": {
+      "p50": 343.633,
+      "p90": 416.315,
+      "p95": 470.248,
+      "p99": 555.821,
+      "min": 107.446,
+      "max": 567.011,
+      "mean": 339.669
+    },
+    "latency_write_ms": {
+      "p50": 0.373,
+      "p90": 0.485,
+      "p95": 0.536,
+      "p99": 1.297,
+      "min": 0.267,
+      "max": 1.375,
+      "mean": 0.404
+    }
+  },
+  {
+    "tier": "rps10",
+    "type": "open_loop",
+    "target_rps": 10,
+    "duration_s": 5.98,
+    "offered_requests": 60,
+    "attempted_requests": 60,
+    "unattempted_requests": 0,
+    "completed_ok": 60,
+    "failed": 0,
+    "achieved_ops_per_sec": 10.03,
+    "throughput_mbs": 10.03,
+    "latency_total_ms": {
+      "p50": 83.443,
+      "p90": 84.961,
+      "p95": 86.441,
+      "p99": 115.457,
+      "min": 81.686,
+      "max": 115.457,
+      "mean": 84.136
+    },
+    "latency_ttfb_ms": {
+      "p50": 82.313,
+      "p90": 83.8,
+      "p95": 85.287,
+      "p99": 114.329,
+      "min": 80.577,
+      "max": 114.329,
+      "mean": 82.983
+    },
+    "latency_write_ms": {
+      "p50": 0.363,
+      "p90": 0.419,
+      "p95": 0.487,
+      "p99": 0.751,
+      "min": 0.309,
+      "max": 0.751,
+      "mean": 0.373
+    }
+  },
+  {
+    "tier": "rps25",
+    "type": "open_loop",
+    "target_rps": 25,
+    "duration_s": 6.48,
+    "offered_requests": 150,
+    "attempted_requests": 150,
+    "unattempted_requests": 0,
+    "completed_ok": 150,
+    "failed": 0,
+    "achieved_ops_per_sec": 23.14,
+    "throughput_mbs": 23.14,
+    "latency_total_ms": {
+      "p50": 562.896,
+      "p90": 988.855,
+      "p95": 1035.114,
+      "p99": 1133.993,
+      "min": 88.786,
+      "max": 1180.234,
+      "mean": 562.171
+    },
+    "latency_ttfb_ms": {
+      "p50": 561.754,
+      "p90": 987.82,
+      "p95": 1033.937,
+      "p99": 1132.813,
+      "min": 87.615,
+      "max": 1179.095,
+      "mean": 561.022
+    },
+    "latency_write_ms": {
+      "p50": 0.365,
+      "p90": 0.406,
+      "p95": 0.42,
+      "p99": 0.605,
+      "min": 0.313,
+      "max": 0.656,
+      "mean": 0.368
+    }
+  },
+  {
+    "tier": "rps50",
+    "type": "open_loop",
+    "target_rps": 50,
+    "duration_s": 6.99,
+    "offered_requests": 300,
+    "attempted_requests": 162,
+    "unattempted_requests": 138,
+    "completed_ok": 162,
+    "failed": 0,
+    "achieved_ops_per_sec": 23.19,
+    "throughput_mbs": 23.19,
+    "latency_total_ms": {
+      "p50": 2553.014,
+      "p90": 2886.117,
+      "p95": 2984.844,
+      "p99": 3033.418,
+      "min": 94.735,
+      "max": 3037.069,
+      "mean": 2324.528
+    },
+    "latency_ttfb_ms": {
+      "p50": 2551.861,
+      "p90": 2885.015,
+      "p95": 2983.721,
+      "p99": 3032.296,
+      "min": 93.502,
+      "max": 3035.902,
+      "mean": 2323.389
+    },
+    "latency_write_ms": {
+      "p50": 0.357,
+      "p90": 0.4,
+      "p95": 0.431,
+      "p99": 0.469,
+      "min": 0.29,
+      "max": 0.496,
+      "mean": 0.36
+    }
+  }
+]

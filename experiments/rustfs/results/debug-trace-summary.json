@@ -1,0 +1,994 @@
+{
+  "event_counts": {
+    "ClockSyncEvent": 3,
+    "TaskSpawnEvent": 37892,
+    "WorkerParkEvent": 14925,
+    "WorkerUnparkEvent": 14923,
+    "PollStartEvent": 188024,
+    "PollEndEvent": 188024,
+    "TaskTerminateEvent": 122408,
+    "ProcessResourceUsageEvent": 585,
+    "RuntimeMetricsEvent": 5839,
+    "SegmentMetadataEvent": 2
+  },
+  "span_ms": 59475.410098,
+  "poll_wall_ms": {
+    "p50": 0.068389,
+    "p95": 2.054165,
+    "p99": 2.164122,
+    "max": 43.291177
+  },
+  "paired_polls": 188024,
+  "unmatched_poll_ends": 0,
+  "unmatched_poll_starts": 0,
+  "overwritten_poll_starts": 0,
+  "polls_ge_30_ms": 1035,
+  "local_queue_max": 91,
+  "polls_with_local_queue": 118863,
+  "spawn_locations": {
+    "/home/brandybuck/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.21/src/rt/tokio.rs:127:9": {
+      "polls": 7,
+      "total_wall_ms": 0.709274,
+      "mean_wall_ms": 0.10132485714285713,
+      "wall_ms": {
+        "p50": 0.064802,
+        "p95": 0.20728,
+        "p99": 0.20728,
+        "max": 0.20728
+      }
+    },
+    "crates/ecstore/src/bucket/bandwidth/monitor.rs:191:20": {
+      "polls": 31,
+      "total_wall_ms": 0.747576,
+      "mean_wall_ms": 0.024115354838709677,
+      "wall_ms": {
+        "p50": 0.021721,
+        "p95": 0.045406,
+        "p99": 0.055274,
+        "max": 0.055274
+      }
+    },
+    "crates/ecstore/src/bucket/bucket_target_sys.rs:486:9": {
+      "polls": 13,
+      "total_wall_ms": 0.716068,
+      "mean_wall_ms": 0.05508215384615385,
+      "wall_ms": {
+        "p50": 0.050225,
+        "p95": 0.096531,
+        "p99": 0.096531,
+        "max": 0.096531
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:1238:13": {
+      "polls": 24,
+      "total_wall_ms": 0.327218,
+      "mean_wall_ms": 0.013634083333333333,
+      "wall_ms": {
+        "p50": 0.00541,
+        "p95": 0.073398,
+        "p99": 0.080973,
+        "max": 0.080973
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:2258:34": {
+      "polls": 12,
+      "total_wall_ms": 0.096453,
+      "mean_wall_ms": 0.00803775,
+      "wall_ms": {
+        "p50": 0.004248,
+        "p95": 0.038643,
+        "p99": 0.038643,
+        "max": 0.038643
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:2435:10": {
+      "polls": 13,
+      "total_wall_ms": 0.730394,
+      "mean_wall_ms": 0.05618415384615384,
+      "wall_ms": {
+        "p50": 0.025568,
+        "p95": 0.156334,
+        "p99": 0.156334,
+        "max": 0.156334
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:2445:10": {
+      "polls": 3,
+      "total_wall_ms": 3.0611010000000003,
+      "mean_wall_ms": 1.020367,
+      "wall_ms": {
+        "p50": 0.064361,
+        "p95": 2.972554,
+        "p99": 2.972554,
+        "max": 2.972554
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:2938:10": {
+      "polls": 4,
+      "total_wall_ms": 0.56786,
+      "mean_wall_ms": 0.141965,
+      "wall_ms": {
+        "p50": 0.060915,
+        "p95": 0.236115,
+        "p99": 0.236115,
+        "max": 0.236115
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:3193:5": {
+      "polls": 7,
+      "total_wall_ms": 3.341139,
+      "mean_wall_ms": 0.47730557142857144,
+      "wall_ms": {
+        "p50": 0.056947,
+        "p95": 3.034581,
+        "p99": 3.034581,
+        "max": 3.034581
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:3212:5": {
+      "polls": 5,
+      "total_wall_ms": 0.232829,
+      "mean_wall_ms": 0.046565800000000004,
+      "wall_ms": {
+        "p50": 0.043422,
+        "p95": 0.096221,
+        "p99": 0.096221,
+        "max": 0.096221
+      }
+    },
+    "crates/ecstore/src/bucket/lifecycle/bucket_lifecycle_ops.rs:3686:5": {
+      "polls": 18,
+      "total_wall_ms": 1.372284,
+      "mean_wall_ms": 0.076238,
+      "wall_ms": {
+        "p50": 0.079871,
+        "p95": 0.100129,
+        "p99": 0.100129,
+        "max": 0.100129
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1212:26": {
+      "polls": 10,
+      "total_wall_ms": 0.062065999999999996,
+      "mean_wall_ms": 0.0062066,
+      "wall_ms": {
+        "p50": 0.001683,
+        "p95": 0.028945,
+        "p99": 0.028945,
+        "max": 0.028945
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1272:26": {
+      "polls": 100,
+      "total_wall_ms": 0.20764,
+      "mean_wall_ms": 0.0020764,
+      "wall_ms": {
+        "p50": 0.001653,
+        "p95": 0.003357,
+        "p99": 0.009458,
+        "max": 0.011371
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1318:26": {
+      "polls": 4,
+      "total_wall_ms": 0.047539,
+      "mean_wall_ms": 0.01188475,
+      "wall_ms": {
+        "p50": 0.004168,
+        "p95": 0.024325,
+        "p99": 0.024325,
+        "max": 0.024325
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1647:22": {
+      "polls": 5,
+      "total_wall_ms": 0.355329,
+      "mean_wall_ms": 0.0710658,
+      "wall_ms": {
+        "p50": 0.025037,
+        "p95": 0.22295,
+        "p99": 0.22295,
+        "max": 0.22295
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1694:13": {
+      "polls": 5,
+      "total_wall_ms": 0.286579,
+      "mean_wall_ms": 0.05731579999999999,
+      "wall_ms": {
+        "p50": 0.027281,
+        "p95": 0.174398,
+        "p99": 0.174398,
+        "max": 0.174398
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1766:22": {
+      "polls": 7,
+      "total_wall_ms": 0.15471000000000001,
+      "mean_wall_ms": 0.022101428571428574,
+      "wall_ms": {
+        "p50": 0.019186,
+        "p95": 0.032651,
+        "p99": 0.032651,
+        "max": 0.032651
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_pool.rs:1906:9": {
+      "polls": 1,
+      "total_wall_ms": 0.065703,
+      "mean_wall_ms": 0.065703,
+      "wall_ms": {
+        "p50": 0.065703,
+        "p95": 0.065703,
+        "p99": 0.065703,
+        "max": 0.065703
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_state.rs:250:9": {
+      "polls": 13,
+      "total_wall_ms": 0.275849,
+      "mean_wall_ms": 0.021219153846153846,
+      "wall_ms": {
+        "p50": 0.021721,
+        "p95": 0.028013,
+        "p99": 0.028013,
+        "max": 0.028013
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_state.rs:260:9": {
+      "polls": 31,
+      "total_wall_ms": 0.872696,
+      "mean_wall_ms": 0.028151483870967744,
+      "wall_ms": {
+        "p50": 0.024646,
+        "p95": 0.057819,
+        "p99": 0.05821,
+        "max": 0.05821
+      }
+    },
+    "crates/ecstore/src/bucket/replication/replication_state.rs:274:9": {
+      "polls": 31,
+      "total_wall_ms": 0.724024,
+      "mean_wall_ms": 0.023355612903225808,
+      "wall_ms": {
+        "p50": 0.02149,
+        "p95": 0.042831,
+        "p99": 0.050425,
+        "max": 0.050425
+      }
+    },
+    "crates/ecstore/src/cache_value/metacache_set.rs:369:14": {
+      "polls": 328,
+      "total_wall_ms": 12.791738,
+      "mean_wall_ms": 0.0389992012195122,
+      "wall_ms": {
+        "p50": 0.039274,
+        "p95": 0.079039,
+        "p99": 0.093806,
+        "max": 0.105558
+      }
+    },
+    "crates/ecstore/src/cache_value/metacache_set.rs:660:13": {
+      "polls": 122,
+      "total_wall_ms": 2.400099,
+      "mean_wall_ms": 0.019672942622950818,
+      "wall_ms": {
+        "p50": 0.014728,
+        "p95": 0.052889,
+        "p99": 0.101521,
+        "max": 0.123513
+      }
+    },
+    "crates/ecstore/src/config/com.rs:104:5": {
+      "polls": 60,
+      "total_wall_ms": 15.326672,
+      "mean_wall_ms": 0.25544453333333333,
+      "wall_ms": {
+        "p50": 0.09574,
+        "p95": 0.928257,
+        "p99": 1.175031,
+        "max": 1.175031
+      }
+    },
+    "crates/ecstore/src/config/com.rs:126:5": {
+      "polls": 72,
+      "total_wall_ms": 20.607101,
+      "mean_wall_ms": 0.2862097361111111,
+      "wall_ms": {
+        "p50": 0.033292,
+        "p95": 0.746485,
+        "p99": 5.313889,
+        "max": 5.313889
+      }
+    },
+    "crates/ecstore/src/config/com.rs:143:5": {
+      "polls": 68,
+      "total_wall_ms": 4.153062,
+      "mean_wall_ms": 0.061074441176470595,
+      "wall_ms": {
+        "p50": 0.029025,
+        "p95": 0.234341,
+        "p99": 0.291659,
+        "max": 0.291659
+      }
+    },
+    "crates/ecstore/src/core/sets.rs:312:9": {
+      "polls": 6,
+      "total_wall_ms": 0.501834,
+      "mean_wall_ms": 0.083639,
+      "wall_ms": {
+        "p50": 0.080531,
+        "p95": 0.117982,
+        "p99": 0.117982,
+        "max": 0.117982
+      }
+    },
+    "crates/ecstore/src/disk/disk_store.rs:1498:9": {
+      "polls": 20,
+      "total_wall_ms": 0.267864,
+      "mean_wall_ms": 0.0133932,
+      "wall_ms": {
+        "p50": 0.006172,
+        "p95": 0.030838,
+        "p99": 0.031479,
+        "max": 0.031479
+      }
+    },
+    "crates/ecstore/src/disk/local.rs:5626:9": {
+      "polls": 8,
+      "total_wall_ms": 0.218292,
+      "mean_wall_ms": 0.0272865,
+      "wall_ms": {
+        "p50": 0.017954,
+        "p95": 0.067988,
+        "p99": 0.067988,
+        "max": 0.067988
+      }
+    },
+    "crates/ecstore/src/disk/local.rs:5717:9": {
+      "polls": 16,
+      "total_wall_ms": 0.607124,
+      "mean_wall_ms": 0.03794525,
+      "wall_ms": {
+        "p50": 0.024005,
+        "p95": 0.169589,
+        "p99": 0.169589,
+        "max": 0.169589
+      }
+    },
+    "crates/ecstore/src/runtime/sources.rs:612:5": {
+      "polls": 1,
+      "total_wall_ms": 0.036218,
+      "mean_wall_ms": 0.036218,
+      "wall_ms": {
+        "p50": 0.036218,
+        "p95": 0.036218,
+        "p99": 0.036218,
+        "max": 0.036218
+      }
+    },
+    "crates/ecstore/src/services/batch_processor.rs:303:22": {
+      "polls": 100,
+      "total_wall_ms": 5.18996,
+      "mean_wall_ms": 0.051899600000000004,
+      "wall_ms": {
+        "p50": 0.039955,
+        "p95": 0.119545,
+        "p99": 0.137749,
+        "max": 0.203704
+      }
+    },
+    "crates/ecstore/src/services/notification_sys.rs:1265:5": {
+      "polls": 7,
+      "total_wall_ms": 0.734412,
+      "mean_wall_ms": 0.104916,
+      "wall_ms": {
+        "p50": 0.105007,
+        "p95": 0.13287,
+        "p99": 0.13287,
+        "max": 0.13287
+      }
+    },
+    "crates/ecstore/src/services/tier/tier.rs:4153:9": {
+      "polls": 1,
+      "total_wall_ms": 0.112181,
+      "mean_wall_ms": 0.112181,
+      "wall_ms": {
+        "p50": 0.112181,
+        "p95": 0.112181,
+        "p99": 0.112181,
+        "max": 0.112181
+      }
+    },
+    "crates/ecstore/src/set_disk/core/io_primitives.rs:3191:26": {
+      "polls": 5530,
+      "total_wall_ms": 192.115415,
+      "mean_wall_ms": 0.034740581374321886,
+      "wall_ms": {
+        "p50": 0.036739,
+        "p95": 0.070813,
+        "p99": 0.086793,
+        "max": 0.145905
+      }
+    },
+    "crates/ecstore/src/set_disk/core/io_primitives.rs:3213:27": {
+      "polls": 31914,
+      "total_wall_ms": 2145.604493,
+      "mean_wall_ms": 0.06723082324371749,
+      "wall_ms": {
+        "p50": 0.027351,
+        "p95": 0.224492,
+        "p99": 0.272813,
+        "max": 0.936573
+      }
+    },
+    "crates/ecstore/src/set_disk/core/io_primitives.rs:3430:42": {
+      "polls": 1184,
+      "total_wall_ms": 48.468184,
+      "mean_wall_ms": 0.040935966216216216,
+      "wall_ms": {
+        "p50": 0.031799,
+        "p95": 0.093296,
+        "p99": 0.104176,
+        "max": 0.235403
+      }
+    },
+    "crates/ecstore/src/set_disk/core/io_primitives.rs:3580:22": {
+      "polls": 137,
+      "total_wall_ms": 19.463449,
+      "mean_wall_ms": 0.14206897080291972,
+      "wall_ms": {
+        "p50": 0.052319,
+        "p95": 0.841564,
+        "p99": 0.949818,
+        "max": 1.026452
+      }
+    },
+    "crates/ecstore/src/set_disk/core/io_primitives.rs:3856:34": {
+      "polls": 112,
+      "total_wall_ms": 4.309841,
+      "mean_wall_ms": 0.03848072321428571,
+      "wall_ms": {
+        "p50": 0.027562,
+        "p95": 0.097172,
+        "p99": 0.104467,
+        "max": 0.11162
+      }
+    },
+    "crates/ecstore/src/set_disk/core/metadata_read.rs:1023:35": {
+      "polls": 13664,
+      "total_wall_ms": 565.035567,
+      "mean_wall_ms": 0.041352134587236536,
+      "wall_ms": {
+        "p50": 0.029666,
+        "p95": 0.097163,
+        "p99": 0.141086,
+        "max": 0.997627
+      }
+    },
+    "crates/ecstore/src/set_disk/core/metadata_read.rs:1138:33": {
+      "polls": 42473,
+      "total_wall_ms": 3812.954766,
+      "mean_wall_ms": 0.08977361537918206,
+      "wall_ms": {
+        "p50": 0.07427,
+        "p95": 0.162245,
+        "p99": 0.214724,
+        "max": 0.58963
+      }
+    },
+    "crates/ecstore/src/set_disk/ops/object.rs:4678:25": {
+      "polls": 2683,
+      "total_wall_ms": 650.254258,
+      "mean_wall_ms": 0.24236088632128217,
+      "wall_ms": {
+        "p50": 0.182684,
+        "p95": 0.453013,
+        "p99": 0.547651,
+        "max": 0.640896
+      }
+    },
+    "crates/ecstore/src/set_disk/ops/object.rs:4971:21": {
+      "polls": 26,
+      "total_wall_ms": 6.944747,
+      "mean_wall_ms": 0.2671056538461538,
+      "wall_ms": {
+        "p50": 0.189727,
+        "p95": 0.411334,
+        "p99": 0.493038,
+        "max": 0.493038
+      }
+    },
+    "crates/ecstore/src/set_disk/ops/object.rs:5001:30": {
+      "polls": 6516,
+      "total_wall_ms": 379.940124,
+      "mean_wall_ms": 0.058308797421731125,
+      "wall_ms": {
+        "p50": 0.060354,
+        "p95": 0.139172,
+        "p99": 0.295356,
+        "max": 3.657372
+      }
+    },
+    "crates/ecstore/src/store/init.rs:794:13": {
+      "polls": 17,
+      "total_wall_ms": 3.225618,
+      "mean_wall_ms": 0.18974223529411763,
+      "wall_ms": {
+        "p50": 0.09005,
+        "p95": 0.488219,
+        "p99": 0.488219,
+        "max": 0.488219
+      }
+    },
+    "crates/ecstore/src/store/init.rs:799:9": {
+      "polls": 13,
+      "total_wall_ms": 0.46652899999999997,
+      "mean_wall_ms": 0.03588684615384615,
+      "wall_ms": {
+        "p50": 0.032671,
+        "p95": 0.054512,
+        "p99": 0.054512,
+        "max": 0.054512
+      }
+    },
+    "crates/ecstore/src/store/list_objects.rs:4714:9": {
+      "polls": 5,
+      "total_wall_ms": 0.359956,
+      "mean_wall_ms": 0.0719912,
+      "wall_ms": {
+        "p50": 0.019767,
+        "p95": 0.178636,
+        "p99": 0.178636,
+        "max": 0.178636
+      }
+    },
+    "crates/ecstore/src/store/list_objects.rs:4906:13": {
+      "polls": 91,
+      "total_wall_ms": 3.069805,
+      "mean_wall_ms": 0.03373412087912088,
+      "wall_ms": {
+        "p50": 0.016231,
+        "p95": 0.078097,
+        "p99": 0.160592,
+        "max": 0.160592
+      }
+    },
+    "crates/ecstore/src/store/list_objects.rs:4908:13": {
+      "polls": 26,
+      "total_wall_ms": 0.39318,
+      "mean_wall_ms": 0.015122307692307692,
+      "wall_ms": {
+        "p50": 0.015479,
+        "p95": 0.034135,
+        "p99": 0.053541,
+        "max": 0.053541
+      }
+    },
+    "crates/ecstore/src/store/list_objects.rs:5351:28": {
+      "polls": 32,
+      "total_wall_ms": 0.450114,
+      "mean_wall_ms": 0.0140660625,
+      "wall_ms": {
+        "p50": 0.014667,
+        "p95": 0.027972,
+        "p99": 0.028924,
+        "max": 0.028924
+      }
+    },
+    "crates/ecstore/src/store/object.rs:3263:9": {
+      "polls": 20,
+      "total_wall_ms": 11.376166,
+      "mean_wall_ms": 0.5688082999999999,
+      "wall_ms": {
+        "p50": 0.013946,
+        "p95": 4.858834,
+        "p99": 5.377489,
+        "max": 5.377489
+      }
+    },
+    "crates/heal/src/heal/manager.rs:1478:9": {
+      "polls": 11,
+      "total_wall_ms": 0.737097,
+      "mean_wall_ms": 0.06700881818181818,
+      "wall_ms": {
+        "p50": 0.071274,
+        "p95": 0.098445,
+        "p99": 0.098445,
+        "max": 0.098445
+      }
+    },
+    "crates/heal/src/heal/manager.rs:1519:9": {
+      "polls": 11,
+      "total_wall_ms": 0.634332,
+      "mean_wall_ms": 0.057666545454545456,
+      "wall_ms": {
+        "p50": 0.06374,
+        "p95": 0.07957,
+        "p99": 0.07957,
+        "max": 0.07957
+      }
+    },
+    "crates/heal/src/heal/manager/auto_scan.rs:48:9": {
+      "polls": 32,
+      "total_wall_ms": 3.336755,
+      "mean_wall_ms": 0.10427359375,
+      "wall_ms": {
+        "p50": 0.095259,
+        "p95": 0.243508,
+        "p99": 0.253096,
+        "max": 0.253096
+      }
+    },
+    "crates/heal/src/heal/manager/scheduler.rs:239:17": {
+      "polls": 25,
+      "total_wall_ms": 4.189713,
+      "mean_wall_ms": 0.16758852000000002,
+      "wall_ms": {
+        "p50": 0.117762,
+        "p95": 0.577867,
+        "p99": 0.653129,
+        "max": 0.653129
+      }
+    },
+    "crates/heal/src/heal/manager/scheduler.rs:51:9": {
+      "polls": 10,
+      "total_wall_ms": 1.026381,
+      "mean_wall_ms": 0.1026381,
+      "wall_ms": {
+        "p50": 0.086323,
+        "p95": 0.243177,
+        "p99": 0.243177,
+        "max": 0.243177
+      }
+    },
+    "crates/heal/src/heal/mrf_queue.rs:1455:5": {
+      "polls": 133,
+      "total_wall_ms": 7.863571,
+      "mean_wall_ms": 0.059124593984962406,
+      "wall_ms": {
+        "p50": 0.054773,
+        "p95": 0.082575,
+        "p99": 0.115327,
+        "max": 0.124845
+      }
+    },
+    "crates/heal/src/lib.rs:135:5": {
+      "polls": 33,
+      "total_wall_ms": 3.217634,
+      "mean_wall_ms": 0.09750406060606061,
+      "wall_ms": {
+        "p50": 0.0797,
+        "p95": 0.245151,
+        "p99": 0.341873,
+        "max": 0.341873
+      }
+    },
+    "crates/heal/src/lib.rs:201:9": {
+      "polls": 3,
+      "total_wall_ms": 0.303743,
+      "mean_wall_ms": 0.10124766666666667,
+      "wall_ms": {
+        "p50": 0.02102,
+        "p95": 0.273155,
+        "p99": 0.273155,
+        "max": 0.273155
+      }
+    },
+    "crates/iam/src/manager.rs:213:13": {
+      "polls": 4,
+      "total_wall_ms": 0.162986,
+      "mean_wall_ms": 0.0407465,
+      "wall_ms": {
+        "p50": 0.02684,
+        "p95": 0.083918,
+        "p99": 0.083918,
+        "max": 0.083918
+      }
+    },
+    "crates/iam/src/store/object.rs:435:9": {
+      "polls": 22,
+      "total_wall_ms": 1.722552,
+      "mean_wall_ms": 0.07829781818181819,
+      "wall_ms": {
+        "p50": 0.020709,
+        "p95": 0.272312,
+        "p99": 0.29773,
+        "max": 0.29773
+      }
+    },
+    "crates/iam/src/store/object.rs:460:9": {
+      "polls": 5,
+      "total_wall_ms": 0.093246,
+      "mean_wall_ms": 0.018649199999999998,
+      "wall_ms": {
+        "p50": 0.016071,
+        "p95": 0.039845,
+        "p99": 0.039845,
+        "max": 0.039845
+      }
+    },
+    "crates/lock/src/fast_lock/manager.rs:412:29": {
+      "polls": 2,
+      "total_wall_ms": 0.454736,
+      "mean_wall_ms": 0.227368,
+      "wall_ms": {
+        "p50": 0.080401,
+        "p95": 0.374335,
+        "p99": 0.374335,
+        "max": 0.374335
+      }
+    },
+    "crates/notify/src/lifecycle.rs:402:58": {
+      "polls": 1,
+      "total_wall_ms": 0.277923,
+      "mean_wall_ms": 0.277923,
+      "wall_ms": {
+        "p50": 0.277923,
+        "p95": 0.277923,
+        "p99": 0.277923,
+        "max": 0.277923
+      }
+    },
+    "crates/object-capacity/src/capacity_manager.rs:1488:11": {
+      "polls": 2,
+      "total_wall_ms": 0.056656,
+      "mean_wall_ms": 0.028328,
+      "wall_ms": {
+        "p50": 0.023835,
+        "p95": 0.032821,
+        "p99": 0.032821,
+        "max": 0.032821
+      }
+    },
+    "crates/object-capacity/src/capacity_manager.rs:1495:11": {
+      "polls": 2,
+      "total_wall_ms": 0.020018,
+      "mean_wall_ms": 0.010009,
+      "wall_ms": {
+        "p50": 0.009668,
+        "p95": 0.01035,
+        "p99": 0.01035,
+        "max": 0.01035
+      }
+    },
+    "crates/obs/src/telemetry/dial9/enabled.rs:164:13": {
+      "polls": 3,
+      "total_wall_ms": 0.516051,
+      "mean_wall_ms": 0.172017,
+      "wall_ms": {
+        "p50": 0.082896,
+        "p95": 0.408158,
+        "p99": 0.408158,
+        "max": 0.408158
+      }
+    },
+    "crates/scanner/src/scanner.rs:1044:5": {
+      "polls": 751,
+      "total_wall_ms": 113.597621,
+      "mean_wall_ms": 0.1512618122503329,
+      "wall_ms": {
+        "p50": 0.028724,
+        "p95": 0.578278,
+        "p99": 4.745831,
+        "max": 5.23421
+      }
+    },
+    "crates/scanner/src/scanner.rs:2055:65": {
+      "polls": 92,
+      "total_wall_ms": 48.141188,
+      "mean_wall_ms": 0.5232737826086956,
+      "wall_ms": {
+        "p50": 0.040366,
+        "p95": 4.618161,
+        "p99": 5.151063,
+        "max": 5.151063
+      }
+    },
+    "crates/scanner/src/scanner/backlog.rs:1728:19": {
+      "polls": 4,
+      "total_wall_ms": 0.092763,
+      "mean_wall_ms": 0.02319075,
+      "wall_ms": {
+        "p50": 0.023273,
+        "p95": 0.028944,
+        "p99": 0.028944,
+        "max": 0.028944
+      }
+    },
+    "crates/scanner/src/scanner_budget.rs:114:13": {
+      "polls": 12,
+      "total_wall_ms": 0.221554,
+      "mean_wall_ms": 0.018462833333333335,
+      "wall_ms": {
+        "p50": 0.020178,
+        "p95": 0.033954,
+        "p99": 0.033954,
+        "max": 0.033954
+      }
+    },
+    "crates/scanner/src/scanner_io/io_cache.rs:636:65": {
+      "polls": 14,
+      "total_wall_ms": 0.283897,
+      "mean_wall_ms": 0.020278357142857143,
+      "wall_ms": {
+        "p50": 0.010781,
+        "p95": 0.048742,
+        "p99": 0.048742,
+        "max": 0.048742
+      }
+    },
+    "crates/scanner/src/scanner_io/io_cache.rs:690:46": {
+      "polls": 3761,
+      "total_wall_ms": 843.762381,
+      "mean_wall_ms": 0.22434522228130815,
+      "wall_ms": {
+        "p50": 0.175049,
+        "p95": 0.492086,
+        "p99": 0.728641,
+        "max": 9.524463
+      }
+    },
+    "crates/scanner/src/scanner_io/io_cycle.rs:585:28": {
+      "polls": 9,
+      "total_wall_ms": 0.171534,
+      "mean_wall_ms": 0.01905933333333333,
+      "wall_ms": {
+        "p50": 0.01595,
+        "p95": 0.035818,
+        "p99": 0.035818,
+        "max": 0.035818
+      }
+    },
+    "crates/scanner/src/scanner_io/io_cycle.rs:613:27": {
+      "polls": 207,
+      "total_wall_ms": 79.486772,
+      "mean_wall_ms": 0.38399406763285027,
+      "wall_ms": {
+        "p50": 0.047028,
+        "p95": 4.471736,
+        "p99": 5.139822,
+        "max": 5.583587
+      }
+    },
+    "rustfs/src/allocator_reclaim.rs:447:5": {
+      "polls": 4,
+      "total_wall_ms": 0.09069,
+      "mean_wall_ms": 0.0226725,
+      "wall_ms": {
+        "p50": 0.022773,
+        "p95": 0.027271,
+        "p99": 0.027271,
+        "max": 0.027271
+      }
+    },
+    "rustfs/src/app/bucket_usecase.rs:1370:5": {
+      "polls": 2,
+      "total_wall_ms": 0.271191,
+      "mean_wall_ms": 0.1355955,
+      "wall_ms": {
+        "p50": 0.111851,
+        "p95": 0.15934,
+        "p99": 0.15934,
+        "max": 0.15934
+      }
+    },
+    "rustfs/src/init.rs:89:5": {
+      "polls": 6,
+      "total_wall_ms": 74.332322,
+      "mean_wall_ms": 12.388720333333334,
+      "wall_ms": {
+        "p50": 0.319161,
+        "p95": 41.874992,
+        "p99": 41.874992,
+        "max": 41.874992
+      }
+    },
+    "rustfs/src/on_demand_migration/backfill.rs:1529:5": {
+      "polls": 3,
+      "total_wall_ms": 0.084829,
+      "mean_wall_ms": 0.028276333333333334,
+      "wall_ms": {
+        "p50": 0.030097,
+        "p95": 0.034434,
+        "p99": 0.034434,
+        "max": 0.034434
+      }
+    },
+    "rustfs/src/server/event.rs:253:5": {
+      "polls": 24,
+      "total_wall_ms": 2.805211,
+      "mean_wall_ms": 0.11688379166666667,
+      "wall_ms": {
+        "p50": 0.042771,
+        "p95": 0.258286,
+        "p99": 0.291689,
+        "max": 0.291689
+      }
+    },
+    "rustfs/src/server/http.rs:1769:23": {
+      "polls": 740,
+      "total_wall_ms": 88.094696,
+      "mean_wall_ms": 0.11904688648648648,
+      "wall_ms": {
+        "p50": 0.109526,
+        "p95": 0.180059,
+        "p99": 0.234411,
+        "max": 0.405903
+      }
+    },
+    "rustfs/src/server/http.rs:2224:5": {
+      "polls": 25367,
+      "total_wall_ms": 3077.826894,
+      "mean_wall_ms": 0.12133192312847399,
+      "wall_ms": {
+        "p50": 0.051557,
+        "p95": 0.347484,
+        "p99": 1.488451,
+        "max": 3.223666
+      }
+    },
+    "rustfs/src/site_replication_reconcile.rs:89:5": {
+      "polls": 29,
+      "total_wall_ms": 1.903762,
+      "mean_wall_ms": 0.06564696551724138,
+      "wall_ms": {
+        "p50": 0.031238,
+        "p95": 0.210746,
+        "p99": 0.222328,
+        "max": 0.222328
+      }
+    },
+    "rustfs/src/startup_bucket_metadata.rs:194:5": {
+      "polls": 1,
+      "total_wall_ms": 0.099357,
+      "mean_wall_ms": 0.099357,
+      "wall_ms": {
+        "p50": 0.099357,
+        "p95": 0.099357,
+        "p99": 0.099357,
+        "max": 0.099357
+      }
+    },
+    "rustfs/src/storage/request_context.rs:257:5": {
+      "polls": 2066,
+      "total_wall_ms": 39.515714,
+      "mean_wall_ms": 0.019126676669893514,
+      "wall_ms": {
+        "p50": 0.018124,
+        "p95": 0.031158,
+        "p99": 0.038783,
+        "max": 0.089909
+      }
+    },
+    "rustfs/src/storage/request_context.rs:266:5": {
+      "polls": 48927,
+      "total_wall_ms": 77248.849523,
+      "mean_wall_ms": 1.5788593112800702,
+      "wall_ms": {
+        "p50": 0.464334,
+        "p95": 2.117404,
+        "p99": 36.08174,
+        "max": 43.291177
+      }
+    },
+    "rustfs/src/storage/scanner_dirty_journal.rs:304:5": {
+      "polls": 110,
+      "total_wall_ms": 51.925187,
+      "mean_wall_ms": 0.47204715454545454,
+      "wall_ms": {
+        "p50": 0.145814,
+        "p95": 1.060726,
+        "p99": 1.220526,
+        "max": 1.40784
+      }
+    }
+  },
+  "limitations": [
+    "Poll durations are whole-task wall time, not CPU or stage time",
+    "Queue depth does not measure request queue wait",
+    "No driver-turn or kernel-readiness timing is reconstructed",
+    "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+  ],
+  "jsonl_sha256": "835afd67dfcf1bb6ef88f703567f211953292d3571a327044f771c1c3c5456bb"
+}

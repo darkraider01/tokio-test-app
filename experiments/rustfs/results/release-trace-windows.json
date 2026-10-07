@@ -1,0 +1,1019 @@
+[
+  {
+    "run": "run-1",
+    "trace_sha256": {
+      "run-1/telemetry/rustfs-tokio/trace.0.jsonl": "df8d253c8a866f4a526338ca5a602f876367e7199983d725e30b43100cf37ba9"
+    },
+    "tiers": [
+      {
+        "tier": "c1",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398066782462619,
+        "end_realtime_ns": 1791398069788572445,
+        "event_counts": {
+          "TaskTerminateEvent": 21882,
+          "PollEndEvent": 35733,
+          "WorkerParkEvent": 19035,
+          "WorkerUnparkEvent": 19034,
+          "PollStartEvent": 35732,
+          "TaskSpawnEvent": 7013,
+          "RuntimeMetricsEvent": 297,
+          "ProcessResourceUsageEvent": 30,
+          "SegmentMetadataEvent": 1,
+          "ClockSyncEvent": 1
+        },
+        "span_ms": 3005.96325,
+        "poll_wall_ms": {
+          "p50": 0.015449,
+          "p95": 0.147638,
+          "p99": 0.291269,
+          "max": 2.415415
+        },
+        "paired_polls": 35732,
+        "unmatched_poll_ends": 1,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 3,
+        "polls_with_local_queue": 7264,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 10308,
+          "total_wall_ms": 806.819106,
+          "mean_wall_ms": 0.07827115890570431,
+          "wall_ms": {
+            "p50": 0.051897,
+            "p95": 0.177474,
+            "p99": 0.556507,
+            "max": 2.415415
+          }
+        }
+      },
+      {
+        "tier": "c2",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398069793614212,
+        "end_realtime_ns": 1791398072794768924,
+        "event_counts": {
+          "WorkerUnparkEvent": 19656,
+          "PollStartEvent": 65202,
+          "TaskSpawnEvent": 12003,
+          "PollEndEvent": 65202,
+          "WorkerParkEvent": 19655,
+          "TaskTerminateEvent": 38290,
+          "RuntimeMetricsEvent": 295,
+          "ProcessResourceUsageEvent": 30
+        },
+        "span_ms": 3000.033321,
+        "poll_wall_ms": {
+          "p50": 0.014778,
+          "p95": 0.153499,
+          "p99": 0.333397,
+          "max": 5.600089
+        },
+        "paired_polls": 65202,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 6,
+        "polls_with_local_queue": 17541,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 18889,
+          "total_wall_ms": 1561.31252,
+          "mean_wall_ms": 0.08265723542802689,
+          "wall_ms": {
+            "p50": 0.034085,
+            "p95": 0.187613,
+            "p99": 0.84536,
+            "max": 5.600089
+          }
+        }
+      },
+      {
+        "tier": "c4",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398072808374407,
+        "end_realtime_ns": 1791398075827259363,
+        "event_counts": {
+          "WorkerUnparkEvent": 14060,
+          "PollStartEvent": 96622,
+          "PollEndEvent": 96622,
+          "WorkerParkEvent": 14060,
+          "TaskSpawnEvent": 18158,
+          "TaskTerminateEvent": 57856,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3017.828127,
+        "poll_wall_ms": {
+          "p50": 0.01573,
+          "p95": 0.156615,
+          "p99": 0.407136,
+          "max": 3.881705
+        },
+        "paired_polls": 96622,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 12,
+        "polls_with_local_queue": 41146,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 27360,
+          "total_wall_ms": 2338.153879,
+          "mean_wall_ms": 0.08545884060672515,
+          "wall_ms": {
+            "p50": 0.040165,
+            "p95": 0.187864,
+            "p99": 0.831625,
+            "max": 2.493321
+          }
+        }
+      },
+      {
+        "tier": "c8",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398075851617751,
+        "end_realtime_ns": 1791398078875194796,
+        "event_counts": {
+          "WorkerUnparkEvent": 3863,
+          "PollStartEvent": 104813,
+          "TaskSpawnEvent": 20180,
+          "PollEndEvent": 104813,
+          "WorkerParkEvent": 3863,
+          "TaskTerminateEvent": 63919,
+          "RuntimeMetricsEvent": 294,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3021.584887,
+        "poll_wall_ms": {
+          "p50": 0.016782,
+          "p95": 0.163117,
+          "p99": 0.512905,
+          "max": 67.267182
+        },
+        "paired_polls": 104813,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 2,
+        "local_queue_max": 17,
+        "polls_with_local_queue": 68426,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 29366,
+          "total_wall_ms": 2864.686129,
+          "mean_wall_ms": 0.09755111792549206,
+          "wall_ms": {
+            "p50": 0.051207,
+            "p95": 0.195598,
+            "p99": 0.891297,
+            "max": 66.763184
+          }
+        }
+      },
+      {
+        "tier": "r100",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398078914544695,
+        "end_realtime_ns": 1791398081920125365,
+        "event_counts": {
+          "WorkerUnparkEvent": 21997,
+          "PollStartEvent": 56762,
+          "TaskSpawnEvent": 10603,
+          "PollEndEvent": 56762,
+          "WorkerParkEvent": 21997,
+          "TaskTerminateEvent": 34076,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3004.069958,
+        "poll_wall_ms": {
+          "p50": 0.018235,
+          "p95": 0.152917,
+          "p99": 0.374795,
+          "max": 2.82206
+        },
+        "paired_polls": 56762,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 4,
+        "polls_with_local_queue": 12779,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 15879,
+          "total_wall_ms": 1336.080007,
+          "mean_wall_ms": 0.0841413191636753,
+          "wall_ms": {
+            "p50": 0.046828,
+            "p95": 0.184627,
+            "p99": 0.751875,
+            "max": 2.82206
+          }
+        }
+      },
+      {
+        "tier": "r200",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398081966392620,
+        "end_realtime_ns": 1791398085094612943,
+        "event_counts": {
+          "WorkerUnparkEvent": 1382,
+          "PollStartEvent": 103965,
+          "PollEndEvent": 103965,
+          "WorkerParkEvent": 1382,
+          "TaskSpawnEvent": 20660,
+          "TaskTerminateEvent": 65795,
+          "RuntimeMetricsEvent": 305,
+          "ProcessResourceUsageEvent": 30
+        },
+        "span_ms": 3126.881613,
+        "poll_wall_ms": {
+          "p50": 0.019136,
+          "p95": 0.166964,
+          "p99": 0.622221,
+          "max": 34.19652
+        },
+        "paired_polls": 103965,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 4,
+        "local_queue_max": 91,
+        "polls_with_local_queue": 91980,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 28437,
+          "total_wall_ms": 3199.587213,
+          "mean_wall_ms": 0.11251493522523472,
+          "wall_ms": {
+            "p50": 0.064461,
+            "p95": 0.213111,
+            "p99": 1.101432,
+            "max": 34.19652
+          }
+        }
+      },
+      {
+        "tier": "r300",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398085152259541,
+        "end_realtime_ns": 1791398088296254979,
+        "event_counts": {
+          "WorkerUnparkEvent": 369,
+          "PollStartEvent": 108430,
+          "PollEndEvent": 108430,
+          "WorkerParkEvent": 369,
+          "TaskSpawnEvent": 21740,
+          "TaskTerminateEvent": 69146,
+          "RuntimeMetricsEvent": 308,
+          "ProcessResourceUsageEvent": 31
+        },
+        "span_ms": 3142.547473,
+        "poll_wall_ms": {
+          "p50": 0.019366,
+          "p95": 0.165401,
+          "p99": 0.588167,
+          "max": 67.263315
+        },
+        "paired_polls": 108430,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 1,
+        "local_queue_max": 98,
+        "polls_with_local_queue": 103704,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 29587,
+          "total_wall_ms": 3342.403936,
+          "mean_wall_ms": 0.11296866650893975,
+          "wall_ms": {
+            "p50": 0.068219,
+            "p95": 0.205688,
+            "p99": 1.083509,
+            "max": 67.263315
+          }
+        }
+      }
+    ]
+  },
+  {
+    "run": "run-2",
+    "trace_sha256": {
+      "run-2/telemetry/rustfs-tokio/trace.0.jsonl": "bffeb8ab8d5ad6c15e4404137d60c36d93794015d8d79ac723f9927fa96fe729"
+    },
+    "tiers": [
+      {
+        "tier": "c1",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398102969196299,
+        "end_realtime_ns": 1791398105970466618,
+        "event_counts": {
+          "TaskTerminateEvent": 22068,
+          "PollEndEvent": 36130,
+          "WorkerParkEvent": 19231,
+          "WorkerUnparkEvent": 19230,
+          "PollStartEvent": 36129,
+          "TaskSpawnEvent": 7077,
+          "ProcessResourceUsageEvent": 30,
+          "RuntimeMetricsEvent": 296,
+          "SegmentMetadataEvent": 1,
+          "ClockSyncEvent": 1
+        },
+        "span_ms": 3001.128633,
+        "poll_wall_ms": {
+          "p50": 0.015449,
+          "p95": 0.146956,
+          "p99": 0.282632,
+          "max": 1.23278
+        },
+        "paired_polls": 36129,
+        "unmatched_poll_ends": 1,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 4,
+        "polls_with_local_queue": 7458,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 10549,
+          "total_wall_ms": 807.385886,
+          "mean_wall_ms": 0.07653672253294151,
+          "wall_ms": {
+            "p50": 0.049523,
+            "p95": 0.173587,
+            "p99": 0.568189,
+            "max": 1.23278
+          }
+        }
+      },
+      {
+        "tier": "c2",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398105976494682,
+        "end_realtime_ns": 1791398108988400505,
+        "event_counts": {
+          "WorkerUnparkEvent": 21789,
+          "PollStartEvent": 69794,
+          "TaskSpawnEvent": 12913,
+          "PollEndEvent": 69793,
+          "WorkerParkEvent": 21788,
+          "TaskTerminateEvent": 40978,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 30
+        },
+        "span_ms": 3010.61797,
+        "poll_wall_ms": {
+          "p50": 0.013295,
+          "p95": 0.149371,
+          "p99": 0.307068,
+          "max": 1.723914
+        },
+        "paired_polls": 69793,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 1,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 6,
+        "polls_with_local_queue": 18541,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 20285,
+          "total_wall_ms": 1548.811161,
+          "mean_wall_ms": 0.07635253443431107,
+          "wall_ms": {
+            "p50": 0.030567,
+            "p95": 0.179217,
+            "p99": 0.794615,
+            "max": 1.723914
+          }
+        }
+      },
+      {
+        "tier": "c4",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398109002049870,
+        "end_realtime_ns": 1791398112020619483,
+        "event_counts": {
+          "RuntimeMetricsEvent": 297,
+          "WorkerUnparkEvent": 14628,
+          "PollStartEvent": 100136,
+          "TaskSpawnEvent": 18695,
+          "PollEndEvent": 100136,
+          "WorkerParkEvent": 14628,
+          "TaskTerminateEvent": 59836,
+          "ProcessResourceUsageEvent": 30
+        },
+        "span_ms": 3017.919199,
+        "poll_wall_ms": {
+          "p50": 0.015218,
+          "p95": 0.155092,
+          "p99": 0.379945,
+          "max": 3.183791
+        },
+        "paired_polls": 100136,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 10,
+        "polls_with_local_queue": 42121,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 28223,
+          "total_wall_ms": 2357.147549,
+          "mean_wall_ms": 0.08351867444991673,
+          "wall_ms": {
+            "p50": 0.039534,
+            "p95": 0.182534,
+            "p99": 0.810064,
+            "max": 3.183791
+          }
+        }
+      },
+      {
+        "tier": "c8",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398112047156771,
+        "end_realtime_ns": 1791398115063309506,
+        "event_counts": {
+          "WorkerUnparkEvent": 3330,
+          "PollStartEvent": 105543,
+          "TaskSpawnEvent": 20355,
+          "PollEndEvent": 105543,
+          "WorkerParkEvent": 3330,
+          "TaskTerminateEvent": 64509,
+          "RuntimeMetricsEvent": 295,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3014.354701,
+        "poll_wall_ms": {
+          "p50": 0.01621,
+          "p95": 0.161574,
+          "p99": 0.482759,
+          "max": 175.759412
+        },
+        "paired_polls": 105543,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 3,
+        "local_queue_max": 15,
+        "polls_with_local_queue": 70223,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 29507,
+          "total_wall_ms": 2781.6006,
+          "mean_wall_ms": 0.09426917680550378,
+          "wall_ms": {
+            "p50": 0.050826,
+            "p95": 0.189146,
+            "p99": 0.873484,
+            "max": 32.66017
+          }
+        }
+      },
+      {
+        "tier": "r100",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398115103441185,
+        "end_realtime_ns": 1791398118109917050,
+        "event_counts": {
+          "WorkerUnparkEvent": 22128,
+          "PollStartEvent": 54234,
+          "TaskSpawnEvent": 10555,
+          "PollEndEvent": 54234,
+          "WorkerParkEvent": 22128,
+          "TaskTerminateEvent": 32972,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3005.02739,
+        "poll_wall_ms": {
+          "p50": 0.016301,
+          "p95": 0.150754,
+          "p99": 0.374925,
+          "max": 2.160976
+        },
+        "paired_polls": 54234,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 4,
+        "polls_with_local_queue": 12547,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 15723,
+          "total_wall_ms": 1268.385018,
+          "mean_wall_ms": 0.0806706746804045,
+          "wall_ms": {
+            "p50": 0.041909,
+            "p95": 0.17564,
+            "p99": 0.720787,
+            "max": 2.160976
+          }
+        }
+      },
+      {
+        "tier": "r200",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398118155093042,
+        "end_realtime_ns": 1791398121305149255,
+        "event_counts": {
+          "WorkerUnparkEvent": 5882,
+          "PollStartEvent": 107027,
+          "TaskSpawnEvent": 20870,
+          "PollEndEvent": 107027,
+          "WorkerParkEvent": 5882,
+          "TaskTerminateEvent": 66131,
+          "RuntimeMetricsEvent": 307,
+          "ProcessResourceUsageEvent": 31
+        },
+        "span_ms": 3146.514829,
+        "poll_wall_ms": {
+          "p50": 0.017202,
+          "p95": 0.163247,
+          "p99": 0.549515,
+          "max": 65.221162
+        },
+        "paired_polls": 107027,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 4,
+        "local_queue_max": 88,
+        "polls_with_local_queue": 72077,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 29606,
+          "total_wall_ms": 3113.530536,
+          "mean_wall_ms": 0.10516552509626428,
+          "wall_ms": {
+            "p50": 0.046909,
+            "p95": 0.203352,
+            "p99": 1.0204,
+            "max": 45.92966
+          }
+        }
+      },
+      {
+        "tier": "r300",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398121364209343,
+        "end_realtime_ns": 1791398124494780259,
+        "event_counts": {
+          "WorkerUnparkEvent": 200,
+          "PollStartEvent": 104219,
+          "TaskSpawnEvent": 20908,
+          "PollEndEvent": 104219,
+          "WorkerParkEvent": 200,
+          "TaskTerminateEvent": 66470,
+          "RuntimeMetricsEvent": 306,
+          "ProcessResourceUsageEvent": 31
+        },
+        "span_ms": 3127.253392,
+        "poll_wall_ms": {
+          "p50": 0.019957,
+          "p95": 0.168828,
+          "p99": 0.639634,
+          "max": 47.885811
+        },
+        "paired_polls": 104219,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 2,
+        "local_queue_max": 96,
+        "polls_with_local_queue": 99769,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 28396,
+          "total_wall_ms": 3268.587467,
+          "mean_wall_ms": 0.11510732029159036,
+          "wall_ms": {
+            "p50": 0.070122,
+            "p95": 0.214554,
+            "p99": 1.096764,
+            "max": 47.885811
+          }
+        }
+      }
+    ]
+  },
+  {
+    "run": "run-3",
+    "trace_sha256": {
+      "run-3/telemetry/rustfs-tokio/trace.0.jsonl": "f7f6780a0fc49d75dc5ab5c41b10ee607d8f484ee17662d7112f0fedd95e3275"
+    },
+    "tiers": [
+      {
+        "tier": "c1",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398139326873118,
+        "end_realtime_ns": 1791398142336039777,
+        "event_counts": {
+          "TaskTerminateEvent": 20933,
+          "PollEndEvent": 34222,
+          "WorkerParkEvent": 18426,
+          "WorkerUnparkEvent": 18425,
+          "PollStartEvent": 34221,
+          "TaskSpawnEvent": 6727,
+          "RuntimeMetricsEvent": 297,
+          "ProcessResourceUsageEvent": 30,
+          "SegmentMetadataEvent": 1,
+          "ClockSyncEvent": 1
+        },
+        "span_ms": 3009.005856,
+        "poll_wall_ms": {
+          "p50": 0.017022,
+          "p95": 0.150643,
+          "p99": 0.305415,
+          "max": 2.696945
+        },
+        "paired_polls": 34221,
+        "unmatched_poll_ends": 1,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 4,
+        "polls_with_local_queue": 6963,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 9896,
+          "total_wall_ms": 829.75962,
+          "mean_wall_ms": 0.08384798100242523,
+          "wall_ms": {
+            "p50": 0.056887,
+            "p95": 0.178015,
+            "p99": 0.669029,
+            "max": 2.696945
+          }
+        }
+      },
+      {
+        "tier": "c2",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398142341212250,
+        "end_realtime_ns": 1791398145347117111,
+        "event_counts": {
+          "WorkerUnparkEvent": 20872,
+          "PollStartEvent": 68576,
+          "TaskSpawnEvent": 12650,
+          "PollEndEvent": 68575,
+          "WorkerParkEvent": 20871,
+          "RuntimeMetricsEvent": 296,
+          "TaskTerminateEvent": 40282,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3004.798489,
+        "poll_wall_ms": {
+          "p50": 0.013886,
+          "p95": 0.150553,
+          "p99": 0.303391,
+          "max": 2.530592
+        },
+        "paired_polls": 68575,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 1,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 7,
+        "polls_with_local_queue": 18320,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 19831,
+          "total_wall_ms": 1534.079654,
+          "mean_wall_ms": 0.07735765488376783,
+          "wall_ms": {
+            "p50": 0.031399,
+            "p95": 0.178216,
+            "p99": 0.778746,
+            "max": 2.530592
+          }
+        }
+      },
+      {
+        "tier": "c4",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398145361950634,
+        "end_realtime_ns": 1791398148378500086,
+        "event_counts": {
+          "WorkerUnparkEvent": 15185,
+          "PollStartEvent": 101647,
+          "TaskSpawnEvent": 19068,
+          "PollEndEvent": 101647,
+          "WorkerParkEvent": 15185,
+          "TaskTerminateEvent": 60801,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3014.99687,
+        "poll_wall_ms": {
+          "p50": 0.014457,
+          "p95": 0.153329,
+          "p99": 0.351421,
+          "max": 5.053249
+        },
+        "paired_polls": 101647,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 11,
+        "polls_with_local_queue": 43721,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 28716,
+          "total_wall_ms": 2287.957304,
+          "mean_wall_ms": 0.07967534837721131,
+          "wall_ms": {
+            "p50": 0.039354,
+            "p95": 0.17538,
+            "p99": 0.705507,
+            "max": 5.053249
+          }
+        }
+      },
+      {
+        "tier": "c8",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398148403854077,
+        "end_realtime_ns": 1791398151652840325,
+        "event_counts": {
+          "ProcessResourceUsageEvent": 32,
+          "WorkerUnparkEvent": 3323,
+          "PollStartEvent": 111877,
+          "TaskSpawnEvent": 21580,
+          "PollEndEvent": 111877,
+          "WorkerParkEvent": 3323,
+          "TaskTerminateEvent": 68358,
+          "RuntimeMetricsEvent": 318
+        },
+        "span_ms": 3247.304674,
+        "poll_wall_ms": {
+          "p50": 0.01579,
+          "p95": 0.160141,
+          "p99": 0.484221,
+          "max": 232.66192
+        },
+        "paired_polls": 111877,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 3,
+        "local_queue_max": 16,
+        "polls_with_local_queue": 73534,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 31276,
+          "total_wall_ms": 3105.396255,
+          "mean_wall_ms": 0.09929007082107687,
+          "wall_ms": {
+            "p50": 0.049393,
+            "p95": 0.182173,
+            "p99": 0.78137,
+            "max": 232.66192
+          }
+        }
+      },
+      {
+        "tier": "r100",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398151691025932,
+        "end_realtime_ns": 1791398154697202003,
+        "event_counts": {
+          "WorkerUnparkEvent": 22630,
+          "PollStartEvent": 54303,
+          "TaskSpawnEvent": 10555,
+          "PollEndEvent": 54303,
+          "WorkerParkEvent": 22630,
+          "TaskTerminateEvent": 32980,
+          "RuntimeMetricsEvent": 296,
+          "ProcessResourceUsageEvent": 29
+        },
+        "span_ms": 3004.988015,
+        "poll_wall_ms": {
+          "p50": 0.01596,
+          "p95": 0.149251,
+          "p99": 0.376789,
+          "max": 1.697044
+        },
+        "paired_polls": 54303,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 0,
+        "local_queue_max": 4,
+        "polls_with_local_queue": 12493,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 15757,
+          "total_wall_ms": 1246.718222,
+          "mean_wall_ms": 0.0791215473757695,
+          "wall_ms": {
+            "p50": 0.039925,
+            "p95": 0.168006,
+            "p99": 0.721598,
+            "max": 1.697044
+          }
+        }
+      },
+      {
+        "tier": "r200",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398154741451090,
+        "end_realtime_ns": 1791398157891452149,
+        "event_counts": {
+          "WorkerUnparkEvent": 7205,
+          "PollStartEvent": 91569,
+          "TaskSpawnEvent": 17873,
+          "PollEndEvent": 91569,
+          "WorkerParkEvent": 7205,
+          "TaskTerminateEvent": 56600,
+          "RuntimeMetricsEvent": 305,
+          "ProcessResourceUsageEvent": 31
+        },
+        "span_ms": 3148.044807,
+        "poll_wall_ms": {
+          "p50": 0.017263,
+          "p95": 0.165903,
+          "p99": 0.612112,
+          "max": 108.94462
+        },
+        "paired_polls": 91569,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 7,
+        "local_queue_max": 94,
+        "polls_with_local_queue": 55362,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 25174,
+          "total_wall_ms": 2975.110599,
+          "mean_wall_ms": 0.11818187808850401,
+          "wall_ms": {
+            "p50": 0.041628,
+            "p95": 0.220324,
+            "p99": 1.231658,
+            "max": 75.207554
+          }
+        }
+      },
+      {
+        "tier": "r300",
+        "window": "generation plus drain",
+        "start_realtime_ns": 1791398157955400226,
+        "end_realtime_ns": 1791398161137059398,
+        "event_counts": {
+          "WorkerUnparkEvent": 336,
+          "PollStartEvent": 101976,
+          "PollEndEvent": 101976,
+          "WorkerParkEvent": 336,
+          "TaskSpawnEvent": 20460,
+          "TaskTerminateEvent": 65045,
+          "RuntimeMetricsEvent": 309,
+          "ProcessResourceUsageEvent": 31
+        },
+        "span_ms": 3177.632115,
+        "poll_wall_ms": {
+          "p50": 0.020499,
+          "p95": 0.170551,
+          "p99": 0.643661,
+          "max": 130.553304
+        },
+        "paired_polls": 101976,
+        "unmatched_poll_ends": 0,
+        "unmatched_poll_starts": 0,
+        "overwritten_poll_starts": 0,
+        "polls_ge_30_ms": 2,
+        "local_queue_max": 100,
+        "polls_with_local_queue": 97641,
+        "limitations": [
+          "Poll durations are whole-task wall time, not CPU or stage time",
+          "Queue depth does not measure request queue wait",
+          "No driver-turn or kernel-readiness timing is reconstructed",
+          "Tier clock mapping uses the first ClockSyncEvent; clock drift is uncorrected"
+        ],
+        "storage_future": {
+          "polls": 27773,
+          "total_wall_ms": 3301.732621,
+          "mean_wall_ms": 0.11888282220141864,
+          "wall_ms": {
+            "p50": 0.071985,
+            "p95": 0.210446,
+            "p99": 1.01487,
+            "max": 130.553304
+          }
+        }
+      }
+    ]
+  }
+]

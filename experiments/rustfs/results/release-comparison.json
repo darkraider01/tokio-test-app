@@ -1,0 +1,1895 @@
+{
+  "build_command": "RUSTFLAGS='--cfg tokio_unstable' cargo build --release --locked --offline -p rustfs --bin rustfs --features dial9 --jobs 2",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "volume_filesystem": "/home: /dev/nvme0n1p3 (single filesystem, four directories)",
+  "tier_order": [
+    "c1",
+    "c2",
+    "c4",
+    "c8",
+    "r100",
+    "r200",
+    "r300"
+  ],
+  "limitations": [
+    "Three short repetitions; sequential telemetry-on then telemetry-off, not randomized",
+    "Same client/server host and shared filesystem; client work is included",
+    "HTTP 200 checked; no read-back integrity check",
+    "No request-level CPU, disk-wait, or driver-delay decomposition"
+  ],
+  "experiments": {
+    "on": {
+      "manifest": {
+        "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+        "rustfs_working_tree": "",
+        "dependencies": [
+          {
+            "name": "dial9",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+            "dependencies": [
+              "bon",
+              "dial9-core",
+              "dial9-macro",
+              "dial9-metrique",
+              "dial9-perf-self-profile",
+              "dial9-tokio-telemetry",
+              "dial9-trace-format",
+              "tokio",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-tokio-telemetry",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+            "dependencies": [
+              "bon",
+              "bytes",
+              "dial9-core",
+              "dial9-perf-self-profile",
+              "dial9-trace-format",
+              "flate2",
+              "futures-util",
+              "hostname",
+              "libc",
+              "metrique-timesource",
+              "pin-project-lite",
+              "serde",
+              "serde_json",
+              "smallvec",
+              "tokio",
+              "tokio-util",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-trace-format",
+            "version": "0.5.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+            "dependencies": [
+              "ahash",
+              "dial9-trace-format-derive",
+              "serde",
+              "typeid"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.53.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044",
+            "dependencies": [
+              "bytes",
+              "libc",
+              "mio",
+              "pin-project-lite",
+              "signal-hook-registry",
+              "socket2",
+              "tokio-macros",
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs/target/release/rustfs",
+        "declared_build_profile": "release",
+        "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+        "workers": 2,
+        "payload_bytes": 1048576,
+        "payload_sha256": "f581abbc52e9c6f65b86f3ecdbe1d640bd5a1fa2abe01c5074c8e4dbcce27a25",
+        "repetitions": 3,
+        "generation_seconds_per_tier": 3.0,
+        "telemetry_enabled": true,
+        "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-release-on",
+        "limitations": [
+          "HTTP 200 is not a read-back integrity check",
+          "New connection and client signing costs are included in attempt latency",
+          "Declared profile must be verified against the binary build command"
+        ],
+        "binary_sha256": "dc577ce78a0dab71cef0072896c02487cd496fb8e6e3e35e5cfb81850cf01c9e",
+        "decoder_commit": "33b2d780628b42251047909ff2b88fdb97e3c28b",
+        "run_1_exit_code": 0,
+        "run_2_exit_code": 0,
+        "run_3_exit_code": 0
+      },
+      "runs": [
+        {
+          "run": "run-1",
+          "raw_requests_sha256": "0c9484bb29b04ca0522db2c7f784ecbe0dffa25aeafe868d239f2b40b8f9a3c3",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398066782462619,
+              "generation_end_realtime_ns": 1791398069782462619,
+              "end_realtime_ns": 1791398069788572445,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.006071203,
+              "drain_s": 0.006071203,
+              "planned_arrivals": 199,
+              "attempted": 199,
+              "completed_ok": 199,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 66.33333333333333,
+              "completions_during_generation_rps": 66.0,
+              "throughput_including_drain_rps": 66.19936340875822,
+              "latency_ms": {
+                "p50": 14.9167,
+                "p95": 16.908819,
+                "p99": 18.612344,
+                "max": 19.383706
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 14.917271,
+                "p95": 16.9092,
+                "p99": 18.612805,
+                "max": 19.384116
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000481,
+                "p95": 0.000852,
+                "p99": 0.001042,
+                "max": 0.001292
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398069793614212,
+              "generation_end_realtime_ns": 1791398072793614212,
+              "end_realtime_ns": 1791398072794768924,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.001080352,
+              "drain_s": 0.001080352,
+              "planned_arrivals": 340,
+              "attempted": 340,
+              "completed_ok": 340,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 113.33333333333333,
+              "completions_during_generation_rps": 112.66666666666667,
+              "throughput_including_drain_rps": 113.29253472784058,
+              "latency_ms": {
+                "p50": 17.038192,
+                "p95": 20.987244,
+                "p99": 32.628149,
+                "max": 38.356789
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 17.038713,
+                "p95": 20.987594,
+                "p99": 32.628339,
+                "max": 38.35724
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000441,
+                "p95": 0.001011,
+                "p99": 0.001523,
+                "max": 0.003537
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398072808374407,
+              "generation_end_realtime_ns": 1791398075808374407,
+              "end_realtime_ns": 1791398075827259363,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.018768948,
+              "drain_s": 0.018768948,
+              "planned_arrivals": 515,
+              "attempted": 515,
+              "completed_ok": 515,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 171.66666666666666,
+              "completions_during_generation_rps": 170.33333333333334,
+              "throughput_including_drain_rps": 170.59934326580333,
+              "latency_ms": {
+                "p50": 23.066746,
+                "p95": 28.512535,
+                "p99": 39.347774,
+                "max": 46.049525
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 23.067227,
+                "p95": 28.512735,
+                "p99": 39.348585,
+                "max": 46.050307
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000431,
+                "p95": 0.000992,
+                "p99": 0.001272,
+                "max": 0.001943
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398075851617751,
+              "generation_end_realtime_ns": 1791398078851617751,
+              "end_realtime_ns": 1791398078875194796,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.023363433,
+              "drain_s": 0.023363433,
+              "planned_arrivals": 575,
+              "attempted": 575,
+              "completed_ok": 575,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 191.66666666666666,
+              "completions_during_generation_rps": 189.0,
+              "throughput_including_drain_rps": 190.18553764455746,
+              "latency_ms": {
+                "p50": 38.488347,
+                "p95": 59.39562,
+                "p99": 153.360832,
+                "max": 230.826597
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 38.488998,
+                "p95": 59.395871,
+                "p99": 153.361343,
+                "max": 230.827759
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000401,
+                "p95": 0.001243,
+                "p99": 0.001583,
+                "max": 0.001894
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398078914544695,
+              "generation_end_realtime_ns": 1791398081914544695,
+              "end_realtime_ns": 1791398081920125365,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.005529564,
+              "drain_s": 0.005529564,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.8160203091584,
+              "latency_ms": {
+                "p50": 16.685909,
+                "p95": 18.55149,
+                "p99": 22.276449,
+                "max": 37.037227
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.837274,
+                "p95": 18.74223,
+                "p99": 22.392917,
+                "max": 37.212563
+              },
+              "launch_lateness_ms": {
+                "p50": 0.131697,
+                "p95": 0.217837,
+                "p99": 0.303265,
+                "max": 0.640493
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398081966392620,
+              "generation_end_realtime_ns": 1791398084966392620,
+              "end_realtime_ns": 1791398085094612943,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.128026858,
+              "drain_s": 0.128026858,
+              "planned_arrivals": 600,
+              "attempted": 589,
+              "completed_ok": 589,
+              "failed": 0,
+              "client_shed": 11,
+              "attempts_during_generation_rps": 196.33333333333334,
+              "completions_during_generation_rps": 177.33333333333334,
+              "throughput_including_drain_rps": 188.29761595352645,
+              "latency_ms": {
+                "p50": 270.687486,
+                "p95": 338.370461,
+                "p99": 357.379392,
+                "max": 379.35196
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 270.897835,
+                "p95": 338.550778,
+                "p99": 359.542356,
+                "max": 379.4742
+              },
+              "launch_lateness_ms": {
+                "p50": 0.184695,
+                "p95": 0.78437,
+                "p99": 9.330135,
+                "max": 11.127322
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398085152259541,
+              "generation_end_realtime_ns": 1791398088152259541,
+              "end_realtime_ns": 1791398088296254979,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.143684613,
+              "drain_s": 0.143684613,
+              "planned_arrivals": 900,
+              "attempted": 620,
+              "completed_ok": 620,
+              "failed": 0,
+              "client_shed": 280,
+              "attempts_during_generation_rps": 206.66666666666666,
+              "completions_during_generation_rps": 185.66666666666666,
+              "throughput_including_drain_rps": 197.22080180566763,
+              "latency_ms": {
+                "p50": 306.146382,
+                "p95": 373.568486,
+                "p99": 404.756786,
+                "max": 425.204164
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 306.339305,
+                "p95": 373.735936,
+                "p99": 404.862674,
+                "max": 425.303551
+              },
+              "launch_lateness_ms": {
+                "p50": 0.150819,
+                "p95": 0.513038,
+                "p99": 0.854193,
+                "max": 1.513181
+              }
+            }
+          ]
+        },
+        {
+          "run": "run-2",
+          "raw_requests_sha256": "f905117bc52fa8739ac160d13dd2c3a45d444532ebdc649985073bc09d4ebd93",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398102969196299,
+              "generation_end_realtime_ns": 1791398105969196299,
+              "end_realtime_ns": 1791398105970466618,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.001221778,
+              "drain_s": 0.001221778,
+              "planned_arrivals": 201,
+              "attempted": 201,
+              "completed_ok": 201,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 67.0,
+              "completions_during_generation_rps": 66.66666666666667,
+              "throughput_including_drain_rps": 66.97272473277381,
+              "latency_ms": {
+                "p50": 14.845696,
+                "p95": 15.966275,
+                "p99": 16.349496,
+                "max": 17.362934
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 14.846047,
+                "p95": 15.966716,
+                "p99": 16.349796,
+                "max": 17.363164
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000381,
+                "p95": 0.000751,
+                "p99": 0.001002,
+                "max": 0.001192
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398105976494682,
+              "generation_end_realtime_ns": 1791398108976494682,
+              "end_realtime_ns": 1791398108988400505,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.011821595,
+              "drain_s": 0.011821595,
+              "planned_arrivals": 366,
+              "attempted": 366,
+              "completed_ok": 366,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 122.0,
+              "completions_during_generation_rps": 121.33333333333333,
+              "throughput_including_drain_rps": 121.52114209141926,
+              "latency_ms": {
+                "p50": 16.327755,
+                "p95": 17.883152,
+                "p99": 18.894365,
+                "max": 38.510328
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.328176,
+                "p95": 17.883673,
+                "p99": 18.895437,
+                "max": 38.510779
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000361,
+                "p95": 0.000801,
+                "p99": 0.001113,
+                "max": 0.001483
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398109002049870,
+              "generation_end_realtime_ns": 1791398112002049870,
+              "end_realtime_ns": 1791398112020619483,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.0184459,
+              "drain_s": 0.0184459,
+              "planned_arrivals": 529,
+              "attempted": 529,
+              "completed_ok": 529,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 176.33333333333334,
+              "completions_during_generation_rps": 175.0,
+              "throughput_including_drain_rps": 175.25574998710428,
+              "latency_ms": {
+                "p50": 22.543842,
+                "p95": 26.610345,
+                "p99": 43.558959,
+                "max": 47.392462
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 22.544353,
+                "p95": 26.610536,
+                "p99": 43.559159,
+                "max": 47.392853
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000311,
+                "p95": 0.000762,
+                "p99": 0.001153,
+                "max": 0.001573
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398112047156771,
+              "generation_end_realtime_ns": 1791398115047156771,
+              "end_realtime_ns": 1791398115063309506,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.016006781,
+              "drain_s": 0.016006781,
+              "planned_arrivals": 580,
+              "attempted": 580,
+              "completed_ok": 580,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 193.33333333333334,
+              "completions_during_generation_rps": 190.66666666666666,
+              "throughput_including_drain_rps": 192.3072599351692,
+              "latency_ms": {
+                "p50": 37.869142,
+                "p95": 48.539091,
+                "p99": 275.281951,
+                "max": 308.178627
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 37.869412,
+                "p95": 48.539291,
+                "p99": 275.282162,
+                "max": 308.179398
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000321,
+                "p95": 0.000931,
+                "p99": 0.001352,
+                "max": 0.001503
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398115103441185,
+              "generation_end_realtime_ns": 1791398118103441185,
+              "end_realtime_ns": 1791398118109917050,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.006413958,
+              "drain_s": 0.006413958,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.78665752322854,
+              "latency_ms": {
+                "p50": 16.048008,
+                "p95": 17.55765,
+                "p99": 21.374372,
+                "max": 35.927778
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.183966,
+                "p95": 17.683948,
+                "p99": 21.507815,
+                "max": 36.051373
+              },
+              "launch_lateness_ms": {
+                "p50": 0.124,
+                "p95": 0.20246,
+                "p99": 0.235341,
+                "max": 0.512453
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398118155093042,
+              "generation_end_realtime_ns": 1791398121155093042,
+              "end_realtime_ns": 1791398121305149255,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.149910057,
+              "drain_s": 0.149910057,
+              "planned_arrivals": 600,
+              "attempted": 595,
+              "completed_ok": 595,
+              "failed": 0,
+              "client_shed": 5,
+              "attempts_during_generation_rps": 198.33333333333334,
+              "completions_during_generation_rps": 177.33333333333334,
+              "throughput_including_drain_rps": 188.89428245030044,
+              "latency_ms": {
+                "p50": 118.915203,
+                "p95": 302.157335,
+                "p99": 352.615437,
+                "max": 374.174717
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 119.611912,
+                "p95": 302.237325,
+                "p99": 352.71243,
+                "max": 374.366639
+              },
+              "launch_lateness_ms": {
+                "p50": 0.153969,
+                "p95": 0.65634,
+                "p99": 1.759721,
+                "max": 6.777412
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398121364209343,
+              "generation_end_realtime_ns": 1791398124364209343,
+              "end_realtime_ns": 1791398124494780259,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.130232448,
+              "drain_s": 0.130232448,
+              "planned_arrivals": 900,
+              "attempted": 596,
+              "completed_ok": 596,
+              "failed": 0,
+              "client_shed": 304,
+              "attempts_during_generation_rps": 198.66666666666666,
+              "completions_during_generation_rps": 178.0,
+              "throughput_including_drain_rps": 190.40119540668692,
+              "latency_ms": {
+                "p50": 320.04672,
+                "p95": 384.600145,
+                "p99": 400.969989,
+                "max": 436.387959
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 320.155586,
+                "p95": 384.796504,
+                "p99": 401.121997,
+                "max": 436.60754
+              },
+              "launch_lateness_ms": {
+                "p50": 0.157537,
+                "p95": 0.641175,
+                "p99": 1.234231,
+                "max": 2.678726
+              }
+            }
+          ]
+        },
+        {
+          "run": "run-3",
+          "raw_requests_sha256": "e511cb58453406ff5a95be9275a0e6d0ad176646dc36c517ff7ab60182283e48",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398139326873118,
+              "generation_end_realtime_ns": 1791398142326873118,
+              "end_realtime_ns": 1791398142336039777,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.009115172,
+              "drain_s": 0.009115172,
+              "planned_arrivals": 191,
+              "attempted": 191,
+              "completed_ok": 191,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 63.666666666666664,
+              "completions_during_generation_rps": 63.333333333333336,
+              "throughput_including_drain_rps": 63.47380843952622,
+              "latency_ms": {
+                "p50": 15.593203,
+                "p95": 17.246874,
+                "p99": 19.857207,
+                "max": 20.013662
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 15.593714,
+                "p95": 17.247536,
+                "p99": 19.857527,
+                "max": 20.014032
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000401,
+                "p95": 0.000822,
+                "p99": 0.001283,
+                "max": 0.001303
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398142341212250,
+              "generation_end_realtime_ns": 1791398145341212250,
+              "end_realtime_ns": 1791398145347117111,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.0057714,
+              "drain_s": 0.0057714,
+              "planned_arrivals": 358,
+              "attempted": 358,
+              "completed_ok": 358,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 119.33333333333333,
+              "completions_during_generation_rps": 118.66666666666667,
+              "throughput_including_drain_rps": 119.10420067208038,
+              "latency_ms": {
+                "p50": 16.377869,
+                "p95": 19.866695,
+                "p99": 25.601336,
+                "max": 37.307254
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.37823,
+                "p95": 19.867356,
+                "p99": 25.601867,
+                "max": 37.308066
+              },
+              "launch_lateness_ms": {
+                "p50": 0.00037,
+                "p95": 0.000792,
+                "p99": 0.001092,
+                "max": 0.001383
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398145361950634,
+              "generation_end_realtime_ns": 1791398148361950634,
+              "end_realtime_ns": 1791398148378500086,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.016406352,
+              "drain_s": 0.016406352,
+              "planned_arrivals": 541,
+              "attempted": 541,
+              "completed_ok": 541,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 180.33333333333334,
+              "completions_during_generation_rps": 179.0,
+              "throughput_including_drain_rps": 179.35249328768154,
+              "latency_ms": {
+                "p50": 22.081983,
+                "p95": 25.555571,
+                "p99": 27.282069,
+                "max": 43.194823
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 22.082364,
+                "p95": 25.556052,
+                "p99": 27.28223,
+                "max": 43.195023
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000301,
+                "p95": 0.000692,
+                "p99": 0.000972,
+                "max": 0.001443
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398148403854077,
+              "generation_end_realtime_ns": 1791398151403854077,
+              "end_realtime_ns": 1791398151652840325,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.248840264,
+              "drain_s": 0.248840264,
+              "planned_arrivals": 615,
+              "attempted": 615,
+              "completed_ok": 615,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 205.0,
+              "completions_during_generation_rps": 202.33333333333334,
+              "throughput_including_drain_rps": 189.2983187923209,
+              "latency_ms": {
+                "p50": 36.663072,
+                "p95": 51.994883,
+                "p99": 337.01995,
+                "max": 430.260017
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 36.663263,
+                "p95": 51.995173,
+                "p99": 337.021082,
+                "max": 430.262121
+              },
+              "launch_lateness_ms": {
+                "p50": 0.00033,
+                "p95": 0.000842,
+                "p99": 0.001402,
+                "max": 0.002264
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398151691025932,
+              "generation_end_realtime_ns": 1791398154691025932,
+              "end_realtime_ns": 1791398154697202003,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.006114164,
+              "drain_s": 0.006114164,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.79660905519755,
+              "latency_ms": {
+                "p50": 15.663255,
+                "p95": 17.317568,
+                "p99": 18.509241,
+                "max": 21.011569
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 15.782768,
+                "p95": 17.461735,
+                "p99": 18.673938,
+                "max": 21.181633
+              },
+              "launch_lateness_ms": {
+                "p50": 0.13374,
+                "p95": 0.192866,
+                "p99": 0.22293,
+                "max": 0.552104
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398154741451090,
+              "generation_end_realtime_ns": 1791398157741451090,
+              "end_realtime_ns": 1791398157891452149,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.149819046,
+              "drain_s": 0.149819046,
+              "planned_arrivals": 600,
+              "attempted": 508,
+              "completed_ok": 508,
+              "failed": 0,
+              "client_shed": 92,
+              "attempts_during_generation_rps": 169.33333333333334,
+              "completions_during_generation_rps": 148.66666666666666,
+              "throughput_including_drain_rps": 161.27910606328842,
+              "latency_ms": {
+                "p50": 23.043483,
+                "p95": 657.797013,
+                "p99": 735.436605,
+                "max": 821.653136
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 23.246174,
+                "p95": 658.07911,
+                "p99": 735.707138,
+                "max": 821.819878
+              },
+              "launch_lateness_ms": {
+                "p50": 0.157344,
+                "p95": 0.806779,
+                "p99": 4.221984,
+                "max": 14.295497
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398157955400226,
+              "generation_end_realtime_ns": 1791398160955400226,
+              "end_realtime_ns": 1791398161137059398,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.181427557,
+              "drain_s": 0.181427557,
+              "planned_arrivals": 900,
+              "attempted": 583,
+              "completed_ok": 583,
+              "failed": 0,
+              "client_shed": 317,
+              "attempts_during_generation_rps": 194.33333333333334,
+              "completions_during_generation_rps": 173.0,
+              "throughput_including_drain_rps": 183.25106875913062,
+              "latency_ms": {
+                "p50": 318.388579,
+                "p95": 483.600192,
+                "p99": 518.583243,
+                "max": 538.289596
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 318.565217,
+                "p95": 483.787275,
+                "p99": 518.692352,
+                "max": 538.425113
+              },
+              "launch_lateness_ms": {
+                "p50": 0.165029,
+                "p95": 0.647218,
+                "p99": 1.126657,
+                "max": 3.309774
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "off": {
+      "manifest": {
+        "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+        "rustfs_working_tree": "",
+        "dependencies": [
+          {
+            "name": "dial9",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+            "dependencies": [
+              "bon",
+              "dial9-core",
+              "dial9-macro",
+              "dial9-metrique",
+              "dial9-perf-self-profile",
+              "dial9-tokio-telemetry",
+              "dial9-trace-format",
+              "tokio",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-tokio-telemetry",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+            "dependencies": [
+              "bon",
+              "bytes",
+              "dial9-core",
+              "dial9-perf-self-profile",
+              "dial9-trace-format",
+              "flate2",
+              "futures-util",
+              "hostname",
+              "libc",
+              "metrique-timesource",
+              "pin-project-lite",
+              "serde",
+              "serde_json",
+              "smallvec",
+              "tokio",
+              "tokio-util",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-trace-format",
+            "version": "0.5.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+            "dependencies": [
+              "ahash",
+              "dial9-trace-format-derive",
+              "serde",
+              "typeid"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.53.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044",
+            "dependencies": [
+              "bytes",
+              "libc",
+              "mio",
+              "pin-project-lite",
+              "signal-hook-registry",
+              "socket2",
+              "tokio-macros",
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs/target/release/rustfs",
+        "declared_build_profile": "release",
+        "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+        "workers": 2,
+        "payload_bytes": 1048576,
+        "payload_sha256": "826bab35ce78af449e66bcff502892ed6274f7a77d98a7c71a73ae0055a4b1c2",
+        "repetitions": 3,
+        "generation_seconds_per_tier": 3.0,
+        "telemetry_enabled": false,
+        "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-release-off",
+        "limitations": [
+          "HTTP 200 is not a read-back integrity check",
+          "New connection and client signing costs are included in attempt latency",
+          "Declared profile must be verified against the binary build command"
+        ],
+        "binary_sha256": "dc577ce78a0dab71cef0072896c02487cd496fb8e6e3e35e5cfb81850cf01c9e",
+        "run_1_exit_code": 0,
+        "run_2_exit_code": 0,
+        "run_3_exit_code": 0
+      },
+      "runs": [
+        {
+          "run": "run-1",
+          "raw_requests_sha256": "d89a4dd20aa60e3b1418a9d9effbaff6318bcb9a3684c8a0ddbe059c77975349",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398221577788710,
+              "generation_end_realtime_ns": 1791398224577788710,
+              "end_realtime_ns": 1791398224580702270,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.002824462,
+              "drain_s": 0.002824462,
+              "planned_arrivals": 192,
+              "attempted": 192,
+              "completed_ok": 192,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 64.0,
+              "completions_during_generation_rps": 63.666666666666664,
+              "throughput_including_drain_rps": 63.93980148680433,
+              "latency_ms": {
+                "p50": 15.323907,
+                "p95": 17.241445,
+                "p99": 22.488139,
+                "max": 29.963747
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 15.324378,
+                "p95": 17.242908,
+                "p99": 22.48876,
+                "max": 29.964207
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000481,
+                "p95": 0.000852,
+                "p99": 0.001182,
+                "max": 0.001463
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398224586114285,
+              "generation_end_realtime_ns": 1791398227586114285,
+              "end_realtime_ns": 1791398227601372966,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.01514604,
+              "drain_s": 0.01514604,
+              "planned_arrivals": 341,
+              "attempted": 341,
+              "completed_ok": 341,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 113.66666666666667,
+              "completions_during_generation_rps": 113.0,
+              "throughput_including_drain_rps": 113.09568275505488,
+              "latency_ms": {
+                "p50": 17.318641,
+                "p95": 21.545285,
+                "p99": 27.747937,
+                "max": 37.900132
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 17.319292,
+                "p95": 21.546587,
+                "p99": 27.74932,
+                "max": 37.900753
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000481,
+                "p95": 0.001042,
+                "p99": 0.001593,
+                "max": 0.007925
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398227623499114,
+              "generation_end_realtime_ns": 1791398230623499114,
+              "end_realtime_ns": 1791398230641934153,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.018280969,
+              "drain_s": 0.018280969,
+              "planned_arrivals": 463,
+              "attempted": 463,
+              "completed_ok": 463,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 154.33333333333334,
+              "completions_during_generation_rps": 153.0,
+              "throughput_including_drain_rps": 153.39857513444105,
+              "latency_ms": {
+                "p50": 25.086899,
+                "p95": 33.709676,
+                "p99": 46.391842,
+                "max": 63.297064
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 25.08739,
+                "p95": 33.709896,
+                "p99": 46.392493,
+                "max": 63.297435
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000461,
+                "p95": 0.001112,
+                "p99": 0.001623,
+                "max": 0.002404
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398230668326579,
+              "generation_end_realtime_ns": 1791398233668326579,
+              "end_realtime_ns": 1791398233690050527,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.021514384,
+              "drain_s": 0.021514384,
+              "planned_arrivals": 548,
+              "attempted": 548,
+              "completed_ok": 548,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 182.66666666666666,
+              "completions_during_generation_rps": 180.0,
+              "throughput_including_drain_rps": 181.36600735771972,
+              "latency_ms": {
+                "p50": 40.245495,
+                "p95": 60.995503,
+                "p99": 153.325342,
+                "max": 205.885632
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 40.245686,
+                "p95": 60.996174,
+                "p99": 153.325793,
+                "max": 205.885892
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000451,
+                "p95": 0.001162,
+                "p99": 0.001533,
+                "max": 0.002475
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398233725211153,
+              "generation_end_realtime_ns": 1791398236725211153,
+              "end_realtime_ns": 1791398236732449081,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.007068018,
+              "drain_s": 0.007068018,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.76495317173767,
+              "latency_ms": {
+                "p50": 16.499679,
+                "p95": 18.345704,
+                "p99": 20.203249,
+                "max": 22.949056
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.660584,
+                "p95": 18.490774,
+                "p99": 20.334757,
+                "max": 23.084616
+              },
+              "launch_lateness_ms": {
+                "p50": 0.126654,
+                "p95": 0.203954,
+                "p99": 0.264614,
+                "max": 0.867663
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398236778723903,
+              "generation_end_realtime_ns": 1791398239778723903,
+              "end_realtime_ns": 1791398239931454563,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.152587361,
+              "drain_s": 0.152587361,
+              "planned_arrivals": 600,
+              "attempted": 522,
+              "completed_ok": 522,
+              "failed": 0,
+              "client_shed": 78,
+              "attempts_during_generation_rps": 174.0,
+              "completions_during_generation_rps": 153.66666666666666,
+              "throughput_including_drain_rps": 165.57828228887578,
+              "latency_ms": {
+                "p50": 321.82554,
+                "p95": 440.441436,
+                "p99": 476.979784,
+                "max": 535.483288
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 322.57655,
+                "p95": 440.714918,
+                "p99": 477.1373,
+                "max": 535.936692
+              },
+              "launch_lateness_ms": {
+                "p50": 0.217191,
+                "p95": 0.814514,
+                "p99": 1.498509,
+                "max": 3.000524
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398239985815852,
+              "generation_end_realtime_ns": 1791398242985815852,
+              "end_realtime_ns": 1791398243242742211,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.256498264,
+              "drain_s": 0.256498264,
+              "planned_arrivals": 900,
+              "attempted": 618,
+              "completed_ok": 618,
+              "failed": 0,
+              "client_shed": 282,
+              "attempts_during_generation_rps": 206.0,
+              "completions_during_generation_rps": 184.66666666666666,
+              "throughput_including_drain_rps": 189.77439872512088,
+              "latency_ms": {
+                "p50": 297.557532,
+                "p95": 472.752058,
+                "p99": 515.521914,
+                "max": 532.446925
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 297.729793,
+                "p95": 472.868416,
+                "p99": 515.641277,
+                "max": 532.579655
+              },
+              "launch_lateness_ms": {
+                "p50": 0.149808,
+                "p95": 0.538529,
+                "p99": 0.87715,
+                "max": 1.959782
+              }
+            }
+          ]
+        },
+        {
+          "run": "run-2",
+          "raw_requests_sha256": "2a4eae24d6db2696643817bc9de0f35ffe51b57c444950bb4acd194de9181462",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398246524625384,
+              "generation_end_realtime_ns": 1791398249524625384,
+              "end_realtime_ns": 1791398249526779615,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.002107944,
+              "drain_s": 0.002107944,
+              "planned_arrivals": 190,
+              "attempted": 190,
+              "completed_ok": 190,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 63.333333333333336,
+              "completions_during_generation_rps": 63.0,
+              "throughput_including_drain_rps": 63.28886353994472,
+              "latency_ms": {
+                "p50": 15.384992,
+                "p95": 17.707673,
+                "p99": 24.411659,
+                "max": 26.005317
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 15.385313,
+                "p95": 17.708034,
+                "p99": 24.412079,
+                "max": 26.006099
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000391,
+                "p95": 0.000772,
+                "p99": 0.000892,
+                "max": 0.001423
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398249532861621,
+              "generation_end_realtime_ns": 1791398252532861621,
+              "end_realtime_ns": 1791398252535877544,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.002932716,
+              "drain_s": 0.002932716,
+              "planned_arrivals": 336,
+              "attempted": 336,
+              "completed_ok": 336,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 112.0,
+              "completions_during_generation_rps": 111.33333333333333,
+              "throughput_including_drain_rps": 111.89061886393594,
+              "latency_ms": {
+                "p50": 17.499281,
+                "p95": 22.019116,
+                "p99": 27.384442,
+                "max": 40.229886
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 17.499692,
+                "p95": 22.019497,
+                "p99": 27.384813,
+                "max": 40.231088
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000401,
+                "p95": 0.000931,
+                "p99": 0.001312,
+                "max": 0.002325
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398252550004698,
+              "generation_end_realtime_ns": 1791398255550004698,
+              "end_realtime_ns": 1791398255556140613,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.005991242,
+              "drain_s": 0.005991242,
+              "planned_arrivals": 444,
+              "attempted": 444,
+              "completed_ok": 444,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 148.0,
+              "completions_during_generation_rps": 146.66666666666666,
+              "throughput_including_drain_rps": 147.70502115787602,
+              "latency_ms": {
+                "p50": 26.625255,
+                "p95": 31.789302,
+                "p99": 44.641658,
+                "max": 52.579756
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 26.625545,
+                "p95": 31.789813,
+                "p99": 44.641879,
+                "max": 52.580688
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000371,
+                "p95": 0.000971,
+                "p99": 0.001473,
+                "max": 0.002234
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398255580359959,
+              "generation_end_realtime_ns": 1791398258580359959,
+              "end_realtime_ns": 1791398258610728335,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.030234103,
+              "drain_s": 0.030234103,
+              "planned_arrivals": 478,
+              "attempted": 478,
+              "completed_ok": 478,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 159.33333333333334,
+              "completions_during_generation_rps": 156.66666666666666,
+              "throughput_including_drain_rps": 157.74358803723092,
+              "latency_ms": {
+                "p50": 45.309945,
+                "p95": 80.210813,
+                "p99": 213.406084,
+                "max": 277.577413
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 45.310086,
+                "p95": 80.211133,
+                "p99": 213.406284,
+                "max": 277.577794
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000411,
+                "p95": 0.000942,
+                "p99": 0.001493,
+                "max": 0.001944
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398258648528348,
+              "generation_end_realtime_ns": 1791398261648528348,
+              "end_realtime_ns": 1791398261655713517,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.007107002,
+              "drain_s": 0.007107002,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.76365982336932,
+              "latency_ms": {
+                "p50": 16.349898,
+                "p95": 18.759362,
+                "p99": 21.138549,
+                "max": 36.967296
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.468437,
+                "p95": 19.010374,
+                "p99": 21.241093,
+                "max": 37.104849
+              },
+              "launch_lateness_ms": {
+                "p50": 0.127376,
+                "p95": 0.203667,
+                "p99": 0.359042,
+                "max": 0.544042
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398261698123224,
+              "generation_end_realtime_ns": 1791398264698123224,
+              "end_realtime_ns": 1791398265047318868,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.348992442,
+              "drain_s": 0.348992442,
+              "planned_arrivals": 600,
+              "attempted": 582,
+              "completed_ok": 582,
+              "failed": 0,
+              "client_shed": 18,
+              "attempts_during_generation_rps": 194.0,
+              "completions_during_generation_rps": 174.66666666666666,
+              "throughput_including_drain_rps": 173.78361106495444,
+              "latency_ms": {
+                "p50": 99.257686,
+                "p95": 416.005882,
+                "p99": 483.021294,
+                "max": 542.670463
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 99.441407,
+                "p95": 416.131283,
+                "p99": 483.650892,
+                "max": 542.743514
+              },
+              "launch_lateness_ms": {
+                "p50": 0.164255,
+                "p95": 1.128035,
+                "p99": 3.685261,
+                "max": 10.173819
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398265107886697,
+              "generation_end_realtime_ns": 1791398268107886697,
+              "end_realtime_ns": 1791398268213430520,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.105227708,
+              "drain_s": 0.105227708,
+              "planned_arrivals": 900,
+              "attempted": 569,
+              "completed_ok": 569,
+              "failed": 0,
+              "client_shed": 331,
+              "attempts_during_generation_rps": 189.66666666666666,
+              "completions_during_generation_rps": 172.0,
+              "throughput_including_drain_rps": 183.2393800087784,
+              "latency_ms": {
+                "p50": 325.585927,
+                "p95": 424.350846,
+                "p99": 462.147773,
+                "max": 487.226387
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 325.703016,
+                "p95": 424.756766,
+                "p99": 462.748485,
+                "max": 488.318695
+              },
+              "launch_lateness_ms": {
+                "p50": 0.163307,
+                "p95": 1.042608,
+                "p99": 3.674484,
+                "max": 8.144219
+              }
+            }
+          ]
+        },
+        {
+          "run": "run-3",
+          "raw_requests_sha256": "a34ab780aa0f76ddff1be3fd6cdce692a924805d5fb0a1e736beb177b3b3d3d8",
+          "tiers": [
+            {
+              "tier": "c1",
+              "mode": "closed_loop",
+              "concurrency": 1,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398271461453574,
+              "generation_end_realtime_ns": 1791398274461453574,
+              "end_realtime_ns": 1791398274469371762,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.007872402,
+              "drain_s": 0.007872402,
+              "planned_arrivals": 183,
+              "attempted": 183,
+              "completed_ok": 183,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 61.0,
+              "completions_during_generation_rps": 60.666666666666664,
+              "throughput_including_drain_rps": 60.840346777449504,
+              "latency_ms": {
+                "p50": 15.166992,
+                "p95": 30.180935,
+                "p99": 40.583401,
+                "max": 41.194141
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 15.167553,
+                "p95": 30.181536,
+                "p99": 40.583822,
+                "max": 41.194491
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000381,
+                "p95": 0.000661,
+                "p99": 0.000922,
+                "max": 0.001032
+              }
+            },
+            {
+              "tier": "c2",
+              "mode": "closed_loop",
+              "concurrency": 2,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398274474253468,
+              "generation_end_realtime_ns": 1791398277474253468,
+              "end_realtime_ns": 1791398277475702373,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.00136175,
+              "drain_s": 0.00136175,
+              "planned_arrivals": 351,
+              "attempted": 351,
+              "completed_ok": 351,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 117.0,
+              "completions_during_generation_rps": 116.33333333333333,
+              "throughput_including_drain_rps": 116.94691584578233,
+              "latency_ms": {
+                "p50": 16.612733,
+                "p95": 21.109274,
+                "p99": 29.199799,
+                "max": 38.236265
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.612973,
+                "p95": 21.109754,
+                "p99": 29.20031,
+                "max": 38.236605
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000381,
+                "p95": 0.000851,
+                "p99": 0.001212,
+                "max": 0.008857
+              }
+            },
+            {
+              "tier": "c4",
+              "mode": "closed_loop",
+              "concurrency": 4,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398277491232788,
+              "generation_end_realtime_ns": 1791398280491232788,
+              "end_realtime_ns": 1791398280499173459,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.007814323,
+              "drain_s": 0.007814323,
+              "planned_arrivals": 489,
+              "attempted": 489,
+              "completed_ok": 489,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 163.0,
+              "completions_during_generation_rps": 161.66666666666666,
+              "throughput_including_drain_rps": 162.57652484089192,
+              "latency_ms": {
+                "p50": 23.268558,
+                "p95": 28.220687,
+                "p99": 44.159701,
+                "max": 183.091487
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 23.269098,
+                "p95": 28.220947,
+                "p99": 44.160483,
+                "max": 183.092018
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000351,
+                "p95": 0.000911,
+                "p99": 0.001653,
+                "max": 0.023083
+              }
+            },
+            {
+              "tier": "c8",
+              "mode": "closed_loop",
+              "concurrency": 8,
+              "target_rps": null,
+              "max_active": 64,
+              "start_realtime_ns": 1791398280525640114,
+              "generation_end_realtime_ns": 1791398283525640114,
+              "end_realtime_ns": 1791398283566971290,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.041193226,
+              "drain_s": 0.041193226,
+              "planned_arrivals": 575,
+              "attempted": 575,
+              "completed_ok": 575,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 191.66666666666666,
+              "completions_during_generation_rps": 189.0,
+              "throughput_including_drain_rps": 189.07052504397498,
+              "latency_ms": {
+                "p50": 41.111615,
+                "p95": 57.399295,
+                "p99": 79.089864,
+                "max": 89.565637
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 41.111945,
+                "p95": 57.400247,
+                "p99": 79.090135,
+                "max": 89.566128
+              },
+              "launch_lateness_ms": {
+                "p50": 0.000361,
+                "p95": 0.000951,
+                "p99": 0.001282,
+                "max": 0.001783
+              }
+            },
+            {
+              "tier": "r100",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 100.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398283609924260,
+              "generation_end_realtime_ns": 1791398286609924260,
+              "end_realtime_ns": 1791398286616785609,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.006795976,
+              "drain_s": 0.006795976,
+              "planned_arrivals": 300,
+              "attempted": 300,
+              "completed_ok": 300,
+              "failed": 0,
+              "client_shed": 0,
+              "attempts_during_generation_rps": 100.0,
+              "completions_during_generation_rps": 99.66666666666667,
+              "throughput_including_drain_rps": 99.77397947668399,
+              "latency_ms": {
+                "p50": 16.752726,
+                "p95": 18.730497,
+                "p99": 25.373409,
+                "max": 39.295467
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 16.916472,
+                "p95": 18.985089,
+                "p99": 25.626876,
+                "max": 39.414678
+              },
+              "launch_lateness_ms": {
+                "p50": 0.136539,
+                "p95": 0.220976,
+                "p99": 0.281938,
+                "max": 0.550495
+              }
+            },
+            {
+              "tier": "r200",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 200.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398286662338592,
+              "generation_end_realtime_ns": 1791398289662338592,
+              "end_realtime_ns": 1791398289857770483,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.195218498,
+              "drain_s": 0.195218498,
+              "planned_arrivals": 600,
+              "attempted": 537,
+              "completed_ok": 537,
+              "failed": 0,
+              "client_shed": 63,
+              "attempts_during_generation_rps": 179.0,
+              "completions_during_generation_rps": 158.33333333333334,
+              "throughput_including_drain_rps": 168.06362392309862,
+              "latency_ms": {
+                "p50": 319.385298,
+                "p95": 428.949941,
+                "p99": 452.70849,
+                "max": 474.624092
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 319.500749,
+                "p95": 430.875589,
+                "p99": 452.971655,
+                "max": 474.79001
+              },
+              "launch_lateness_ms": {
+                "p50": 0.218005,
+                "p95": 1.030875,
+                "p99": 2.384709,
+                "max": 5.000581
+              }
+            },
+            {
+              "tier": "r300",
+              "mode": "open_loop_with_client_cap",
+              "concurrency": null,
+              "target_rps": 300.0,
+              "max_active": 64,
+              "start_realtime_ns": 1791398289923058964,
+              "generation_end_realtime_ns": 1791398292923058964,
+              "end_realtime_ns": 1791398293075564681,
+              "generation_s": 3.0,
+              "elapsed_including_drain_s": 3.152304068,
+              "drain_s": 0.152304068,
+              "planned_arrivals": 900,
+              "attempted": 570,
+              "completed_ok": 570,
+              "failed": 0,
+              "client_shed": 330,
+              "attempts_during_generation_rps": 190.0,
+              "completions_during_generation_rps": 170.0,
+              "throughput_including_drain_rps": 180.82012004687107,
+              "latency_ms": {
+                "p50": 338.156363,
+                "p95": 388.205797,
+                "p99": 404.678125,
+                "max": 418.171557
+              },
+              "scheduled_to_completion_ms": {
+                "p50": 338.375396,
+                "p95": 388.534293,
+                "p99": 404.83711,
+                "max": 418.396491
+              },
+              "launch_lateness_ms": {
+                "p50": 0.179947,
+                "p95": 0.690268,
+                "p99": 1.433937,
+                "max": 1.535291
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

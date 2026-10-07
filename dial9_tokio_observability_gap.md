@@ -482,23 +482,180 @@ We classify each causal boundary independently:
 | **Boundary C: Worker Notification $\to$ Worker Resume** | **REAL GAP** | **Proven.** `on_thread_unpark` fires after resumption with 0 arguments. The duration between unpark dispatch and worker loop resumption cannot be reconstructed from current external Tokio/Dial9 telemetry or attributed to a cause. |
 | **Boundary D: Task Placement / Work Stealing $\to$ Poll** | **PARTIAL GAP** | **Partially Addressed.** `TaskMeta::schedule_latency()` measures the total delay, but does not expose queue placement (local vs injected vs LIFO) or work-stealing causality. |
 
-### Addressing Russell Cohen's Real-Application Question: Controlled Reproduction vs Production Service Workloads
+### Addressing Russell Cohen's Real-Application Question: From Controlled Reproduction to Real RustFS Investigation
 
-A central motivation from Russell Cohen was to determine whether this investigation explains real-world application slowdowns or only a synthetic, controlled reproduction.
+A central motivation from Russell Cohen was to determine whether this investigation explains real-world application slowdowns or only a synthetic, controlled reproduction. Russell specifically pointed to RustFS because it integrates Dial9 telemetry in production.
 
-Based on the empirical evidence across our controlled experiments (Case E, Case F) and closed-loop concurrency sweeps (Case G), we draw the following precise boundaries:
+The preliminary local RustFS run reproduces a slowdown under load. Its traces expose long task polls and queue depths, but do not yet establish the request-level cause or reconstruct why the I/O driver was delayed.
 
-1. **What is Conclusively Proven (The Controlled Case):**
-   - **The Architectural Vulnerability is Real:** Tokio multi-thread workers turn the I/O driver either when parking or during periodic maintenance (`core.tick % event_interval == 0` at `worker.rs:844`). Because `core.tick` only advances when tasks yield or complete, worker compute saturation starves driver maintenance.
-   - **The Observability Inversion is Real:** In both Case E and Case F, when worker threads are saturated with non-yielding compute (40 ms), a client write experiences a ~30 ms client-write-to-Tokio-readiness-observation delay before Tokio discovers socket readiness. Both Stock Tokio (`TaskMeta::schedule_latency()`) and Dial9 (`wake_to_poll_delay`) report sub-5-microsecond latencies for the identified task, completely masking the ~30 ms delay.
-   - **The Telemetry Blind Spot is Proven:** Existing public Tokio instrumentation and Dial9 cannot detect this interval because their measurement clocks start only *after* readiness is observed and the task is scheduled (`TaskMeta::set_scheduled_at`).
+---
 
-2. **What Remains Unverified in Production (The Real-Application Question):**
-   - **Controlled Reproduction vs Organic Emergence:** Case E and Case F deliberately force saturation using 40 ms spin loops. This is a controlled reproduction designed to isolate scheduler mechanics, not proof of an organic, naturally occurring slowdown in production applications.
-   - **Real Services vs Closed-Loop Queueing:** In our closed-loop concurrency sweep (Case G) using realistic short chunk compute (5 ms), when load exceeds worker capacity (Tier 4, 8 concurrent clients on 2 workers), Stock Tokio ($5.044\text{ ms}$ p50) and Dial9 ($5.045\text{ ms}$ p50) **do observe** queueing latency. This is because tasks that are already woken queue in the scheduler runqueue, where schedule latency tracking functions as designed.
-   - **Absence of Production Execution Traces:** The report provides no pinned production service revision or verified upload call chain establishing whether CPU algorithms (e.g., checksums, erasure coding) execute directly on Tokio worker threads without yielding versus being offloaded via `spawn_blocking` or dedicated worker pools. Nor is there evidence establishing whether production tail latencies stem from driver starvation rather than runqueue wait, storage subsystem latency, or network transit. Without primary-source verification, the workload is modeled and labeled strictly as a generic synthetic TCP service.
-   - **Conclusion on Russell's Question:**
-     The corrected evidence conclusively answers **the controlled case and the architectural mechanism**: Tokio has an inherent blind spot where un-serviced I/O driver latency cannot be observed by current telemetry. However, it **does not** answer the real-application question for production services. Proving that driver starvation occurs organically in production would require either upstream driver turn interval telemetry or in-situ eBPF kernel probes in an active deployment.
+## Preliminary Local RustFS Workload Investigation (Debug Build)
+
+### 1. Primary Source Request Path & Hypotheses (Commit `6b1554003ebf8f2037ffb7da9c9b906527e758da`)
+
+To establish whether driver starvation or task scheduling bottlenecks emerge organically, we inspected primary RustFS source at commit [`6b1554003ebf8f2037ffb7da9c9b906527e758da`](https://github.com/rustfs/rustfs/tree/6b1554003ebf8f2037ffb7da9c9b906527e758da) and traced the relevant source path for the standard S3 `PutObject` operation. Source inspection identifies possible work, not the measured duration of each operation:
+
+1. **Network Ingress & Connection Spawning:**
+   - [`rustfs/src/server/http.rs:1905`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/server/http.rs#L1905): `listener.accept().await` accepts the incoming client TCP socket.
+   - [`rustfs/src/server/http.rs:2218-2224`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/server/http.rs#L2218-L2224): `process_connection()` is spawned as an async task on the Tokio runtime.
+   - [`rustfs/src/server/http.rs:2488`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/server/http.rs#L2488): Hands the socket to Hyper via `TokioIo::new(socket)`.
+2. **Request Routing & Admission Control:**
+   - [`rustfs/src/app/object/put.rs:1230`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/app/object/put.rs#L1230): Hyper dispatches S3 `PUT` requests to `put_object()` $\to$ `put_object_core()`.
+   - [`rustfs/src/app/object/put.rs:1517`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/app/object/put.rs#L1517): `ConcurrencyManager::admit_put_object()` applies semaphore admission control.
+3. **Payload Streaming & Synchronous Checksumming:**
+   - [`crates/rio/src/hash_reader.rs:191-230`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/rio/src/hash_reader.rs#L191-L230): `HashReader::from_stream()` wraps the HTTP body stream.
+   - [`crates/rio/src/hash_reader.rs:531-545`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/rio/src/hash_reader.rs#L531-L545): `poll_read()` updates the SHA-256 hasher synchronously when that hasher is configured. This identifies an execution boundary, not the cost of hashing in the captured requests.
+4. **Storage Pipeline Dispatch:**
+   - [`rustfs/src/app/object/put.rs:1990`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/app/object/put.rs#L1990): Calls `spawn_traced_join(store.put_object_with_old_current_size(...))` defined at [`rustfs/src/storage/request_context.rs:266`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/storage/request_context.rs#L266).
+   - Enters `SetDisks::put_object_with_old_current_size_inner()` at [`crates/ecstore/src/set_disk/ops/object.rs:3497`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/ecstore/src/set_disk/ops/object.rs#L3497).
+5. **Inlined Reed-Solomon Erasure Coding (Key CPU Path Finding):**
+   - [`crates/ecstore/src/erasure/coding/encode.rs:702-717`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/ecstore/src/erasure/coding/encode.rs#L702-L717): Under `RuntimeFlavor::MultiThread`, RustFS **deliberately executes Reed-Solomon matrix encoding directly on the Tokio worker thread without yielding** (`encode_once()`). RustFS avoids `spawn_blocking` or `block_in_place` here to prevent thread parking overhead.
+   - [`crates/ecstore/src/erasure/coding/bitrot.rs:533-542`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/ecstore/src/erasure/coding/bitrot.rs#L533-L542): `BitrotWriter` computes `HighwayHash256` bitrot checksums per block synchronously on the worker thread.
+6. **Disk I/O Offloading:**
+   - [`crates/ecstore/src/disk/local.rs:3839`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/crates/ecstore/src/disk/local.rs#L3839): `open_write()` creates the file-backed writer, with backend-dependent paths and wrappers. The earlier citation to `object.rs:5001` identified a spawned commit task, not a vectored-write call. Neither disk service time nor blocking-pool queue wait was measured in this run.
+7. **Runtime & Dial9 Telemetry Integration:**
+   - [`rustfs/src/server/runtime.rs:207`](https://github.com/rustfs/rustfs/blob/6b1554003ebf8f2037ffb7da9c9b906527e758da/rustfs/src/server/runtime.rs#L207): Calls `rustfs_obs::dial9::build_traced_runtime()`, attaching `Dial9Handle` with unstable Tokio hooks (`tokio_unstable`).
+
+**Hypothesis Formulation:**
+- **Observable Symptom:** As concurrent PUT load increases, request latency degrades non-linearly.
+- **Suspected Mechanism:** Because RustFS inlines Reed-Solomon EC computation and chunk hashing on worker threads, multiple concurrent operations may hold worker threads for extended intervals, delaying periodic I/O driver turns (`core.tick % 61 == 0`) and causing pre-readiness discovery delays on active sockets.
+- **Evidence that would support it:** Dial9 worker poll durations regularly exceeding multiple milliseconds, accompanied by driver discovery delays and rising socket queueing.
+- **Evidence that would contradict it:** Worker poll durations remaining small (<1 ms), while latency degradation is dominated by Tokio blocking pool disk I/O or client-side queueing.
+
+---
+
+### 2. Experimental Setup & Workload Parameters
+
+- **Repository Revisions:**
+  - RustFS Base Commit: [`6b1554003ebf8f2037ffb7da9c9b906527e758da`](https://github.com/rustfs/rustfs/tree/6b1554003ebf8f2037ffb7da9c9b906527e758da)
+  - Runtime dependencies from RustFS Cargo.lock: registry Tokio **1.53.2**, Dial9 **0.5.3**, and dial9-tokio-telemetry **0.5.3**. Registry checksums are saved in [debug-provenance.json](experiments/rustfs/results/debug-provenance.json). The runtime was not built against the harness's cloned Git revisions.
+  - Decoder checkout: `33b2d780628b42251047909ff2b88fdb97e3c28b`; this describes the separately built trace converter, not the RustFS runtime dependencies.
+  - Original build command: `RUSTFLAGS="--cfg tokio_unstable" cargo build -p rustfs --bin rustfs --features dial9`. The binary was `target/debug/rustfs`, using the unoptimized dev profile. These numbers are not release performance or a production capacity limit.
+- **Host Resources:**
+  - CPU: AMD Ryzen 5 5600H (12 vCPUs, 3.3/4.2 GHz)
+  - Memory: 18 GiB total (7.1 GiB available buffer cache)
+  - Kernel: Linux 6.18.33
+- **RustFS Configuration:**
+  - Topology: single node with four local volume directories on the same host (`/tmp/rustfs-exp/vol{1..4}`). This is not four independently provisioned storage devices.
+  - A host check during follow-up found `/tmp` backed by tmpfs. The original run did not capture mount provenance, and its timings cannot establish physical disk latency.
+  - Runtime Workers: `RUSTFS_RUNTIME_WORKER_THREADS=2` (bounded worker count to isolate multi-threaded contention).
+  - Telemetry: `RUSTFS_RUNTIME_DIAL9_ENABLED=true`, writing to `/tmp/rustfs-exp/telemetry`.
+  - Flags: `RUSTFS_UNSAFE_BYPASS_DISK_CHECK=true`, `RUSTFS_CONSOLE_ENABLE=false`.
+- **Workload:**
+  - Operation: Fixed 1 MiB (`1,048,576` bytes) S3 `PutObject` with AWS SigV4 authentication.
+  - Warmup: 5 sequential requests.
+  - Closed-loop Concurrency Tiers: 1, 2, 4, 8 workers (duration = 8.0s per tier).
+  - Scheduled arrival-rate sweep: 10, 25, 50 requests/s for 6 seconds, with a client cap of 64 active threads. Requests arriving at a full cap were shed by the client.
+  - One run per tier; tiers ran sequentially. Startup, warmup, and all tiers share one trace without saved phase timestamps. Instrumentation overhead and run-to-run variability were not measured.
+
+---
+
+### 3. Load Experiment Results
+
+All **attempted** requests in the saved results returned HTTP 200. No read-back integrity check was performed. The old field named TTFB measures time through response-header parsing, not the exact first response byte. The original result JSON is preserved in [debug-original.json](experiments/rustfs/results/debug-original.json).
+
+#### Closed-Loop Concurrency Sweep (Duration: 8.0s per tier)
+
+| Tier | Concurrency | Completed Reqs | Achieved Ops/s | Throughput (MiB/s) | Total Latency p50 | Total Latency p95 | Total Latency Max | Write Time p50 | Response-header wait p50 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Tier 1 (Baseline)** | 1 | 97 | 12.05 ops/s | 12.05 MiB/s | **82.71 ms** | 85.29 ms | 87.38 ms | 0.33 ms | 81.73 ms |
+| **Tier 2 (Worker Limit)**| 2 | 184 | 22.88 ops/s | 22.88 MiB/s | **86.74 ms** | 90.70 ms | 100.24 ms | 0.41 ms | 85.61 ms |
+| **Tier 3 (2x Workers)** | 4 | 186 | 23.00 ops/s | 23.00 MiB/s | **167.42 ms** | 253.94 ms | 287.52 ms | 0.35 ms | 166.33 ms |
+| **Tier 4 (4x Workers)** | 8 | 189 | 23.24 ops/s | 23.24 MiB/s | **344.72 ms** | 471.32 ms | 568.14 ms | 0.37 ms | 343.63 ms |
+
+*Observation:* This debug run plateaued near 23 successful PUTs/s as concurrency rose. Median latency increased from 82.71 ms to 344.72 ms. The experiment does not establish whether CPU work, admission, storage, client behavior, or another resource caused that plateau. Throughput uses the full elapsed time including final request drain (8.04–8.13 seconds), not a strictly fixed 8-second completion window.
+
+#### Scheduled Arrival Sweep with Client Shedding (6-second Generation Window)
+
+| Tier | Target Rate | Scheduled | Attempted | Completed OK | Client-shed | Ops/s Including Drain | Latency p50 | Latency p95 | Latency Max |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Rate 10** | 10 req/s | 60 | 60 | 60 (100%) | 0 | 10.03 ops/s | **83.44 ms** | 86.44 ms | 115.46 ms |
+| **Rate 25** | 25 req/s | 150 | 150 | 150 (100%) | 0 | 23.14 ops/s | **562.90 ms** | 1035.11 ms | 1180.23 ms |
+| **Rate 50** | 50 req/s | 300 | 162 | 162 (100%) | 138 (client cap)| 23.19 ops/s | **2553.01 ms** | 2984.84 ms | 3037.07 ms |
+
+*Observation:* Attempt latency increased with the configured arrival rate, but the 50 requests/s tier issued only 162 of 300 scheduled requests; the client shed 138. This is not measured server rejection or server backpressure. Reported throughput divides completions by generation plus drain (5.98, 6.48, and 6.99 seconds in the old generator). Latencies omit scheduled-to-launch delay and include client signing and connection setup. The old generator did not save per-request timings, so these omissions cannot be repaired retrospectively.
+
+---
+
+### 4. Whole-Run Dial9 Observations
+
+Upon graceful server shutdown (SIGTERM), Dial9 flushed and sealed the binary trace segment:
+- **Trace Artifact:** `/tmp/rustfs-exp/telemetry/rustfs-tokio/trace.0.bin` (6,629,197 bytes).
+- **Decoded Events:** 572,625 events over 59,475.41 ms of live execution.
+  - `PollStartEvent`: 188,024
+  - `PollEndEvent`: 188,024
+  - `TaskSpawnEvent`: 37,892
+  - `TaskTerminateEvent`: 122,408
+  - `WorkerParkEvent`: 14,925
+  - `WorkerUnparkEvent`: 14,923
+  - `RuntimeMetricsEvent`: 5,839
+  - `ProcessResourceUsageEvent`: 585
+
+#### Worker Poll Wall Time
+
+- **Worker 0:** 92,875 polls, 44,482.53 ms inside task polls (**74.8% of the trace wall-clock span**), 7,461 parks.
+- **Worker 1:** 95,149 polls, 45,135.97 ms inside task polls (**75.9% of the trace wall-clock span**), 7,464 parks.
+- **Poll Duration Distribution:**
+  - Median ($p50$): **0.068 ms** (68 µs)
+  - 90th percentile ($p90$): **0.814 ms** (814 µs)
+  - 95th percentile ($p95$): **2.054 ms**
+  - 99th percentile ($p99$): **2.164 ms**
+  - Maximum Poll Duration: **43.291 ms**
+- **Count of Extended Worker Polls:**
+  - Polls $\ge 1\text{ ms}$: **18,518** (9.8% of all task polls)
+  - Polls $\ge 5\text{ ms}$: **1,055**
+  - Polls $\ge 10\text{ ms}$: **1,035**
+  - Polls $\ge 30\text{ ms}$: **1,035**
+
+#### Source Attribution of Extended Polls
+
+Dial9 records spawn locations for whole futures. These locations do not identify which inner operation occupied a poll. All statistics below combine startup, warmup, background work, and every load tier:
+
+1. **`rustfs/src/storage/request_context.rs:266:5` (`spawn_traced_join`):**
+   - Max poll: **43.291 ms**
+   - Average poll: **1.579 ms**
+   - Total polls: **48,927**
+   - *Scope:* The storage future contains hashing, encoding, storage coordination, and other work. The trace cannot assign the 43.291 ms poll specifically to Reed-Solomon encoding. Its combined poll wall time is **77,248.85 ms** across the run; the mean per poll is not the total CPU cost per request.
+2. **`rustfs/src/init.rs:89:5`:** Max poll = **41.875 ms** (startup storage volume scan).
+3. **`crates/scanner/src/scanner_io/io_cache.rs:690:46`:** Max poll = **9.524 ms** (scanner metadata cache).
+4. **`crates/ecstore/src/store/object.rs:3263:9`:** Max poll = **5.377 ms** (object metadata update).
+5. **`rustfs/src/server/http.rs:2224:5`:** Max poll = **3.224 ms** (Hyper connection processor reading network body).
+
+#### Local Runqueue Depth Accumulation
+
+Dial9 records `local_queue` depth on every `PollStartEvent`:
+- `local_queue == 0`: 36.8% of polls.
+- `local_queue > 0`: **63.2% of polls**.
+- Maximum observed local queue depth: **91 tasks**. Without tier boundaries and request/task links, this does not identify a particular tier's queue wait or prove a request-level head-of-line bottleneck.
+
+The repository analyzer independently reproduces the poll counts and durations in [debug-trace-summary.json](experiments/rustfs/results/debug-trace-summary.json). It labels them as wall time and reports unmatched poll boundaries. Thread CPU-counter spans are separate evidence and cannot allocate CPU to a particular request or encoding stage.
+
+---
+
+### 5. Evidence Boundaries and Remaining Questions
+
+| Question | What this run establishes | What remains unmeasured |
+| :--- | :--- | :--- |
+| Did real requests slow down under increased load? | Yes, in a local debug build with successful attempted PUTs and client-side shedding at the highest rate. | Release behavior, repeated measurements, and telemetry overhead. |
+| Were long worker polls present? | Yes: whole-task wall-clock polls reached 43.291 ms. | CPU versus descheduling time for each poll, and the cost of individual inner operations. |
+| Was the driver starved during a particular request? | Not established by this trace. Long polls make the hypothesis worth testing. | Overlapping occupancy of all workers, driver-turn intervals, and request-linked readiness observation. One occupied worker alone does not prevent the other worker from servicing I/O. |
+| Was the baseline dominated by disk waits? | Not established. No numerical baseline decomposition is available. | Request-linked disk service time, blocking-pool queue wait, admission waits, and synchronous processing. The earlier 75 ms disk / 2–5 ms CPU split was unsupported and has been removed. |
+| Why are wake-to-poll measurements unavailable? | The decoded trace contains no wake events; the inspected request helper uses standard `tokio::spawn` rather than Dial9's wake wrapper. | Wake-to-poll analysis is unavailable for this configuration. This does not imply that every possible Tokio schedule-latency measurement requires application rewrites. |
+
+RustFS already has opt-in PUT stage metrics (`RUSTFS_OBS_PUT_STAGE_METRICS_ENABLED`) including `erasure_encode_cpu`, emitted through its existing metrics exporter. They were not collected in the original run. These aggregate stages would help distinguish possible costs, but are not a request-linked causal timeline and must not be subtracted from request latency as independent percentiles.
+
+### 6. Reproduction and Next Measurements
+
+The reusable client, bounded runner, trace analyzer, and tests are now in [experiments/rustfs](experiments/rustfs/README.md). They use Python's standard library and the existing RustFS/Dial9 dependencies. New runs record each tier's wall-clock boundaries, each request's attempt and completion timestamps, launch lateness, client shedding, generation-window throughput, and throughput including drain. Repetitions use fresh temporary data directories. Large traces and binaries remain outside tracked results.
+
+The [optimized follow-up](experiments/rustfs/README.md#optimized-follow-up-results) now includes three telemetry-on and three telemetry-off repetitions using the same release binary and pinned lockfile. Every tier has a three-second generation window, saved request records, and explicit drain accounting. Unlike the original `/tmp` run, temporary volumes shared the NVMe-backed `/home` filesystem. The different storage backing prevents a direct debug-versus-release comparison.
+
+Telemetry-on closed-loop throughput at concurrency eight ranged from 189.30–192.31 PUTs/s; telemetry-off ranged from 157.74–189.07 PUTs/s. At 300 scheduled arrivals/s, successful attempt-latency p50 ranged from 306.15–320.05 ms with telemetry and 297.56–338.16 ms without it. Client shedding occurred in both conditions. All 18,289 attempted PUTs returned HTTP 200; read-back integrity was not checked. These short, sequential conditions do not establish an instrumentation-overhead percentage or production capacity.
+
+The [21 per-tier trace windows](experiments/rustfs/results/release-trace-windows.json) include generation and drain and explicitly report partial poll boundaries. Polls of at least 30 ms occurred in every c8, r200, and r300 window, and none in c1, c2, c4, or r100. This supports an association between heavier local load and long whole-task wall time. To explain a representative slowdown, collect existing stage metrics or profiling evidence and correlate it with the request path. Driver starvation remains a separate hypothesis requiring relevant I/O timing and evidence that all workers were unavailable.
+
+**Objective status: partially answered.** A real local RustFS request path and load-dependent slowdown were reproduced, including short repeated release measurements. The request-level cause, driver servicing delay, and instrumentation overhead remain unresolved. The controlled synthetic experiments remain the direct evidence for their deliberately forced conditions.
 
 ---
 

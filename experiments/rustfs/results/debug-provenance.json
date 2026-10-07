@@ -1,0 +1,37 @@
+{
+  "classification": "preliminary local debug-build run; one repetition per tier",
+  "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+  "runtime_dependencies": {
+    "dial9": {
+      "version": "0.5.3",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14"
+    },
+    "dial9-tokio-telemetry": {
+      "version": "0.5.3",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3"
+    },
+    "dial9-trace-format": {
+      "version": "0.5.2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2"
+    },
+    "tokio": {
+      "version": "1.53.2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
+    }
+  },
+  "binary_profile": "dev (unoptimized)",
+  "original_generator_sha256": "0a3069ccb9393d000e170d9056cf9ffc7e4e7ef0ea4912e40ea9f26accab0e10",
+  "original_analyzer_sha256": "83fdd0fbbe6b25a880ff171e2e17530adf917bdfc8076ebac867f69be4fc3735",
+  "trace_sha256": "9767bb446b2b4e99c459129ce1a812181db97f72561d3527f6e571aaa4f8f19f",
+  "measurement_limitations": [
+    "no per-tier trace boundaries",
+    "no request-level raw samples saved",
+    "no GET/read-back integrity check",
+    "client-side cap of 64 active requests",
+    "throughput denominator includes drain; scheduled-to-launch lateness not measured"
+  ]
+}
