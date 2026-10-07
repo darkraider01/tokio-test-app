@@ -1007,6 +1007,7 @@ dependencies = [
  "dial9-core",
  "dial9-tokio-telemetry",
  "dial9-trace-format",
+ "serde_json",
  "tokio",
 ]
 

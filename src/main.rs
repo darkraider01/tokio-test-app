@@ -15,7 +15,7 @@ use dial9_tokio_telemetry::telemetry::analysis_events::Dial9Event;
 use dial9_tokio_telemetry::telemetry::{Dial9HandleTokioExt, TokioAttachOptions, TokioHooks};
 use dial9_trace_format::decoder::Decoder;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StockEvent {
     pub t_ns: u64,
     pub event_type: &'static str,
@@ -1035,13 +1035,11 @@ impl Stats {
 }
 
 // -------------------------------------------------------------
-// Realistic Network-Service Workload (RustFS Chunk Ingestion Model)
+// Generic Synthetic TCP Service Workload (Synchronous Chunk Ingestion Model)
 // -------------------------------------------------------------
 
-/// Simulates synchronous CPU processing during object storage chunk ingestion
-/// (e.g. AWS SigV4 payload SHA-256 calculation, CRC32C checksumming, and
-/// Reed-Solomon erasure coding parity generation across shards) executed
-/// synchronously on runtime worker threads without yielding.
+/// Simulates synchronous CPU processing during request ingestion
+/// executed synchronously on runtime worker threads without yielding.
 fn simulate_chunk_processing(duration: Duration) -> u32 {
     let start = Instant::now();
     let mut hash = 0x811c9dc5u32;
@@ -1127,6 +1125,155 @@ fn correlate_unambiguous_readiness(
         readiness_ns: candidates[0].0,
         token: candidates[0].1,
     }
+}
+
+fn extract_identified_task_telemetry(
+    stock_events: &[StockEvent],
+    dial9_events: &[Dial9Event],
+    target_tid: u64,
+) -> (Option<u64>, Option<u64>) {
+    extract_identified_task_telemetry_for_cycle(stock_events, dial9_events, target_tid, None)
+}
+
+fn extract_identified_task_telemetry_for_cycle(
+    stock_events: &[StockEvent],
+    dial9_events: &[Dial9Event],
+    target_tid: u64,
+    cycle_index: Option<usize>,
+) -> (Option<u64>, Option<u64>) {
+    // ── Dial9 Telemetry ──────────────────────────────────────────────────────────
+    // Dial9 encoders flush per-worker buffers independently, so `dial9_events`
+    // may have reversed or interleaved segment chunks across worker migration.
+    // Sort events by layer-native timestamp_ns.
+    let mut dial9_wakes: Vec<u64> = dial9_events
+        .iter()
+        .filter_map(|ev| {
+            if let Dial9Event::WakeEvent(w) = ev {
+                if w.woken_task_id == target_tid {
+                    Some(w.timestamp_ns)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    dial9_wakes.sort_unstable();
+
+    let mut dial9_polls: Vec<u64> = dial9_events
+        .iter()
+        .filter_map(|ev| {
+            if let Dial9Event::PollStartEvent(p) = ev {
+                if p.task_id == target_tid {
+                    Some(p.timestamp_ns)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    dial9_polls.sort_unstable();
+
+    // Group wakes within intervals between consecutive polls.
+    // Never carry a wake past the first poll that follows it.
+    // Each poll defines a stable cycle index.
+    let mut dial9_cycles: Vec<Option<u64>> = Vec::with_capacity(dial9_polls.len());
+    let mut has_dial9_ambiguous = false;
+    let mut prev_poll_ts = 0u64;
+
+    for (i, &poll_ts) in dial9_polls.iter().enumerate() {
+        // Interval: for i == 0, wakes <= poll_ts; for i > 0, prev_poll_ts < wakes <= poll_ts
+        let candidate_wakes: Vec<u64> = dial9_wakes
+            .iter()
+            .copied()
+            .filter(|&w| (i == 0 || w > prev_poll_ts) && w <= poll_ts)
+            .collect();
+
+        match candidate_wakes.len() {
+            0 => {
+                // Poll without intervening wake: unavailable for wake-to-poll measurement
+                dial9_cycles.push(None);
+            }
+            1 => {
+                let delay = poll_ts.saturating_sub(candidate_wakes[0]);
+                dial9_cycles.push(Some(delay));
+            }
+            _ => {
+                // Multiple candidate wakes: ambiguous attribution
+                has_dial9_ambiguous = true;
+                dial9_cycles.push(None);
+            }
+        }
+        prev_poll_ts = poll_ts;
+    }
+
+    let dial9_sample = match cycle_index {
+        Some(idx) => dial9_cycles.get(idx).copied().flatten(),
+        None => {
+            if dial9_cycles.len() == 1 {
+                dial9_cycles[0]
+            } else if !has_dial9_ambiguous {
+                let valid: Vec<u64> = dial9_cycles.iter().filter_map(|c| *c).collect();
+                if valid.len() == 1 {
+                    Some(valid[0])
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+    };
+
+    // ── Stock Tokio Observability ────────────────────────────────────────────────
+    // Filter Stock events for target_tid and sort by layer-native t_ns.
+    let mut stock_filtered: Vec<&StockEvent> = stock_events
+        .iter()
+        .filter(|ev| ev.task_id == Some(target_tid))
+        .collect();
+    stock_filtered.sort_by_key(|ev| ev.t_ns);
+
+    let mut has_spawn = false;
+    let mut stock_polls: Vec<Option<u64>> = Vec::new();
+
+    for ev in &stock_filtered {
+        match ev.event_type {
+            "on_task_spawn" => {
+                has_spawn = true;
+            }
+            "on_before_task_poll" => {
+                // If on_task_spawn was observed, the first poll is spawn-to-initial-poll latency,
+                // which is unavailable for wake-to-poll measurement.
+                if has_spawn && stock_polls.is_empty() {
+                    stock_polls.push(None);
+                } else {
+                    stock_polls.push(ev.schedule_latency_ns);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let stock_sample = match cycle_index {
+        Some(idx) => stock_polls.get(idx).copied().flatten(),
+        None => {
+            if stock_polls.len() == 1 {
+                stock_polls[0]
+            } else {
+                let valid: Vec<u64> = stock_polls.iter().filter_map(|c| *c).collect();
+                if valid.len() == 1 {
+                    Some(valid[0])
+                } else {
+                    None
+                }
+            }
+        }
+    };
+
+    (stock_sample, dial9_sample)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1258,6 +1405,10 @@ fn run_network_service_load_tier_internal(
                 if requests_per_client == 0 {
                     return;
                 }
+                // Connection attempt semantics:
+                // Connecting to the server is the first attempted operation for this client.
+                // If connecting fails, that first planned request is counted as attempted and failed.
+                // Remaining requests for this client thread are never attempted and remain in `unattempted`.
                 let stream_res = std::net::TcpStream::connect(addr);
                 let mut stream = match stream_res {
                     Ok(s) => s,
@@ -1313,7 +1464,7 @@ fn run_network_service_load_tier_internal(
         }
 
         for ch in client_threads {
-            let _ = ch.join();
+            ch.join().expect("client thread panicked");
         }
 
         ground_truth_probes::disable();
@@ -1324,9 +1475,11 @@ fn run_network_service_load_tier_internal(
     let tier_duration = tier_start.elapsed().as_secs_f64();
     let (_gt_events, stock_events, dial9_events) = session.finish();
 
+    let planned = concurrency * requests_per_client;
     let attempted = attempted_count.load(Ordering::SeqCst);
     let completed = completed_count.load(Ordering::SeqCst);
     let failed = failed_count.load(Ordering::SeqCst);
+    let unattempted = planned.saturating_sub(attempted);
 
     let mut lat_stats = Stats::default();
     for lat in client_latencies.lock().unwrap().iter() {
@@ -1397,26 +1550,15 @@ fn run_network_service_load_tier_internal(
         0.0
     };
 
-    let planned_requests = concurrency * requests_per_client;
-    let unattempted_requests = planned_requests.saturating_sub(attempted);
-    assert_eq!(
-        attempted,
-        completed + failed,
-        "invariant violated: attempted ({}) != completed ({}) + failed ({})",
-        attempted,
-        completed,
-        failed
-    );
-
     LoadTierMetrics {
         concurrency,
         offered_load_rps: offered_rps,
         achieved_rps,
-        planned_requests,
+        planned_requests: planned,
         attempted_requests: attempted,
         completed_requests: completed,
         failed_requests: failed,
-        unattempted_requests,
+        unattempted_requests: unattempted,
         lat_min_ms: l_min,
         lat_p50_ms: l_p50,
         lat_p95_ms: l_p95,
@@ -1600,7 +1742,7 @@ fn test_network_service_workload(workers: usize) {
 
     print_three_view_timeline(
         &format!(
-            "CONTROLLED REPRODUCTION: S3 Chunk Ingestion Under Forced Saturation (workers={}, task_id={})",
+            "CONTROLLED REPRODUCTION: Synthetic TCP Service Under Forced Saturation (workers={}, task_id={})",
             workers, target_tid
         ),
         &gt_events,
@@ -1608,36 +1750,8 @@ fn test_network_service_workload(workers: usize) {
         &dial9_events,
     );
 
-    // Extract exact Stock Tokio schedule latency for target_tid
-    let stock_target_lat = stock_events.iter().find_map(|ev| {
-        if ev.task_id == Some(target_tid) {
-            ev.schedule_latency_ns
-        } else {
-            None
-        }
-    });
-
-    // Extract exact Dial9 delay for target_tid
-    let mut d_wake = 0u64;
-    let mut d_poll = 0u64;
-    for ev in &dial9_events {
-        match ev {
-            Dial9Event::WakeEvent(w) if w.woken_task_id == target_tid && d_wake == 0 => {
-                d_wake = w.timestamp_ns;
-            }
-            Dial9Event::PollStartEvent(p)
-                if p.task_id == target_tid && d_wake > 0 && d_poll == 0 =>
-            {
-                d_poll = p.timestamp_ns;
-            }
-            _ => {}
-        }
-    }
-    let dial9_target_delay = if d_poll > d_wake {
-        Some(d_poll - d_wake)
-    } else {
-        None
-    };
+    let (stock_target_lat, dial9_target_delay) =
+        extract_identified_task_telemetry(&stock_events, &dial9_events, target_tid);
 
     if ext_write_start > 0 && tokio_io_ready > 0 && task_sched > 0 && task_polled > 0 {
         let delta_driver = tokio_io_ready.saturating_sub(ext_write_start) as f64 / 1_000_000.0;
@@ -1648,15 +1762,15 @@ fn test_network_service_workload(workers: usize) {
         println!("\n--- [CONTROLLED FORCED-SATURATION DISCREPANCY ANALYSIS] ---");
         println!("  Target Task ID:             {}", target_tid);
         println!(
-            "  T(external_write_begin):    +{:>8.3} ms (client initiated write_all)",
+            "  T(client_write_begin):      +{:>8.3} ms (client initiated write_all; user-space timestamp)",
             ext_write_start as f64 / 1_000_000.0
         );
         println!(
-            "  T(external_write_done):     +{:>8.3} ms (client finished write_all)",
+            "  T(client_write_done):       +{:>8.3} ms (client finished write_all; user-space timestamp)",
             ext_write_done as f64 / 1_000_000.0
         );
         println!(
-            "  T(tokio_io_readiness):       +{:>8.3} ms (Driver::turn runs epoll_wait and observes socket readiness)",
+            "  T(tokio_io_readiness):       +{:>8.3} ms (Driver::turn runs epoll_wait and discovers socket readiness)",
             tokio_io_ready as f64 / 1_000_000.0
         );
         println!(
@@ -1671,21 +1785,12 @@ fn test_network_service_workload(workers: usize) {
             "  --------------------------------------------------------------------------------------------------"
         );
         println!(
-            "  Δdriver_observation (Write Init -> Driver Ready): {:>8.3} ms <=== INVISIBLE TO TOKIO & DIAL9!",
+            "  Δclient_write_to_readiness:  {:>8.3} ms <=== INVISIBLE TO TOKIO & DIAL9 (Driver not turned)",
             delta_driver
         );
-        println!(
-            "  Δschedule (Ready -> Sched):                      {:>8.3} ms",
-            delta_sched
-        );
-        println!(
-            "  Δpoll (Sched -> Poll):                           {:>8.3} ms",
-            delta_poll
-        );
-        println!(
-            "  Δtotal_real (Write Init -> Task Poll):           {:>8.3} ms",
-            delta_e2e
-        );
+        println!("  Δschedule (Ready -> Sched):  {:>8.3} ms", delta_sched);
+        println!("  Δpoll (Sched -> Poll):       {:>8.3} ms", delta_poll);
+        println!("  Δtotal_e2e (Write -> Poll):  {:>8.3} ms", delta_e2e);
         if let Some(s_lat) = stock_target_lat {
             println!(
                 "  Stock Tokio Schedule Latency (Task {}):          {:>8.3} ms",
@@ -1700,6 +1805,18 @@ fn test_network_service_workload(workers: usize) {
                 d_delay as f64 / 1_000_000.0
             );
         }
+        println!(
+            "  Note: WRITE_BEGIN/WRITE_DONE are client user-space timestamps. Driver starvation is the explanation"
+        );
+        println!(
+            "  supported by the controlled setup, without claiming measured kernel-buffer residence or conclusively"
+        );
+        println!(
+            "  excluding network transit. IoReadinessObserved is an epoll readiness discovery event, not a driver-turn"
+        );
+        println!(
+            "  lifecycle event (Tokio does not currently emit DriverTurnBegin/DriverTurnEnd hooks)."
+        );
     }
 
     // Run bounded load sweep (single overview run)
@@ -1708,14 +1825,14 @@ fn test_network_service_workload(workers: usize) {
 
 fn run_network_service_load_sweep(workers: usize, iterations: usize) {
     println!(
-        "\n========================================================================================================================"
+        "\n=============================================================================================================================================="
     );
     println!(
-        "CLOSED-LOOP CONCURRENCY LOAD SWEEP: S3 Ingestion Model (workers={}, iterations={})",
+        "CLOSED-LOOP CONCURRENCY LOAD SWEEP: Synthetic TCP Service (workers={}, iterations={})",
         workers, iterations
     );
     println!(
-        "========================================================================================================================"
+        "=============================================================================================================================================="
     );
 
     // Constant chunk compute cost across all tiers: 5 ms per request
@@ -1765,9 +1882,11 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
         let mut stock_p95_stats = Stats::default();
         let mut dial9_p50_stats = Stats::default();
         let mut dial9_p95_stats = Stats::default();
+        let mut total_planned = 0usize;
         let mut total_attempted = 0usize;
         let mut total_completed = 0usize;
         let mut total_failed = 0usize;
+        let mut total_unattempted = 0usize;
 
         for _ in 0..iterations {
             let m = run_network_service_load_tier(
@@ -1786,9 +1905,11 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
             stock_p95_stats.add(m.handler_stock_sched_p95_ms);
             dial9_p50_stats.add(m.handler_dial9_delay_p50_ms);
             dial9_p95_stats.add(m.handler_dial9_delay_p95_ms);
+            total_planned += m.planned_requests;
             total_attempted += m.attempted_requests;
             total_completed += m.completed_requests;
             total_failed += m.failed_requests;
+            total_unattempted += m.unattempted_requests;
         }
 
         let (_, off_p50, _, _) = off_stats.summarize();
@@ -1801,14 +1922,23 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
         let (_, d50_p50, _, _) = dial9_p50_stats.summarize();
         let (_, d95_p50, _, _) = dial9_p95_stats.summarize();
 
+        let fail_rate = total_failed as f64 / iterations as f64;
+        let fail_str = if total_failed == 0 {
+            "0".to_string()
+        } else {
+            format!("{}/{:.1}", total_failed, fail_rate)
+        };
+
         println!(
-            "{:>4}  {:>12.1}  {:>13.1}  {:>9}  {:>9}  {:>6}  {:>11.2}  {:>11.2}  {:>11.2}  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms",
+            "{:>4}  {:>12.1}  {:>13.1}  {:>12}  {:>14}  {:>14}  {:>16}  {:>11}  {:>11.2}  {:>11.2}  {:>11.2}  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms",
             conc,
             off_p50,
             ach_p50,
+            total_planned / iterations,
             total_attempted / iterations,
             total_completed / iterations,
-            total_failed / iterations,
+            fail_str,
+            total_unattempted,
             l50_p50,
             l95_p50,
             lmax_p50,
@@ -1819,11 +1949,14 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
         );
     }
     println!(
-        "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
     );
     println!("Closed-Loop Load Testing Methodology & Discrepancy Notes:");
     println!(
         "  - Client Latency measures full round-trip time: client write -> OS socket queuing -> driver turn -> task sched -> compute -> client read."
+    );
+    println!(
+        "  - Response validation: client verifies response echoes 32-bit request ID and non-zero compute hash produced by chunk processing."
     );
     println!(
         "  - Stock Tokio & Dial9 latencies strictly measure the identified request handler tasks (excluding unrelated background runtime tasks)."
@@ -2424,7 +2557,7 @@ fn main() {
     test_adversarial_wake_coalescing(2);
     test_adversarial_work_stealing(2);
 
-    println!("\n>>> RUNNING CONTROLLED NETWORK SERVICE WORKLOAD (RustFS Model) <<<");
+    println!("\n>>> RUNNING CONTROLLED NETWORK SERVICE WORKLOAD (Generic Synthetic TCP Model) <<<");
     test_network_service_workload(2);
 
     println!("\n===============================================================");
@@ -2439,6 +2572,27 @@ mod tests {
     use super::*;
 
     static TEST_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn test_missing_telemetry_detection() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let stock_events = vec![StockEvent {
+            task_id: Some(99),
+            schedule_latency_ns: Some(5_000),
+            ..Default::default()
+        }];
+        let dial9_events = vec![];
+        let (stock_lat, dial9_delay) =
+            extract_identified_task_telemetry(&stock_events, &dial9_events, 42);
+        assert_eq!(
+            stock_lat, None,
+            "missing stock latency must return None without fabricating default"
+        );
+        assert_eq!(
+            dial9_delay, None,
+            "missing dial9 delay must return None without fabricating default"
+        );
+    }
 
     #[test]
     fn test_ambiguous_readiness_rejection() {
@@ -2573,31 +2727,280 @@ mod tests {
     fn test_failure_count_reporting() {
         let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-        let closed_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let closed_addr = closed_listener.local_addr().unwrap();
-        drop(closed_listener);
+        // Test the actual connection-failure error path using an unreachable target port
+        let unused_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed_addr = unused_listener.local_addr().unwrap();
+        drop(unused_listener);
 
-        let metrics = run_network_service_load_tier_internal(
+        let m = run_network_service_load_tier_internal(
             2,
             2,
             10,
-            Duration::from_millis(1),
+            Duration::ZERO,
             Duration::from_millis(1),
             Some(closed_addr),
         );
 
-        assert_eq!(metrics.concurrency, 2);
-        assert_eq!(metrics.attempted_requests, 2);
-        assert_eq!(metrics.failed_requests, 2);
-        assert_eq!(metrics.completed_requests, 0);
-        assert_eq!(metrics.unattempted_requests, 18);
         assert_eq!(
-            metrics.attempted_requests,
-            metrics.completed_requests + metrics.failed_requests
+            m.planned_requests, 20,
+            "planned requests must equal concurrency * requests_per_client"
+        );
+        assert_eq!(
+            m.attempted_requests, 2,
+            "each client attempts its first request connection before failing"
+        );
+        assert_eq!(
+            m.failed_requests, 2,
+            "connection failures are accounted as failed requests"
+        );
+        assert_eq!(
+            m.completed_requests, 0,
+            "failed connections must have 0 completed requests"
+        );
+        assert_eq!(
+            m.unattempted_requests, 18,
+            "remaining planned requests for disconnected clients remain unattempted"
+        );
+        assert_eq!(
+            m.attempted_requests,
+            m.completed_requests + m.failed_requests,
+            "attempted must strictly equal completed + failed"
+        );
+        assert_eq!(
+            m.planned_requests,
+            m.attempted_requests + m.unattempted_requests,
+            "planned must strictly equal attempted + unattempted"
         );
 
-        let fail_rate = metrics.failed_requests as f64 / metrics.attempted_requests as f64;
-        assert_eq!(fail_rate, 1.0);
+        let iterations = 5;
+        let fail_rate = m.failed_requests as f64 / iterations as f64;
+        assert_eq!(
+            fail_rate, 0.4,
+            "fractional failure rate must preserve small failure counts"
+        );
+    }
+
+    fn make_dial9_poll_start(timestamp_ns: u64, task_id: u64, worker_id: u64) -> Dial9Event {
+        let json = format!(
+            r#"{{"event":"PollStartEvent","timestamp_ns":{},"worker_id":{},"local_queue":0,"task_id":{},"spawn_loc":"test"}}"#,
+            timestamp_ns, worker_id, task_id
+        );
+        serde_json::from_str(&json).unwrap()
+    }
+
+    fn make_dial9_wake(
+        timestamp_ns: u64,
+        woken_task_id: u64,
+        waker_task_id: u64,
+        target_worker: u8,
+    ) -> Dial9Event {
+        let json = format!(
+            r#"{{"event":"WakeEventEvent","timestamp_ns":{},"waker_task_id":{},"woken_task_id":{},"target_worker":{}}}"#,
+            timestamp_ns, waker_task_id, woken_task_id, target_worker
+        );
+        serde_json::from_str(&json).unwrap()
+    }
+
+    #[test]
+    fn test_telemetry_ordering_and_cycle_selection() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let stock_empty: Vec<StockEvent> = vec![];
+
+        // ── Regression Test 1: Two wakes before one poll, followed by poll without wake ──
+        // Confirmed reproduction from review:
+        // - Wake(task=42, t=100)
+        // - Wake(task=42, t=110)
+        // - PollStart(task=42, t=120)  [Cycle 0: multiple wakes -> ambiguous (None)]
+        // - PollStart(task=42, t=210)  [Cycle 1: no intervening wake -> unavailable (None)]
+        let dial9_coalesced = vec![
+            make_dial9_wake(100, 42, 1, 0),
+            make_dial9_wake(110, 42, 1, 0),
+            make_dial9_poll_start(120, 42, 0),
+            make_dial9_poll_start(210, 42, 0),
+        ];
+
+        // Cycle 0: multiple wakes before poll without distinguishing evidence -> ambiguous
+        let (_, d9_coal_c0) = extract_identified_task_telemetry_for_cycle(
+            &stock_empty,
+            &dial9_coalesced,
+            42,
+            Some(0),
+        );
+        assert_eq!(
+            d9_coal_c0, None,
+            "two wakes before one poll must be treated as ambiguous attribution"
+        );
+
+        // Cycle 1: wake=110 must NEVER carry past poll=120 into poll=210; poll=210 has no intervening wake -> unavailable
+        let (_, d9_coal_c1) = extract_identified_task_telemetry_for_cycle(
+            &stock_empty,
+            &dial9_coalesced,
+            42,
+            Some(1),
+        );
+        assert_eq!(
+            d9_coal_c1, None,
+            "wake must not carry past earlier poll; subsequent poll without wake is unavailable"
+        );
+
+        // Unspecified cycle selection on ambiguous/multi-poll sequence
+        let (_, d9_coal_unspec) =
+            extract_identified_task_telemetry(&stock_empty, &dial9_coalesced, 42);
+        assert_eq!(
+            d9_coal_unspec, None,
+            "unspecified cycle on ambiguous coalesced sequence must return None"
+        );
+
+        // ── Regression Test 2: Poll without intervening wake, followed by valid wake/poll ──
+        // - PollStart(task=42, t=50)   [Cycle 0: initial poll without preceding wake -> unavailable (None)]
+        // - Wake(task=42, t=100)
+        // - PollStart(task=42, t=120)  [Cycle 1: valid wake/poll cycle -> delay 20ns]
+        let dial9_spawn_then_wake = vec![
+            make_dial9_poll_start(50, 42, 0),
+            make_dial9_wake(100, 42, 1, 0),
+            make_dial9_poll_start(120, 42, 0),
+        ];
+
+        let (_, d9_spawn_c0) = extract_identified_task_telemetry_for_cycle(
+            &stock_empty,
+            &dial9_spawn_then_wake,
+            42,
+            Some(0),
+        );
+        assert_eq!(
+            d9_spawn_c0, None,
+            "poll without intervening wake must be unavailable"
+        );
+
+        let (_, d9_spawn_c1) = extract_identified_task_telemetry_for_cycle(
+            &stock_empty,
+            &dial9_spawn_then_wake,
+            42,
+            Some(1),
+        );
+        assert_eq!(
+            d9_spawn_c1,
+            Some(20),
+            "poll following wake must yield exact wake-to-poll delay (120 - 100 = 20ns)"
+        );
+
+        // ── Regression Test 3: Reversed segment order ──
+        // PollStart at t=120 appears first in vector, WakeEvent at t=100 appears second.
+        let dial9_reversed = vec![
+            make_dial9_poll_start(120, 42, 1),
+            make_dial9_wake(100, 42, 1, 0),
+        ];
+        let stock_single = vec![StockEvent {
+            task_id: Some(42),
+            event_type: "on_before_task_poll",
+            schedule_latency_ns: Some(18_000),
+            ..Default::default()
+        }];
+        let (stock_lat, dial9_delay) =
+            extract_identified_task_telemetry(&stock_single, &dial9_reversed, 42);
+        assert_eq!(
+            dial9_delay,
+            Some(20),
+            "reversed segment order must be sorted by layer timestamp and yield 20ns delay"
+        );
+        assert_eq!(stock_lat, Some(18_000));
+
+        // ── Regression Test 4: Ambiguous and unavailable cycle selection without index shifting ──
+        // - Wake(10), Wake(20) -> PollStart(30)   [Cycle 0: ambiguous -> None]
+        // - PollStart(50)                         [Cycle 1: unavailable -> None]
+        // - Wake(70) -> PollStart(85)             [Cycle 2: valid -> Some(15ns)]
+        // - PollStart(110)                        [Cycle 3: unavailable -> None]
+        let dial9_complex = vec![
+            make_dial9_wake(10, 42, 1, 0),
+            make_dial9_wake(20, 42, 1, 0),
+            make_dial9_poll_start(30, 42, 0),
+            make_dial9_poll_start(50, 42, 0),
+            make_dial9_wake(70, 42, 1, 0),
+            make_dial9_poll_start(85, 42, 0),
+            make_dial9_poll_start(110, 42, 0),
+        ];
+
+        let (_, c0) =
+            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(0));
+        assert_eq!(c0, None, "cycle 0 must be None (ambiguous)");
+
+        let (_, c1) =
+            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(1));
+        assert_eq!(c1, None, "cycle 1 must be None (unavailable)");
+
+        let (_, c2) =
+            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(2));
+        assert_eq!(
+            c2,
+            Some(15),
+            "cycle 2 must remain at stable index 2 without shifting from preceding missing cycles"
+        );
+
+        let (_, c3) =
+            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(3));
+        assert_eq!(c3, None, "cycle 3 must be None (unavailable)");
+
+        let (_, c4) =
+            extract_identified_task_telemetry_for_cycle(&stock_empty, &dial9_complex, 42, Some(4));
+        assert_eq!(c4, None, "cycle 4 must be None (out of range)");
+
+        let (_, c_unspec) = extract_identified_task_telemetry(&stock_empty, &dial9_complex, 42);
+        assert_eq!(
+            c_unspec, None,
+            "unspecified cycle must be None when ambiguous cycles exist"
+        );
+
+        // ── Multiple task cycles in both layers ──
+        let dial9_multi = vec![
+            make_dial9_wake(100, 42, 1, 0),
+            make_dial9_poll_start(120, 42, 0),
+            make_dial9_wake(200, 42, 1, 1),
+            make_dial9_poll_start(215, 42, 1),
+        ];
+        let stock_multi = vec![
+            StockEvent {
+                task_id: Some(42),
+                event_type: "on_before_task_poll",
+                schedule_latency_ns: Some(18_000),
+                ..Default::default()
+            },
+            StockEvent {
+                task_id: Some(42),
+                event_type: "on_before_task_poll",
+                schedule_latency_ns: Some(12_000),
+                ..Default::default()
+            },
+        ];
+
+        // Ambiguity check: Without a specified cycle, multiple valid cycles must return None
+        let (stock_ambig, dial9_ambig) =
+            extract_identified_task_telemetry(&stock_multi, &dial9_multi, 42);
+        assert_eq!(
+            dial9_ambig, None,
+            "multiple cycles without cycle selection must return None (ambiguous)"
+        );
+        assert_eq!(
+            stock_ambig, None,
+            "multiple cycles without cycle selection must return None (ambiguous)"
+        );
+
+        // Cycle 0 selection
+        let (stock_c0, dial9_c0) =
+            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(0));
+        assert_eq!(stock_c0, Some(18_000));
+        assert_eq!(dial9_c0, Some(20));
+
+        // Cycle 1 selection
+        let (stock_c1, dial9_c1) =
+            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(1));
+        assert_eq!(stock_c1, Some(12_000));
+        assert_eq!(dial9_c1, Some(15));
+
+        // Non-existent Cycle 2 selection
+        let (stock_c2, dial9_c2) =
+            extract_identified_task_telemetry_for_cycle(&stock_multi, &dial9_multi, 42, Some(2));
+        assert_eq!(stock_c2, None);
+        assert_eq!(dial9_c2, None);
     }
 
     #[test]
@@ -2731,7 +3134,7 @@ mod tests {
             let _ = accept_handle.await;
         });
 
-        let (gt_events, stock_events, _) = session.finish();
+        let (gt_events, stock_events, dial9_events) = session.finish();
         let target_tid = probe_handler_task_id.load(Ordering::SeqCst);
         assert!(target_tid > 0, "probe handler task id must be recorded");
 
@@ -2760,40 +3163,56 @@ mod tests {
         let attribution = correlate_unambiguous_readiness(&gt_events, target_tid, ext_write_start);
         let tokio_io_ready = match attribution {
             ReadinessAttribution::Unambiguous { readiness_ns, .. } => readiness_ns,
-            other => panic!(
-                "expected unambiguous readiness for target task {}, got {:?}",
-                target_tid, other
-            ),
+            ReadinessAttribution::Ambiguous { candidate_tokens } => {
+                panic!(
+                    "Readiness attribution ambiguous with tokens {:?}",
+                    candidate_tokens
+                );
+            }
+            ReadinessAttribution::Unavailable => {
+                panic!("Readiness attribution unavailable for task {}", target_tid);
+            }
         };
 
-        assert!(ext_write_start > 0, "write start must be recorded");
+        // Assert full causal event sequence existence and temporal ordering
+        assert!(ext_write_start > 0, "WRITE_BEGIN stimulus must exist");
         assert!(
-            tokio_io_ready >= ext_write_start,
+            ext_write_done >= ext_write_start,
+            "WRITE_DONE must occur after WRITE_BEGIN"
+        );
+        assert!(
+            tokio_io_ready > ext_write_start,
             "driver readiness observation must occur after WRITE_BEGIN"
         );
         assert!(
-            ext_write_done >= ext_write_start,
-            "WRITE_DONE must occur at or after WRITE_BEGIN"
+            task_sched >= tokio_io_ready,
+            "task scheduling must occur after driver readiness observation"
         );
+        assert!(
+            task_polled >= task_sched,
+            "worker task poll must occur after task scheduling"
+        );
+
         let delta_driver_ms = (tokio_io_ready - ext_write_start) as f64 / 1_000_000.0;
 
         assert!(
             delta_driver_ms > 15.0,
-            "driver delay must be > 15ms due to worker compute saturation (observed {:.2}ms)",
+            "driver readiness observation delay must be > 15ms due to worker compute saturation (observed {:.2}ms)",
             delta_driver_ms
         );
 
-        let stock_sched_ms = stock_events
-            .iter()
-            .find_map(|ev| {
-                if ev.task_id == Some(target_tid) {
-                    ev.schedule_latency_ns.map(|ns| ns as f64 / 1_000_000.0)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.0);
+        let (stock_lat_ns, dial9_delay_ns) =
+            extract_identified_task_telemetry(&stock_events, &dial9_events, target_tid);
 
+        // Require real samples for identified task - missing telemetry MUST fail
+        let stock_sched_ns = stock_lat_ns.expect(
+            "Stock Tokio schedule_latency must be present for target handler task; missing telemetry must fail",
+        );
+        let _dial9_delay = dial9_delay_ns.expect(
+            "Dial9 wake-to-poll delay must be present for target handler task; missing telemetry must fail",
+        );
+
+        let stock_sched_ms = stock_sched_ns as f64 / 1_000_000.0;
         assert!(
             stock_sched_ms < 1.0,
             "stock schedule latency for newly woken task must be sub-millisecond (observed {:.3}ms)",
@@ -2801,7 +3220,7 @@ mod tests {
         );
         assert!(
             delta_driver_ms > stock_sched_ms * 10.0,
-            "physical driver delay ({:.2}ms) must exceed stock schedule latency ({:.3}ms) by >10x",
+            "client-write-to-readiness delay ({:.2}ms) must exceed stock schedule latency ({:.3}ms) by >10x in controlled saturation",
             delta_driver_ms,
             stock_sched_ms
         );

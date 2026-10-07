@@ -10,5 +10,8 @@ dial9-tokio-telemetry = { path = ".repro/dial9/dial9-tokio-telemetry", features 
 dial9-core = { path = ".repro/dial9/dial9-core" }
 dial9-trace-format = { path = ".repro/dial9/dial9-trace-format", features = ["serde", "serde-deserialize"] }
 
+[dev-dependencies]
+serde_json = "1"
+
 [patch.crates-io]
 tokio = { path = ".repro/tokio/tokio" }
