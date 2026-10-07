@@ -11,9 +11,11 @@ import subprocess
 import tempfile
 import time
 import tomllib
+from contextlib import nullcontext
 from pathlib import Path
 
 from load import S3Client, run_tier
+from stage_metrics import metrics_receiver, read_histograms, summarize_tier
 
 
 def write_json(path, value):
@@ -26,6 +28,16 @@ def write_json(path, value):
             temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
+
+
+def read_thread_names(pid):
+    names = {}
+    for thread in Path(f"/proc/{pid}/task").iterdir():
+        try:
+            names[thread.name] = (thread / "comm").read_text().strip()
+        except FileNotFoundError:
+            continue
+    return names
 
 
 def main():
@@ -42,8 +54,13 @@ def main():
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--max-active", type=int, default=64)
     parser.add_argument("--no-telemetry", action="store_true")
+    parser.add_argument("--stage-metrics", action="store_true")
+    parser.add_argument("--request-traces", action="store_true")
+    parser.add_argument("--strace", type=Path)
     parser.add_argument("--converter", type=Path, default=root / ".repro/dial9/target/debug/examples/trace_to_jsonl")
     args = parser.parse_args()
+    if args.stage_metrics and args.request_traces:
+        parser.error("Collect stdout metrics and spans separately to avoid interleaved exporter output")
     if (args.repetitions < 1 or not 0 < args.duration <= 30 or args.workers < 1
             or not 1 <= args.max_active <= 256
             or any(not 1 <= c <= 256 for c in args.concurrency)
@@ -52,6 +69,8 @@ def main():
     args.binary = args.binary.resolve()
     if not args.binary.is_file():
         parser.error(f"Binary not found: {args.binary}; build it first")
+    if args.strace is not None:
+        args.strace = args.strace.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     lock = tomllib.loads((args.rustfs_source / "Cargo.lock").read_text())
     names = {"tokio", "dial9", "dial9-tokio-telemetry", "dial9-trace-format"}
@@ -68,6 +87,8 @@ def main():
         "payload_sha256": hashlib.sha256(payload).hexdigest(),
         "repetitions": args.repetitions, "generation_seconds_per_tier": args.duration,
         "telemetry_enabled": not args.no_telemetry,
+        "stage_metrics_enabled": args.stage_metrics,
+        "request_traces_enabled": args.request_traces,
         "temporary_volume_parent": str(args.output.resolve()),
         "limitations": ["HTTP 200 is not a read-back integrity check",
                         "New connection and client signing costs are included in attempt latency",
@@ -75,6 +96,9 @@ def main():
     }
     with args.binary.open("rb") as binary:
         manifest["binary_sha256"] = hashlib.file_digest(binary, "sha256").hexdigest()
+    if args.strace:
+        manifest["strace_version"] = subprocess.check_output([str(args.strace), "-V"], text=True)
+        manifest["limitations"].append("ptrace syscall tracing changes timing; diagnostic run only")
     if not args.no_telemetry:
         manifest["decoder_commit"] = subprocess.check_output(
             ["git", "-C", str(root / ".repro/dial9"), "rev-parse", "HEAD"], text=True).strip()
@@ -83,7 +107,8 @@ def main():
     for repetition in range(args.repetitions):
         out = args.output / f"run-{repetition + 1}"
         out.mkdir()
-        with tempfile.TemporaryDirectory(prefix="volumes-", dir=out.resolve()) as data:
+        with (tempfile.TemporaryDirectory(prefix="volumes-", dir=out.resolve()) as data,
+              metrics_receiver(out / "otlp") if args.stage_metrics or args.request_traces else nullcontext(None) as metric_endpoint):
             volumes = [Path(data) / f"vol{i}" for i in range(4)]
             for volume in volumes:
                 volume.mkdir()
@@ -97,9 +122,30 @@ def main():
                        RUSTFS_CONSOLE_ENABLE="false", RUSTFS_RUNTIME_WORKER_THREADS=str(args.workers),
                        RUSTFS_RUNTIME_DIAL9_ENABLED=str(not args.no_telemetry).lower(),
                        RUSTFS_RUNTIME_DIAL9_OUTPUT_DIR=str((out / "telemetry").resolve()))
+            if args.stage_metrics:
+                env.update(RUSTFS_OBS_ENDPOINT="", RUSTFS_OBS_METRIC_ENDPOINT=metric_endpoint,
+                           RUSTFS_OBS_PUT_STAGE_METRICS_ENABLED="true",
+                           RUSTFS_OBS_METRICS_EXPORT_ENABLED="true", RUSTFS_OBS_USE_STDOUT="true",
+                           RUSTFS_OBS_METER_INTERVAL="1", RUSTFS_OBS_TRACES_EXPORT_ENABLED="false",
+                           RUSTFS_OBS_LOGS_EXPORT_ENABLED="false", RUSTFS_OBS_PROFILING_EXPORT_ENABLED="false")
+            if args.request_traces:
+                env.update(RUSTFS_OBS_ENDPOINT="", RUSTFS_OBS_METRIC_ENDPOINT="",
+                           RUSTFS_OBS_TRACE_ENDPOINT=metric_endpoint.removesuffix("metrics") + "traces",
+                           RUSTFS_OBS_TRACES_EXPORT_ENABLED="true", RUSTFS_OBS_SAMPLE_RATIO="1.0",
+                           RUSTFS_OBS_METRICS_EXPORT_ENABLED="false", RUSTFS_OBS_USE_STDOUT="true",
+                           RUSTFS_OBS_LOGS_EXPORT_ENABLED="false", RUSTFS_OBS_PROFILING_EXPORT_ENABLED="false",
+                           RUSTFS_OBS_LOGGER_LEVEL="info,rustfs_ecstore=debug",
+                           RUST_LOG="info,rustfs_ecstore=debug",
+                           OTEL_BSP_SCHEDULE_DELAY="1000", OTEL_BSP_MAX_QUEUE_SIZE="16384")
             tiers = []
             with (out / "rustfs.log").open("w") as log:
-                proc = subprocess.Popen([str(args.binary)], env=env, stdout=log, stderr=subprocess.STDOUT)
+                command = [str(args.binary)]
+                if args.strace:
+                    # -D keeps RustFS as our direct child so shutdown still targets the server.
+                    command = [str(args.strace), "-D", "-f", "-ttt", "-T", "-yy",
+                               "-o", str((out / "syscalls.txt").resolve()), "-e",
+                               "trace=fdatasync,fsync,futex,epoll_wait,epoll_pwait", "--", *command]
+                proc = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT)
                 try:
                     client = S3Client(port=port)
                     bucket = "tokio-experiment"
@@ -118,6 +164,10 @@ def main():
                     for i in range(5):
                         if client.put_object(bucket, f"warmup/{i}", payload)["status"] != 200:
                             raise RuntimeError("Warmup PUT failed")
+                    if args.stage_metrics:
+                        time.sleep(2)
+                    if args.strace:
+                        write_json(out / "threads-before.json", read_thread_names(proc.pid))
                     specifications = [(f"c{c}", c, None) for c in args.concurrency]
                     specifications += [(f"r{r:g}", None, r) for r in args.rates]
                     for name, concurrency, rate in specifications:
@@ -126,6 +176,10 @@ def main():
                         tiers.append(result)
                         write_json(out / "tiers.json", tiers)
                         print(json.dumps({k: v for k, v in result.items() if k != "requests"}), flush=True)
+                        if args.stage_metrics:
+                            time.sleep(2)
+                        if args.strace:
+                            write_json(out / f"threads-after-{name}.json", read_thread_names(proc.pid))
                 finally:
                     if proc.poll() is None:
                         proc.send_signal(signal.SIGTERM)
@@ -136,6 +190,15 @@ def main():
                             proc.wait()
                     manifest[f"run_{repetition + 1}_exit_code"] = proc.returncode
                     write_json(args.output / "manifest.json", manifest)
+            if args.stage_metrics:
+                points = read_histograms((out / "rustfs.log").read_text())
+                summaries = [{"tier": t["tier"], "stages": summarize_tier(
+                    points, t["start_realtime_ns"], t["end_realtime_ns"])} for t in tiers]
+                if not points or any(not t["stages"] for t in summaries):
+                    raise RuntimeError(f"Missing stage histogram coverage; see {out / 'rustfs.log'}")
+                write_json(out / "stage-metrics.json", summaries)
+            if args.request_traces and "Span #" not in (out / "rustfs.log").read_text():
+                raise RuntimeError(f"No request spans exported; see {out / 'rustfs.log'}")
             if not args.no_telemetry:
                 traces = sorted((out / "telemetry").rglob("trace.*.bin"))
                 if not traces:

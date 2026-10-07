@@ -643,7 +643,7 @@ The repository analyzer independently reproduces the poll counts and durations i
 | Was the baseline dominated by disk waits? | Not established. No numerical baseline decomposition is available. | Request-linked disk service time, blocking-pool queue wait, admission waits, and synchronous processing. The earlier 75 ms disk / 2–5 ms CPU split was unsupported and has been removed. |
 | Why are wake-to-poll measurements unavailable? | The decoded trace contains no wake events; the inspected request helper uses standard `tokio::spawn` rather than Dial9's wake wrapper. | Wake-to-poll analysis is unavailable for this configuration. This does not imply that every possible Tokio schedule-latency measurement requires application rewrites. |
 
-RustFS already has opt-in PUT stage metrics (`RUSTFS_OBS_PUT_STAGE_METRICS_ENABLED`) including `erasure_encode_cpu`, emitted through its existing metrics exporter. They were not collected in the original run. These aggregate stages would help distinguish possible costs, but are not a request-linked causal timeline and must not be subtracted from request latency as independent percentiles.
+RustFS already has opt-in PUT stage metrics (`RUSTFS_OBS_PUT_STAGE_METRICS_ENABLED`), emitted through its existing metrics exporter. They were not collected in the original run. Separate encoding timers such as `erasure_encode_cpu` cover particular code paths, not every PUT. These aggregate stages help distinguish possible costs, but are not a request-linked causal timeline and must not be subtracted from request latency as independent percentiles.
 
 ### 6. Reproduction and Next Measurements
 
@@ -656,6 +656,28 @@ Telemetry-on closed-loop throughput at concurrency eight ranged from 189.30–19
 The [21 per-tier trace windows](experiments/rustfs/results/release-trace-windows.json) include generation and drain and explicitly report partial poll boundaries. Polls of at least 30 ms occurred in every c8, r200, and r300 window, and none in c1, c2, c4, or r100. This supports an association between heavier local load and long whole-task wall time. To explain a representative slowdown, collect existing stage metrics or profiling evidence and correlate it with the request path. Driver starvation remains a separate hypothesis requiring relevant I/O timing and evidence that all workers were unavailable.
 
 **Objective status: partially answered.** A real local RustFS request path and load-dependent slowdown were reproduced, including short repeated release measurements. The request-level cause, driver servicing delay, and instrumentation overhead remain unresolved. The controlled synthetic experiments remain the direct evidence for their deliberately forced conditions.
+
+### 7. Existing Stage Metrics Follow-up
+
+The [stage-metrics experiment](experiments/rustfs/README.md#existing-put-stage-metrics) collected three repetitions at concurrency one and eight with the same optimized binary and 1 MiB PUT workload. All 2,352 attempts returned HTTP 200. Cumulative export differences bracket each tier with idle padding; they are observation-window aggregates, not request-level traces.
+
+Mean `app_store_put` elapsed time ranged from 13.22–13.95 ms at concurrency one to 32.45–43.76 ms at concurrency eight. Mean rename/quorum wait rose from 7.45–7.64 ms to 16.31–21.21 ms; per-file fdatasync timing rose from 2.47–2.51 ms to 3.69–4.80 ms. Nested stages and parallel disk observations must not be added into a latency budget. These results prioritize storage commit/quorum and sync operations for further profiling; they do not establish physical disk service time or exclude scheduler effects.
+
+The emitted path label is `write_single_block_non_inline`. This dispatches to `encode_small_direct`, which synchronously encodes an owned block and also awaits reading, writes, and shutdown. It bypasses the `encode_block` timer cited earlier as a possible CPU path. No `erasure_encode_cpu` samples were exported, so encoding CPU cost remains unmeasured. The broader `set_disk_encode` mean increased from 3.71–3.97 ms to 8.25–11.66 ms and includes async work. The next useful measurement is storage syscall and off-CPU profiling, followed by request correlation; this evidence does not yet justify a driver-starvation claim.
+
+### 8. Separate Syscall Diagnostic
+
+The [strace diagnostic](experiments/rustfs/README.md#separate-syscall-diagnostic) traced file sync, futex, and epoll calls and correlated thread identities with Dial9. It strongly perturbed execution: c8 throughput dropped to 33.61 PUTs/s. Its timings must not be used as a normal performance baseline. No fsync/fdatasync calls ran on the two identified Tokio runtime workers during either tier; most ran on dedicated fsync threads. Other threads reused the runtime worker name, so names alone would have misclassified them.
+
+For the traced c8 request `c8/75.bin`, attempt latency was 345.26 ms. Four directory syncs associated by exact object path began 309.64–326.82 ms after the attempt and each lasted 0.86–1.36 ms. The runtime workers entered epoll 19 times during that request. This is a partial timeline, not a latency decomposition: request-specific temporary-file syncs, queue waits, CPU work, and pre-driver readiness delay remain unmeasured. The untraced stage data prioritizes storage commit/quorum work, but neither these syscalls nor aggregate histograms explain the full critical path. No driver-starvation or encoding-CPU claim follows from this diagnostic.
+
+### 9. Existing Request Spans: A Representative Slow PUT
+
+The [request-span diagnostic](experiments/rustfs/README.md#existing-request-span-diagnostic) enabled RustFS's existing spans without changing its source or build. One repetition completed 507 PUTs successfully and exported 36,146 spans. Debug logging and export overhead make this a separate diagnostic condition.
+
+Request `c8/259.bin` took 99.69 ms at the client. The matching server request ID identifies a 92.851 ms HTTP span. Its selected trace contains 54 spans with all exported parent references resolved; the erasure-set storage operation spans 85.989 ms. A nested directory-creation operation takes 19.830 ms, including an exported 19.110 ms span-idle interval. This wrapper awaits `tokio::fs` operations. The span counters are wall time around enter/exit, not CPU time or a measured blocking-pool queue delay; filesystem work, queueing, scheduling, and diagnostic overhead remain indistinguishable within the await.
+
+An additional object-matched metadata trace has a separate trace ID and is preserved without inventing a causal parent link. The selected hierarchy locates most server elapsed time inside storage and identifies a substantial await interval, but does not fully explain that interval or establish complete request coverage. The next causal boundary to measure is request-linked filesystem/queue completion and task resumption. Kernel socket readiness and driver discovery are still absent; the evidence does not establish driver starvation in this RustFS workload.
 
 ---
 

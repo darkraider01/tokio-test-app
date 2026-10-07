@@ -3,6 +3,9 @@ from unittest.mock import patch
 
 from analyze import analyze
 from load import run_tier
+from stage_metrics import read_histograms, summarize_tier
+from syscalls import read_syscalls
+from request_spans import read_spans
 
 
 class FakeClient:
@@ -11,6 +14,66 @@ class FakeClient:
 
 
 class ExperimentTests(unittest.TestCase):
+    def test_span_events_do_not_overwrite_request_attributes_or_span_name(self):
+        spans, incomplete = read_spans('Span #0\n\tName : storage\n\tTraceId : abc\n'
+                                      '\tSpanId : def\n\tParentSpanId : None (root span)\n'
+                                      '\tStart time : 2026-10-08 00:00:01\n'
+                                      '\tEnd time : 2026-10-08 00:00:02\n\tAttributes:\n'
+                                      '\t\t -> object: String(Owned("c8/1.bin"))\n'
+                                      '\tEvents:\n\tName : event\n\tAttributes:\n'
+                                      '\t\t -> object: String(Owned("other"))')
+        self.assertEqual(spans[0]["Name"], "storage")
+        self.assertEqual(spans[0]["attributes"]["object"], "c8/1.bin")
+        self.assertEqual(spans[0]["wall_ms"], 1000)
+        self.assertEqual(incomplete, 0)
+
+    def test_resumed_syscall_preserves_entry_time_and_file_path(self):
+        calls, unmatched = read_syscalls("7 1.000000 fsync(3</volume/object>) <unfinished ...>\n"
+                                        "7 1.500000 <... fsync resumed>) = 0 <0.500000>")
+        self.assertEqual(calls[0]["start_realtime_ns"], 1_000_000_000)
+        self.assertEqual(calls[0]["end_realtime_ns"], 1_500_000_000)
+        self.assertEqual(calls[0]["wall_ms"], 500)
+        self.assertIn("/volume/object", calls[0]["text"])
+        self.assertEqual(unmatched, {"unmatched_returns": 0, "unfinished_calls": 0})
+
+    def test_cumulative_stage_exports_exclude_pre_tier_observations(self):
+        text = """Metrics
+Metric #0
+Name : rustfs_internal_stage_duration_ms
+Temporality : Cumulative
+EndTime : 2026-10-08 00:00:01.000000
+DataPoint #0
+Count : 5
+Sum : 10.0
+-> stage: erasure_encode_cpu
+Metrics
+Metric #0
+Name : rustfs_internal_stage_duration_ms
+Temporality : Cumulative
+EndTime : 2026-10-08 00:00:03.000000
+DataPoint #0
+Count : 9
+Sum : 22.0
+-> stage: erasure_encode_cpu
+"""
+        points = read_histograms(text)
+        result = summarize_tier(points, points[0]["end_realtime_ns"] + 1,
+                                points[1]["end_realtime_ns"] - 1)
+        self.assertEqual(result[0]["observations"], 4)
+        self.assertEqual(result[0]["total_wall_ms"], 12)
+        self.assertEqual(result[0]["mean_wall_ms"], 3)
+        self.assertTrue(result[0]["baseline_present"])
+
+    def test_histogram_reset_is_rejected_instead_of_reporting_negative_duration(self):
+        points = [{"metric": "stage", "attributes": {"stage": "write"},
+                   "temporality": "Cumulative", "end_realtime_ns": 1,
+                   "count": 5, "sum": 10},
+                  {"metric": "stage", "attributes": {"stage": "write"},
+                   "temporality": "Cumulative", "end_realtime_ns": 3,
+                   "count": 2, "sum": 4}]
+        with self.assertRaisesRegex(ValueError, "reset"):
+            summarize_tier(points, 2, 3)
+
     def test_independent_segments_pair_polls_by_worker_and_timestamp(self):
         events = [
             {"event": "PollEndEvent", "timestamp_ns": 200, "worker_id": 0},

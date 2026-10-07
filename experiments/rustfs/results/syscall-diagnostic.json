@@ -1,0 +1,498 @@
+{
+  "manifest": {
+    "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+    "rustfs_working_tree": "",
+    "dependencies": [
+      {
+        "name": "dial9",
+        "version": "0.5.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+        "dependencies": [
+          "bon",
+          "dial9-core",
+          "dial9-macro",
+          "dial9-metrique",
+          "dial9-perf-self-profile",
+          "dial9-tokio-telemetry",
+          "dial9-trace-format",
+          "tokio",
+          "tracing"
+        ]
+      },
+      {
+        "name": "dial9-tokio-telemetry",
+        "version": "0.5.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+        "dependencies": [
+          "bon",
+          "bytes",
+          "dial9-core",
+          "dial9-perf-self-profile",
+          "dial9-trace-format",
+          "flate2",
+          "futures-util",
+          "hostname",
+          "libc",
+          "metrique-timesource",
+          "pin-project-lite",
+          "serde",
+          "serde_json",
+          "smallvec",
+          "tokio",
+          "tokio-util",
+          "tracing"
+        ]
+      },
+      {
+        "name": "dial9-trace-format",
+        "version": "0.5.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+        "dependencies": [
+          "ahash",
+          "dial9-trace-format-derive",
+          "serde",
+          "typeid"
+        ]
+      },
+      {
+        "name": "tokio",
+        "version": "1.53.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044",
+        "dependencies": [
+          "bytes",
+          "libc",
+          "mio",
+          "pin-project-lite",
+          "signal-hook-registry",
+          "socket2",
+          "tokio-macros",
+          "windows-sys 0.61.2"
+        ]
+      }
+    ],
+    "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs/target/release/rustfs",
+    "declared_build_profile": "release",
+    "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+    "workers": 2,
+    "payload_bytes": 1048576,
+    "payload_sha256": "c897acce4e3270116dcb715189589cb22288cb8a832dcf559d5a3d3bcb23c6ca",
+    "repetitions": 1,
+    "generation_seconds_per_tier": 3.0,
+    "telemetry_enabled": true,
+    "stage_metrics_enabled": true,
+    "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic",
+    "limitations": [
+      "HTTP 200 is not a read-back integrity check",
+      "New connection and client signing costs are included in attempt latency",
+      "Declared profile must be verified against the binary build command",
+      "ptrace syscall tracing changes timing; diagnostic run only"
+    ],
+    "binary_sha256": "dc577ce78a0dab71cef0072896c02487cd496fb8e6e3e35e5cfb81850cf01c9e",
+    "strace_version": "strace -- version 7.2\nCopyright (c) 1991-2026 The strace developers <https://strace.io>.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\nOptional features enabled: stack-trace=libdw stack-demangle m32-mpers mx32-mpers secontext\n",
+    "decoder_commit": "33b2d780628b42251047909ff2b88fdb97e3c28b",
+    "run_1_exit_code": 0
+  },
+  "worker_tids": {
+    "0": 373024,
+    "1": 373025
+  },
+  "thread_names": {
+    "373007": "rustfs",
+    "373011": "rustfs",
+    "373012": "rustfs",
+    "373013": "rustfs",
+    "373014": "rustfs",
+    "373015": "rustfs",
+    "373016": "rustfs",
+    "373017": "rustfs",
+    "373018": "rustfs",
+    "373019": "rustfs",
+    "373020": "rustfs",
+    "373021": "rustfs",
+    "373022": "rustfs",
+    "373023": "dial9-flush",
+    "373024": "rustfs-worker",
+    "373025": "rustfs-worker",
+    "373026": "rustfs-worker",
+    "373029": "reqwest-interna",
+    "373030": "OpenTelemetry.M",
+    "373031": "OpenTelemetry.M",
+    "373032": "rustfs-worker",
+    "373034": "rustfs-worker",
+    "373035": "rustfs-worker",
+    "373036": "rustfs-worker",
+    "373037": "rustfs-worker",
+    "373038": "rustfs-worker",
+    "373039": "rustfs-worker",
+    "373040": "rustfs-fsync",
+    "373041": "rustfs-fsync",
+    "373042": "rustfs-fsync",
+    "373043": "rustfs-fsync",
+    "373044": "rustfs-fsync",
+    "373045": "rustfs-fsync",
+    "373046": "rustfs-fsync",
+    "373047": "rustfs-fsync",
+    "373048": "rustfs-fsync",
+    "373049": "rustfs-fsync",
+    "373050": "rustfs-fsync",
+    "373051": "rustfs-fsync",
+    "373063": "rustfs-fsync",
+    "373064": "rustfs-fsync",
+    "373065": "rustfs-fsync",
+    "373066": "rustfs-fsync",
+    "373067": "rustfs-fsync",
+    "373079": "rustfs-worker",
+    "373089": "rustfs-worker",
+    "373090": "rustfs-worker",
+    "373091": "rustfs-worker",
+    "373092": "rustfs-worker",
+    "373093": "rustfs-worker",
+    "373094": "rustfs-worker",
+    "373095": "rustfs-worker",
+    "373096": "rustfs-worker",
+    "373097": "rustfs-worker",
+    "373098": "rustfs-fsync",
+    "373099": "rustfs-fsync",
+    "373100": "rustfs-fsync",
+    "373103": "rustfs-fsync",
+    "373104": "rustfs-fsync",
+    "373105": "rustfs-fsync"
+  },
+  "pairing": {
+    "unmatched_returns": 0,
+    "unfinished_calls": 0
+  },
+  "trace_sha256": "f5f30693438e73469ec2c907fcac9d83401d2d25755b224882792f6a24a37cea",
+  "tiers": [
+    {
+      "tier": "c1",
+      "load": {
+        "tier": "c1",
+        "mode": "closed_loop",
+        "concurrency": 1,
+        "target_rps": null,
+        "max_active": 64,
+        "start_realtime_ns": 1791399509233406269,
+        "generation_end_realtime_ns": 1791399512233406269,
+        "end_realtime_ns": 1791399512267512338,
+        "generation_s": 3.0,
+        "elapsed_including_drain_s": 3.034077977,
+        "drain_s": 0.034077977,
+        "planned_arrivals": 80,
+        "attempted": 80,
+        "completed_ok": 80,
+        "failed": 0,
+        "client_shed": 0,
+        "attempts_during_generation_rps": 26.666666666666668,
+        "completions_during_generation_rps": 26.333333333333332,
+        "throughput_including_drain_rps": 26.367153582223178,
+        "latency_ms": {
+          "p50": 36.837532,
+          "p95": 45.099219,
+          "p99": 51.479305,
+          "max": 51.479305
+        },
+        "scheduled_to_completion_ms": {
+          "p50": 36.837953,
+          "p95": 45.09959,
+          "p99": 51.479676,
+          "max": 51.479676
+        },
+        "launch_lateness_ms": {
+          "p50": 0.000401,
+          "p95": 0.000621,
+          "p99": 0.000842,
+          "max": 0.000842
+        }
+      },
+      "syscalls": {
+        "epoll_wait": {
+          "calls": 4593,
+          "wall_ms": {
+            "p50": 0.177,
+            "p95": 0.989,
+            "p99": 1.392,
+            "max": 999.226
+          }
+        },
+        "fdatasync": {
+          "calls": 664,
+          "wall_ms": {
+            "p50": 1.97,
+            "p95": 2.632,
+            "p99": 8.071,
+            "max": 9.82
+          }
+        },
+        "fsync": {
+          "calls": 1304,
+          "wall_ms": {
+            "p50": 1.002,
+            "p95": 1.565,
+            "p99": 1.733,
+            "max": 2.141
+          }
+        },
+        "futex": {
+          "calls": 43384,
+          "wall_ms": {
+            "p50": 0.061,
+            "p95": 5.047,
+            "p99": 29.283,
+            "max": 995.372
+          }
+        }
+      },
+      "storage_calls_by_thread_name": {
+        "rustfs-worker": 320,
+        "rustfs-fsync": 1648
+      },
+      "storage_calls_on_runtime_workers": 0,
+      "representative_slow_request": {
+        "key": "c1/11.bin",
+        "scheduled_ns": 33116295560677,
+        "attempted_ns": 33116295561048,
+        "attempted_realtime_ns": 1791399509689692181,
+        "launch_lateness_ms": 0.000371,
+        "status": 200,
+        "server_request_id": "8be6dc53-467a-4921-a019-f2c3e9aeb59c",
+        "total_ms": 51.405576,
+        "write_ms": 0.451059,
+        "response_headers_wait_ms": 50.256233,
+        "response_wait_ms": 50.271462,
+        "completed_ns": 33116347040353,
+        "attempt_to_completion_ms": 51.479305,
+        "scheduled_to_completion_ms": 51.479676
+      },
+      "request_linked_syncs": [
+        {
+          "tid": 373067,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399509732641000,
+          "end_realtime_ns": 1791399509733522000,
+          "wall_ms": 0.881,
+          "text": "fsync(809</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol0/tokio-experiment/c1/11.bin> ) = 0 <0.000881>",
+          "start_after_attempt_ms": 42.948819
+        },
+        {
+          "tid": 373066,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399509733167000,
+          "end_realtime_ns": 1791399509734174000,
+          "wall_ms": 1.007,
+          "text": "fsync(2938</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol1/tokio-experiment/c1/11.bin> ) = 0 <0.001007>",
+          "start_after_attempt_ms": 43.474819
+        },
+        {
+          "tid": 373063,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399509733021000,
+          "end_realtime_ns": 1791399509734193000,
+          "wall_ms": 1.172,
+          "text": "fsync(2926</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol3/tokio-experiment/c1/11.bin> ) = 0 <0.001172>",
+          "start_after_attempt_ms": 43.328819
+        },
+        {
+          "tid": 373051,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399509733045000,
+          "end_realtime_ns": 1791399509734226000,
+          "wall_ms": 1.181,
+          "text": "fsync(2931</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol2/tokio-experiment/c1/11.bin> ) = 0 <0.001181>",
+          "start_after_attempt_ms": 43.352819
+        }
+      ],
+      "runtime_worker_syscalls": {
+        "epoll_wait": {
+          "calls": 4585,
+          "wall_ms": {
+            "p50": 0.177,
+            "p95": 0.982,
+            "p99": 1.382,
+            "max": 7.457
+          }
+        },
+        "futex": {
+          "calls": 14536,
+          "wall_ms": {
+            "p50": 0.033,
+            "p95": 0.194,
+            "p99": 0.801,
+            "max": 7.283
+          }
+        }
+      },
+      "representative_runtime_epoll_entries": 53
+    },
+    {
+      "tier": "c8",
+      "load": {
+        "tier": "c8",
+        "mode": "closed_loop",
+        "concurrency": 8,
+        "target_rps": null,
+        "max_active": 64,
+        "start_realtime_ns": 1791399514273382623,
+        "generation_end_realtime_ns": 1791399517273382623,
+        "end_realtime_ns": 1791399517457078304,
+        "generation_s": 3.0,
+        "elapsed_including_drain_s": 3.183663922,
+        "drain_s": 0.183663922,
+        "planned_arrivals": 107,
+        "attempted": 107,
+        "completed_ok": 107,
+        "failed": 0,
+        "client_shed": 0,
+        "attempts_during_generation_rps": 35.666666666666664,
+        "completions_during_generation_rps": 33.0,
+        "throughput_including_drain_rps": 33.60907514785099,
+        "latency_ms": {
+          "p50": 231.366362,
+          "p95": 276.780123,
+          "p99": 317.590532,
+          "max": 345.255713
+        },
+        "scheduled_to_completion_ms": {
+          "p50": 231.367294,
+          "p95": 276.780644,
+          "p99": 317.590832,
+          "max": 345.256123
+        },
+        "launch_lateness_ms": {
+          "p50": 0.000371,
+          "p95": 0.000731,
+          "p99": 0.000932,
+          "max": 0.001362
+        }
+      },
+      "syscalls": {
+        "epoll_wait": {
+          "calls": 191,
+          "wall_ms": {
+            "p50": 0.044,
+            "p95": 0.232,
+            "p99": 997.328,
+            "max": 998.343
+          }
+        },
+        "fdatasync": {
+          "calls": 880,
+          "wall_ms": {
+            "p50": 1.844,
+            "p95": 2.664,
+            "p99": 3.277,
+            "max": 7.649
+          }
+        },
+        "fsync": {
+          "calls": 1736,
+          "wall_ms": {
+            "p50": 0.939,
+            "p95": 1.798,
+            "p99": 2.063,
+            "max": 4.973
+          }
+        },
+        "futex": {
+          "calls": 74159,
+          "wall_ms": {
+            "p50": 0.107,
+            "p95": 5.453,
+            "p99": 14.987,
+            "max": 994.847
+          }
+        }
+      },
+      "storage_calls_by_thread_name": {
+        "rustfs-worker": 428,
+        "rustfs-fsync": 2188
+      },
+      "storage_calls_on_runtime_workers": 0,
+      "representative_slow_request": {
+        "key": "c8/75.bin",
+        "scheduled_ns": 33123043129880,
+        "attempted_ns": 33123043130290,
+        "attempted_realtime_ns": 1791399516437261123,
+        "launch_lateness_ms": 0.00041,
+        "status": 200,
+        "server_request_id": "7156dd8a-a998-4cfd-ab0a-79c9035216ae",
+        "total_ms": 345.209135,
+        "write_ms": 0.37178,
+        "response_headers_wait_ms": 344.168126,
+        "response_wait_ms": 344.182603,
+        "completed_ns": 33123388386003,
+        "attempt_to_completion_ms": 345.255713,
+        "scheduled_to_completion_ms": 345.256123
+      },
+      "request_linked_syncs": [
+        {
+          "tid": 373065,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399516746904000,
+          "end_realtime_ns": 1791399516748238000,
+          "wall_ms": 1.334,
+          "text": "fsync(2946</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol1/tokio-experiment/c8/75.bin> ) = 0 <0.001334>",
+          "start_after_attempt_ms": 309.642877
+        },
+        {
+          "tid": 373066,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399516754244000,
+          "end_realtime_ns": 1791399516755503000,
+          "wall_ms": 1.259,
+          "text": "fsync(2941</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol2/tokio-experiment/c8/75.bin> ) = 0 <0.001259>",
+          "start_after_attempt_ms": 316.982877
+        },
+        {
+          "tid": 373098,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399516756968000,
+          "end_realtime_ns": 1791399516758330000,
+          "wall_ms": 1.362,
+          "text": "fsync(2941</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol3/tokio-experiment/c8/75.bin> ) = 0 <0.001362>",
+          "start_after_attempt_ms": 319.706877
+        },
+        {
+          "tid": 373063,
+          "syscall": "fsync",
+          "start_realtime_ns": 1791399516764082000,
+          "end_realtime_ns": 1791399516764942000,
+          "wall_ms": 0.86,
+          "text": "fsync(2938</home/brandybuck/Code/tokio-test-app/.repro/rustfs-strace-diagnostic/run-1/volumes-w82kauzd/vol0/tokio-experiment/c8/75.bin> ) = 0 <0.000860>",
+          "start_after_attempt_ms": 326.820877
+        }
+      ],
+      "runtime_worker_syscalls": {
+        "epoll_wait": {
+          "calls": 183,
+          "wall_ms": {
+            "p50": 0.042,
+            "p95": 0.161,
+            "p99": 0.266,
+            "max": 0.267
+          }
+        },
+        "futex": {
+          "calls": 19060,
+          "wall_ms": {
+            "p50": 0.045,
+            "p95": 0.228,
+            "p99": 0.573,
+            "max": 1.905
+          }
+        }
+      },
+      "representative_runtime_epoll_entries": 19
+    }
+  ],
+  "limitations": [
+    "ptrace strongly perturbs latency; not a performance baseline",
+    "Syscall wall time includes descheduling and tracing; not pure device or off-CPU time",
+    "Futex intervals are not necessarily blocking-pool queue wait",
+    "Request-linked directory syncs do not cover the full request pipeline"
+  ]
+}

@@ -1,0 +1,2872 @@
+{
+  "manifest": {
+    "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+    "rustfs_working_tree": "",
+    "dependencies": [
+      {
+        "name": "dial9",
+        "version": "0.5.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+        "dependencies": [
+          "bon",
+          "dial9-core",
+          "dial9-macro",
+          "dial9-metrique",
+          "dial9-perf-self-profile",
+          "dial9-tokio-telemetry",
+          "dial9-trace-format",
+          "tokio",
+          "tracing"
+        ]
+      },
+      {
+        "name": "dial9-tokio-telemetry",
+        "version": "0.5.3",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+        "dependencies": [
+          "bon",
+          "bytes",
+          "dial9-core",
+          "dial9-perf-self-profile",
+          "dial9-trace-format",
+          "flate2",
+          "futures-util",
+          "hostname",
+          "libc",
+          "metrique-timesource",
+          "pin-project-lite",
+          "serde",
+          "serde_json",
+          "smallvec",
+          "tokio",
+          "tokio-util",
+          "tracing"
+        ]
+      },
+      {
+        "name": "dial9-trace-format",
+        "version": "0.5.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+        "dependencies": [
+          "ahash",
+          "dial9-trace-format-derive",
+          "serde",
+          "typeid"
+        ]
+      },
+      {
+        "name": "tokio",
+        "version": "1.53.2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044",
+        "dependencies": [
+          "bytes",
+          "libc",
+          "mio",
+          "pin-project-lite",
+          "signal-hook-registry",
+          "socket2",
+          "tokio-macros",
+          "windows-sys 0.61.2"
+        ]
+      }
+    ],
+    "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs/target/release/rustfs",
+    "declared_build_profile": "release",
+    "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+    "workers": 2,
+    "payload_bytes": 1048576,
+    "payload_sha256": "0bd999502bbb0560ed98f6594a56d2e0aff749958db5c9c83a9f479d92f929cf",
+    "repetitions": 3,
+    "generation_seconds_per_tier": 3.0,
+    "telemetry_enabled": true,
+    "stage_metrics_enabled": true,
+    "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-stage-sweep",
+    "limitations": [
+      "HTTP 200 is not a read-back integrity check",
+      "New connection and client signing costs are included in attempt latency",
+      "Declared profile must be verified against the binary build command"
+    ],
+    "binary_sha256": "dc577ce78a0dab71cef0072896c02487cd496fb8e6e3e35e5cfb81850cf01c9e",
+    "decoder_commit": "33b2d780628b42251047909ff2b88fdb97e3c28b",
+    "run_1_exit_code": 0,
+    "run_2_exit_code": 0,
+    "run_3_exit_code": 0
+  },
+  "metric_export_interval_seconds": 1,
+  "idle_export_padding_seconds": 2,
+  "limitations": [
+    "Cumulative export differences, not exact request-linked boundaries",
+    "Nested stages overlap; observations can include background metadata and parallel disk operations",
+    "No stage percentile or CPU-time decomposition; missing timers are not zero",
+    "Extra metric export and stdout costs are enabled in this diagnostic run"
+  ],
+  "runs": [
+    {
+      "run": "run-1",
+      "tiers": [
+        {
+          "tier": "c1",
+          "mode": "closed_loop",
+          "concurrency": 1,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399179787797010,
+          "generation_end_realtime_ns": 1791399182787797010,
+          "end_realtime_ns": 1791399182790453406,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.002620479,
+          "drain_s": 0.002620479,
+          "planned_arrivals": 191,
+          "attempted": 191,
+          "completed_ok": 191,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 63.666666666666664,
+          "completions_during_generation_rps": 63.333333333333336,
+          "throughput_including_drain_rps": 63.61110281363668,
+          "latency_ms": {
+            "p50": 15.382648,
+            "p95": 18.475718,
+            "p99": 25.247872,
+            "max": 25.349714
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 15.383148,
+            "p95": 18.476038,
+            "p99": 25.248263,
+            "max": 25.350225
+          },
+          "launch_lateness_ms": {
+            "p50": 0.000411,
+            "p95": 0.000722,
+            "p99": 0.001022,
+            "max": 0.001062
+          }
+        },
+        {
+          "tier": "c8",
+          "mode": "closed_loop",
+          "concurrency": 8,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399184795002704,
+          "generation_end_realtime_ns": 1791399187795002704,
+          "end_realtime_ns": 1791399187823956788,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.028811045,
+          "drain_s": 0.028811045,
+          "planned_arrivals": 603,
+          "attempted": 603,
+          "completed_ok": 603,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 201.0,
+          "completions_during_generation_rps": 198.33333333333334,
+          "throughput_including_drain_rps": 199.0880220129414,
+          "latency_ms": {
+            "p50": 36.410098,
+            "p95": 59.767923,
+            "p99": 183.878517,
+            "max": 189.403706
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 36.410538,
+            "p95": 59.768114,
+            "p99": 183.878798,
+            "max": 189.403976
+          },
+          "launch_lateness_ms": {
+            "p50": 0.00028,
+            "p95": 0.000742,
+            "p99": 0.001062,
+            "max": 0.001653
+          }
+        }
+      ],
+      "stage_metrics": [
+        {
+          "tier": "c1",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.6072229999999998,
+              "mean_wall_ms": 0.0031791780104712033,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.750513,
+              "mean_wall_ms": 0.003929387434554974,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.7169329999999999,
+              "mean_wall_ms": 0.003753575916230366,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 191,
+              "total_wall_ms": 3.3254380000000014,
+              "mean_wall_ms": 0.01741067015706807,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.4119069999999999,
+              "mean_wall_ms": 0.00215658115183246,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 191,
+              "total_wall_ms": 4.401828999999999,
+              "mean_wall_ms": 0.02304622513089005,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 191,
+              "total_wall_ms": 1.1796090000000004,
+              "mean_wall_ms": 0.006175963350785342,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.6027630000000003,
+              "mean_wall_ms": 0.0031558272251308913,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 191,
+              "total_wall_ms": 1.0896630000000003,
+              "mean_wall_ms": 0.0057050418848167556,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 191,
+              "total_wall_ms": 1.5878769999999998,
+              "mean_wall_ms": 0.008313492146596857,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.10642799999999998,
+              "mean_wall_ms": 0.0005572146596858638,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.2832780000000001,
+              "mean_wall_ms": 0.0014831308900523565,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 191,
+              "total_wall_ms": 0.28210599999999997,
+              "mean_wall_ms": 0.0014769947643979056,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 191,
+              "total_wall_ms": 2663.712861,
+              "mean_wall_ms": 13.946140633507854,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 191,
+              "total_wall_ms": 15.034783000000001,
+              "mean_wall_ms": 0.07871614136125656,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 195,
+              "total_wall_ms": 2.7459149999999983,
+              "mean_wall_ms": 0.014081615384615376,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 191,
+              "total_wall_ms": 37.097764000000005,
+              "mean_wall_ms": 0.1942291308900524,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 195,
+              "total_wall_ms": 774.5625139999999,
+              "mean_wall_ms": 3.9721154564102554,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 195,
+              "total_wall_ms": 1525.3494469999991,
+              "mean_wall_ms": 7.822304856410252,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 1528,
+              "total_wall_ms": 1268.6179300000006,
+              "mean_wall_ms": 0.830247336387435,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 21.669358999999986,
+              "mean_wall_ms": 1.3543349374999991,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 780,
+              "total_wall_ms": 5730.773940000004,
+              "mean_wall_ms": 7.347146076923082,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 780,
+              "total_wall_ms": 1007.7000670000004,
+              "mean_wall_ms": 1.2919231628205134,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 764,
+              "total_wall_ms": 1919.1525429999992,
+              "mean_wall_ms": 2.5119797683246063,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 796,
+              "total_wall_ms": 0.30008100000000015,
+              "mean_wall_ms": 0.0003769861809045228,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.007131000000000012,
+              "mean_wall_ms": 0.00014856250000000026,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 195,
+              "total_wall_ms": 1489.4700060000005,
+              "mean_wall_ms": 7.638307723076926,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 2340,
+              "total_wall_ms": 360.8099340000012,
+              "mean_wall_ms": 0.15419227948718,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 764,
+              "total_wall_ms": 680.5699280000009,
+              "mean_wall_ms": 0.8907983350785352,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 195,
+              "total_wall_ms": 76.16709199999998,
+              "mean_wall_ms": 0.39060047179487173,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 191,
+              "total_wall_ms": 2676.9349000000007,
+              "mean_wall_ms": 14.01536596858639,
+              "baseline_present": true,
+              "export_start_ns": 1791399179359512064,
+              "export_end_ns": 1791399183359908096
+            }
+          ]
+        },
+        {
+          "tier": "c8",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 603,
+              "total_wall_ms": 2.8890039999999995,
+              "mean_wall_ms": 0.004791051409618573,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 603,
+              "total_wall_ms": 2.673879000000001,
+              "mean_wall_ms": 0.0044342935323383095,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 603,
+              "total_wall_ms": 1.9057429999999989,
+              "mean_wall_ms": 0.0031604361525704792,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 603,
+              "total_wall_ms": 12.470514999999994,
+              "mean_wall_ms": 0.020680787728026524,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 603,
+              "total_wall_ms": 1.280706,
+              "mean_wall_ms": 0.0021238905472636812,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 603,
+              "total_wall_ms": 11.132112999999999,
+              "mean_wall_ms": 0.01846121558872305,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 603,
+              "total_wall_ms": 3.987795000000001,
+              "mean_wall_ms": 0.006613258706467663,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 603,
+              "total_wall_ms": 2.0135250000000005,
+              "mean_wall_ms": 0.0033391791044776126,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 603,
+              "total_wall_ms": 3.522938000000007,
+              "mean_wall_ms": 0.005842351575456065,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 603,
+              "total_wall_ms": 5.073559000000005,
+              "mean_wall_ms": 0.008413862354892214,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 603,
+              "total_wall_ms": 0.2478399999999996,
+              "mean_wall_ms": 0.00041101160862354823,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 603,
+              "total_wall_ms": 0.9434229999999999,
+              "mean_wall_ms": 0.0015645489220563846,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 603,
+              "total_wall_ms": 1.7800969999999987,
+              "mean_wall_ms": 0.0029520679933664985,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 603,
+              "total_wall_ms": 21616.258352999994,
+              "mean_wall_ms": 35.84785796517412,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 603,
+              "total_wall_ms": 51.39853399999994,
+              "mean_wall_ms": 0.08523803316749576,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 607,
+              "total_wall_ms": 8.497063000000022,
+              "mean_wall_ms": 0.0139984563426689,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 603,
+              "total_wall_ms": 107.6526560000002,
+              "mean_wall_ms": 0.17852845107794396,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 607,
+              "total_wall_ms": 5122.279289999997,
+              "mean_wall_ms": 8.438680873146618,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 607,
+              "total_wall_ms": 11876.44109999999,
+              "mean_wall_ms": 19.56580082372321,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 4824,
+              "total_wall_ms": 5491.5147419999885,
+              "mean_wall_ms": 1.138373702736316,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 67.87811500000004,
+              "mean_wall_ms": 4.242382187500002,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 2428,
+              "total_wall_ms": 43121.825667000085,
+              "mean_wall_ms": 17.760224739291633,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 2428,
+              "total_wall_ms": 7762.200036000005,
+              "mean_wall_ms": 3.1969522388797382,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 2412,
+              "total_wall_ms": 10881.756013000046,
+              "mean_wall_ms": 4.511507468076304,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 2444,
+              "total_wall_ms": 0.8191300000000006,
+              "mean_wall_ms": 0.0003351595744680853,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.009515999999999983,
+              "mean_wall_ms": 0.00019824999999999964,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 607,
+              "total_wall_ms": 11217.245113000003,
+              "mean_wall_ms": 18.479810729818784,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 7284,
+              "total_wall_ms": 4473.901172000003,
+              "mean_wall_ms": 0.6142093866007692,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 2412,
+              "total_wall_ms": 6023.841164000006,
+              "mean_wall_ms": 2.4974465854063044,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 607,
+              "total_wall_ms": 1593.5864119999992,
+              "mean_wall_ms": 2.6253482899505753,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 603,
+              "total_wall_ms": 21679.359746000002,
+              "mean_wall_ms": 35.952503724709786,
+              "baseline_present": true,
+              "export_start_ns": 1791399184359880960,
+              "export_end_ns": 1791399188360515072
+            }
+          ]
+        }
+      ],
+      "raw_requests_sha256": "1b448ab87d3ec51cc3bc1ea3a41e2e553b40da78d76f52377d2b1c1ba2ebe5c3",
+      "stdout_sha256": "9440e58a1983276071fb334fa473e5a33f5dbf49b93c6a8012def725bf868aff",
+      "otlp_batches": [
+        {
+          "file": "batch-0.bin",
+          "received_realtime_ns": 1791399178366584150,
+          "content_encoding": "gzip",
+          "sha256": "1ac9a18b91e28598d311d98c231a44b8a8eb307da948cdf81fd085ee2e6292dc"
+        },
+        {
+          "file": "batch-1.bin",
+          "received_realtime_ns": 1791399179361522814,
+          "content_encoding": "gzip",
+          "sha256": "076f7eedebffd25a8d6e7ceac2040f1a8e154c33395cffe359efe5ba15beedcb"
+        },
+        {
+          "file": "batch-2.bin",
+          "received_realtime_ns": 1791399180361765320,
+          "content_encoding": "gzip",
+          "sha256": "73f218a4b727c019ac11729d6c06b7093e0581cb5bcfaf85711a4323481c5758"
+        },
+        {
+          "file": "batch-3.bin",
+          "received_realtime_ns": 1791399181362622462,
+          "content_encoding": "gzip",
+          "sha256": "ee040e7ef052bb7cd02f1718b671ed08915eba3239e71d9e88920086401d2205"
+        },
+        {
+          "file": "batch-4.bin",
+          "received_realtime_ns": 1791399182362038883,
+          "content_encoding": "gzip",
+          "sha256": "18184797c834fdce4c0bc884f09a50231aca148dab8a258ffab27d4689d6cb35"
+        },
+        {
+          "file": "batch-5.bin",
+          "received_realtime_ns": 1791399183361941749,
+          "content_encoding": "gzip",
+          "sha256": "9ed72f65b196f029730b8f678a6f26730decdd6a8f96a9f563dc33760ee1bd9f"
+        },
+        {
+          "file": "batch-6.bin",
+          "received_realtime_ns": 1791399184361935126,
+          "content_encoding": "gzip",
+          "sha256": "28d9fa950a0ad0c7b1a43ec168a8409e0808e01a33df36c91d23be22a5ac7a88"
+        },
+        {
+          "file": "batch-7.bin",
+          "received_realtime_ns": 1791399185364014798,
+          "content_encoding": "gzip",
+          "sha256": "66a4173b636a0dd13ee6557fb130c6dfdc595e39bf59fe8a671c337990d3cf40"
+        },
+        {
+          "file": "batch-8.bin",
+          "received_realtime_ns": 1791399186364345830,
+          "content_encoding": "gzip",
+          "sha256": "b25f9e45d7381c71500468573667dbb140df12f8e4a344816d133bfc2b20e4ae"
+        },
+        {
+          "file": "batch-9.bin",
+          "received_realtime_ns": 1791399187363117027,
+          "content_encoding": "gzip",
+          "sha256": "04ee1e7c990a3ef8bd911fabda78494021ed7ecb496e730a6f07c1896bb6d9f2"
+        },
+        {
+          "file": "batch-10.bin",
+          "received_realtime_ns": 1791399188362935494,
+          "content_encoding": "gzip",
+          "sha256": "ea838d226d131843baf495c5dd95a8feb7286290ea349090b6487ad21a519392"
+        },
+        {
+          "file": "batch-11.bin",
+          "received_realtime_ns": 1791399189362397761,
+          "content_encoding": "gzip",
+          "sha256": "7a006daf58c974ffdd8db9c541bff993fedd1baf7339f57e2acb9f79b43c35f4"
+        },
+        {
+          "file": "batch-12.bin",
+          "received_realtime_ns": 1791399189861068174,
+          "content_encoding": "gzip",
+          "sha256": "c1368f143a1cf176ad8f9202162f23848866bd07483a82ac139f30c61afb41c3"
+        }
+      ]
+    },
+    {
+      "run": "run-2",
+      "tiers": [
+        {
+          "tier": "c1",
+          "mode": "closed_loop",
+          "concurrency": 1,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399196752236134,
+          "generation_end_realtime_ns": 1791399199752236134,
+          "end_realtime_ns": 1791399199754715337,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.002437495,
+          "drain_s": 0.002437495,
+          "planned_arrivals": 200,
+          "attempted": 200,
+          "completed_ok": 200,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 66.66666666666667,
+          "completions_during_generation_rps": 66.33333333333333,
+          "throughput_including_drain_rps": 66.61254408561801,
+          "latency_ms": {
+            "p50": 14.674716,
+            "p95": 17.239983,
+            "p99": 23.108747,
+            "max": 28.931083
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 14.675117,
+            "p95": 17.240494,
+            "p99": 23.109137,
+            "max": 28.931354
+          },
+          "launch_lateness_ms": {
+            "p50": 0.000481,
+            "p95": 0.000792,
+            "p99": 0.001142,
+            "max": 0.001283
+          }
+        },
+        {
+          "tier": "c8",
+          "mode": "closed_loop",
+          "concurrency": 8,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399201759764166,
+          "generation_end_realtime_ns": 1791399204759764166,
+          "end_realtime_ns": 1791399204785940302,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.026009734,
+          "drain_s": 0.026009734,
+          "planned_arrivals": 662,
+          "attempted": 662,
+          "completed_ok": 662,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 220.66666666666666,
+          "completions_during_generation_rps": 218.0,
+          "throughput_including_drain_rps": 218.76995059263083,
+          "latency_ms": {
+            "p50": 34.050076,
+            "p95": 63.111025,
+            "p99": 87.703984,
+            "max": 114.403919
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 34.050638,
+            "p95": 63.111325,
+            "p99": 87.704525,
+            "max": 114.4045
+          },
+          "launch_lateness_ms": {
+            "p50": 0.0003,
+            "p95": 0.000842,
+            "p99": 0.001142,
+            "max": 0.001303
+          }
+        }
+      ],
+      "stage_metrics": [
+        {
+          "tier": "c1",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.5902260000000001,
+              "mean_wall_ms": 0.0029511300000000006,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.710096,
+              "mean_wall_ms": 0.00355048,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.6906140000000001,
+              "mean_wall_ms": 0.0034530700000000004,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 200,
+              "total_wall_ms": 3.196532,
+              "mean_wall_ms": 0.01598266,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.38667899999999983,
+              "mean_wall_ms": 0.0019333949999999992,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 200,
+              "total_wall_ms": 4.107016000000001,
+              "mean_wall_ms": 0.020535080000000004,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 200,
+              "total_wall_ms": 1.0849820000000003,
+              "mean_wall_ms": 0.0054249100000000015,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.5748840000000002,
+              "mean_wall_ms": 0.002874420000000001,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 200,
+              "total_wall_ms": 1.052592,
+              "mean_wall_ms": 0.00526296,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 200,
+              "total_wall_ms": 1.4721780000000007,
+              "mean_wall_ms": 0.007360890000000004,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.08728300000000003,
+              "mean_wall_ms": 0.0004364150000000001,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.2275,
+              "mean_wall_ms": 0.0011375,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 200,
+              "total_wall_ms": 0.2961360000000002,
+              "mean_wall_ms": 0.001480680000000001,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 200,
+              "total_wall_ms": 2661.404882000001,
+              "mean_wall_ms": 13.307024410000006,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 200,
+              "total_wall_ms": 13.880906000000003,
+              "mean_wall_ms": 0.06940453000000002,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 204,
+              "total_wall_ms": 2.1568069999999993,
+              "mean_wall_ms": 0.01057258333333333,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 200,
+              "total_wall_ms": 36.065250000000006,
+              "mean_wall_ms": 0.18032625000000002,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 204,
+              "total_wall_ms": 763.8176879999994,
+              "mean_wall_ms": 3.7442043529411735,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 204,
+              "total_wall_ms": 1591.3067469999999,
+              "mean_wall_ms": 7.800523269607843,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 1600,
+              "total_wall_ms": 1321.1343150000005,
+              "mean_wall_ms": 0.8257089468750003,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 24.71980100000001,
+              "mean_wall_ms": 1.5449875625000007,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 816,
+              "total_wall_ms": 5987.680678,
+              "mean_wall_ms": 7.337843968137254,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 816,
+              "total_wall_ms": 1036.7595989999998,
+              "mean_wall_ms": 1.2705387242647055,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 800,
+              "total_wall_ms": 1996.775820999997,
+              "mean_wall_ms": 2.4959697762499964,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 832,
+              "total_wall_ms": 0.27917000000000036,
+              "mean_wall_ms": 0.0003355408653846158,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.006359999999999977,
+              "mean_wall_ms": 0.0001324999999999995,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 204,
+              "total_wall_ms": 1555.8194659999992,
+              "mean_wall_ms": 7.626566009803918,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 2448,
+              "total_wall_ms": 343.74169399999994,
+              "mean_wall_ms": 0.1404173586601307,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 800,
+              "total_wall_ms": 710.2381960000006,
+              "mean_wall_ms": 0.8877977450000007,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 204,
+              "total_wall_ms": 73.75194399999997,
+              "mean_wall_ms": 0.3615291372549018,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 200,
+              "total_wall_ms": 2673.4079630000006,
+              "mean_wall_ms": 13.367039815000004,
+              "baseline_present": true,
+              "export_start_ns": 1791399196237323008,
+              "export_end_ns": 1791399200237634816
+            }
+          ]
+        },
+        {
+          "tier": "c8",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 662,
+              "total_wall_ms": 1.7759469999999977,
+              "mean_wall_ms": 0.0026826993957703893,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 662,
+              "total_wall_ms": 2.3851530000000016,
+              "mean_wall_ms": 0.003602950151057404,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 662,
+              "total_wall_ms": 1.741195999999998,
+              "mean_wall_ms": 0.002630205438066462,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 662,
+              "total_wall_ms": 12.683739000000012,
+              "mean_wall_ms": 0.019159726586102738,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 662,
+              "total_wall_ms": 1.2918379999999987,
+              "mean_wall_ms": 0.0019514169184290011,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 662,
+              "total_wall_ms": 11.122007000000012,
+              "mean_wall_ms": 0.016800614803625397,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 662,
+              "total_wall_ms": 3.740343000000003,
+              "mean_wall_ms": 0.005650064954682784,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 662,
+              "total_wall_ms": 1.9900880000000005,
+              "mean_wall_ms": 0.0030061752265861034,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 662,
+              "total_wall_ms": 3.400765000000002,
+              "mean_wall_ms": 0.00513710725075529,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 662,
+              "total_wall_ms": 5.102276,
+              "mean_wall_ms": 0.007707365558912387,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 662,
+              "total_wall_ms": 0.23549700000000023,
+              "mean_wall_ms": 0.00035573564954682814,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 662,
+              "total_wall_ms": 0.8834519999999992,
+              "mean_wall_ms": 0.0013345196374622344,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 662,
+              "total_wall_ms": 0.8025289999999994,
+              "mean_wall_ms": 0.0012122794561933525,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 662,
+              "total_wall_ms": 21481.918682999985,
+              "mean_wall_ms": 32.45002822205436,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 662,
+              "total_wall_ms": 52.38041500000002,
+              "mean_wall_ms": 0.07912449395770396,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 666,
+              "total_wall_ms": 8.523109999999996,
+              "mean_wall_ms": 0.012797462462462456,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 662,
+              "total_wall_ms": 108.38460500000012,
+              "mean_wall_ms": 0.1637229682779458,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 666,
+              "total_wall_ms": 5495.827795000006,
+              "mean_wall_ms": 8.251993686186195,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 666,
+              "total_wall_ms": 11629.169422999998,
+              "mean_wall_ms": 17.461215349849848,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 5296,
+              "total_wall_ms": 6371.404601999988,
+              "mean_wall_ms": 1.2030597813444086,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 44.56070600000001,
+              "mean_wall_ms": 2.7850441250000006,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 2664,
+              "total_wall_ms": 41767.434920000116,
+              "mean_wall_ms": 15.678466561561605,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 2664,
+              "total_wall_ms": 7016.155662000009,
+              "mean_wall_ms": 2.633692065315319,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 2648,
+              "total_wall_ms": 9760.538712000018,
+              "mean_wall_ms": 3.6860040453172274,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 2680,
+              "total_wall_ms": 0.7665369999999997,
+              "mean_wall_ms": 0.0002860212686567163,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.008444,
+              "mean_wall_ms": 0.00017591666666666667,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 666,
+              "total_wall_ms": 10862.712968,
+              "mean_wall_ms": 16.31037983183183,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 7992,
+              "total_wall_ms": 4591.161473999987,
+              "mean_wall_ms": 0.5744696539039023,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 2648,
+              "total_wall_ms": 5136.4609749999945,
+              "mean_wall_ms": 1.9397511234894238,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 666,
+              "total_wall_ms": 1217.2688179999996,
+              "mean_wall_ms": 1.8277309579579573,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 662,
+              "total_wall_ms": 21540.72545700002,
+              "mean_wall_ms": 32.53886020694867,
+              "baseline_present": true,
+              "export_start_ns": 1791399201237606912,
+              "export_end_ns": 1791399205238106112
+            }
+          ]
+        }
+      ],
+      "raw_requests_sha256": "c7df9e1f0ca24b0c9f848be0f1f4d6e668b43f5a25e98aa669cee3c4e567b506",
+      "stdout_sha256": "c4ca0854c7fd95886fa46d5a8995f1e5e24cbddd87fbe062d01c97178778c917",
+      "otlp_batches": [
+        {
+          "file": "batch-0.bin",
+          "received_realtime_ns": 1791399195243436311,
+          "content_encoding": "gzip",
+          "sha256": "f7548e79fad8ee4188af08dfc491f11fcdcdce747d080a9f4c94294a2ef534cd"
+        },
+        {
+          "file": "batch-1.bin",
+          "received_realtime_ns": 1791399196239449808,
+          "content_encoding": "gzip",
+          "sha256": "ccd869812d2872037e92eb315102d318df539b75827993820c74c8ab52037495"
+        },
+        {
+          "file": "batch-2.bin",
+          "received_realtime_ns": 1791399197239745173,
+          "content_encoding": "gzip",
+          "sha256": "4cdc37ce832465737784087f48a8d0aef24df2656f6809fe4e06a814b38802ea"
+        },
+        {
+          "file": "batch-3.bin",
+          "received_realtime_ns": 1791399198239859938,
+          "content_encoding": "gzip",
+          "sha256": "782c5133c71c34d7940ade9a756cb16fa89ecad08ea67829f23921f2af720f2e"
+        },
+        {
+          "file": "batch-4.bin",
+          "received_realtime_ns": 1791399199239735994,
+          "content_encoding": "gzip",
+          "sha256": "16c1bba223d5327553dc30f140412d251fa43f966d6318600894349c6623bd7a"
+        },
+        {
+          "file": "batch-5.bin",
+          "received_realtime_ns": 1791399200239729731,
+          "content_encoding": "gzip",
+          "sha256": "ac1103c1416e0f330e9ac9bebb266482a3a816b92249084d1e5b7eedc074ddff"
+        },
+        {
+          "file": "batch-6.bin",
+          "received_realtime_ns": 1791399201239616397,
+          "content_encoding": "gzip",
+          "sha256": "18ee8330c78c9ffbc57230cd488d52e28c2f8c5753dbb6897b57f9d1f6d3b923"
+        },
+        {
+          "file": "batch-7.bin",
+          "received_realtime_ns": 1791399202242085011,
+          "content_encoding": "gzip",
+          "sha256": "1e260230c496dc4338d95fd5b5b03673d0f18e71863cb7e8a70b440264c994da"
+        },
+        {
+          "file": "batch-8.bin",
+          "received_realtime_ns": 1791399203243319474,
+          "content_encoding": "gzip",
+          "sha256": "58f46402d586be4a3e6d675382a1e16f9c9796be225baa3db7313f46049a784a"
+        },
+        {
+          "file": "batch-9.bin",
+          "received_realtime_ns": 1791399204241000499,
+          "content_encoding": "gzip",
+          "sha256": "687bffa3c54675a331521da1f1344b7ccf3e55997a3737c993b1209d7f239df7"
+        },
+        {
+          "file": "batch-10.bin",
+          "received_realtime_ns": 1791399205240210401,
+          "content_encoding": "gzip",
+          "sha256": "b0128a497a1480890c5089c1035dbd5bda3db35c9b7f847b6945b8194252799a"
+        },
+        {
+          "file": "batch-11.bin",
+          "received_realtime_ns": 1791399206240222904,
+          "content_encoding": "gzip",
+          "sha256": "1cefef3258a71d4b5ee94d95a7a2179a26332e9011972d92afc0e8a819ab41ec"
+        },
+        {
+          "file": "batch-12.bin",
+          "received_realtime_ns": 1791399206822641135,
+          "content_encoding": "gzip",
+          "sha256": "b9071247748991cf8a73b36484d48ac94d52c8b396c69f82756292ca0e0154e8"
+        }
+      ]
+    },
+    {
+      "run": "run-3",
+      "tiers": [
+        {
+          "tier": "c1",
+          "mode": "closed_loop",
+          "concurrency": 1,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399213708691905,
+          "generation_end_realtime_ns": 1791399216708691905,
+          "end_realtime_ns": 1791399216722293799,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.013547932,
+          "drain_s": 0.013547932,
+          "planned_arrivals": 202,
+          "attempted": 202,
+          "completed_ok": 202,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 67.33333333333333,
+          "completions_during_generation_rps": 67.0,
+          "throughput_including_drain_rps": 67.03062455221635,
+          "latency_ms": {
+            "p50": 14.842201,
+            "p95": 16.041307,
+            "p99": 17.145355,
+            "max": 19.988595
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 14.842591,
+            "p95": 16.041818,
+            "p99": 17.145665,
+            "max": 19.989106
+          },
+          "launch_lateness_ms": {
+            "p50": 0.000431,
+            "p95": 0.000721,
+            "p99": 0.000821,
+            "max": 0.001383
+          }
+        },
+        {
+          "tier": "c8",
+          "mode": "closed_loop",
+          "concurrency": 8,
+          "target_rps": null,
+          "max_active": 64,
+          "start_realtime_ns": 1791399218727478784,
+          "generation_end_realtime_ns": 1791399221727478784,
+          "end_realtime_ns": 1791399221750366122,
+          "generation_s": 3.0,
+          "elapsed_including_drain_s": 3.022760249,
+          "drain_s": 0.022760249,
+          "planned_arrivals": 494,
+          "attempted": 494,
+          "completed_ok": 494,
+          "failed": 0,
+          "client_shed": 0,
+          "attempts_during_generation_rps": 164.66666666666666,
+          "completions_during_generation_rps": 162.0,
+          "throughput_including_drain_rps": 163.42678853323773,
+          "latency_ms": {
+            "p50": 40.746257,
+            "p95": 105.958435,
+            "p99": 197.86602,
+            "max": 246.177945
+          },
+          "scheduled_to_completion_ms": {
+            "p50": 40.746508,
+            "p95": 105.958976,
+            "p99": 197.866682,
+            "max": 246.179228
+          },
+          "launch_lateness_ms": {
+            "p50": 0.00037,
+            "p95": 0.000902,
+            "p99": 0.001412,
+            "max": 0.001924
+          }
+        }
+      ],
+      "stage_metrics": [
+        {
+          "tier": "c1",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.6047870000000002,
+              "mean_wall_ms": 0.0029939950495049515,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.6984719999999998,
+              "mean_wall_ms": 0.0034577821782178207,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.7659600000000001,
+              "mean_wall_ms": 0.003791881188118812,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 202,
+              "total_wall_ms": 3.3059960000000004,
+              "mean_wall_ms": 0.01636631683168317,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.40356999999999993,
+              "mean_wall_ms": 0.0019978712871287123,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 202,
+              "total_wall_ms": 4.257272999999999,
+              "mean_wall_ms": 0.021075608910891084,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 202,
+              "total_wall_ms": 1.2616429999999996,
+              "mean_wall_ms": 0.0062457574257425725,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.617452,
+              "mean_wall_ms": 0.0030566930693069305,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 202,
+              "total_wall_ms": 1.0918149999999993,
+              "mean_wall_ms": 0.005405024752475244,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 202,
+              "total_wall_ms": 1.5642919999999996,
+              "mean_wall_ms": 0.007744019801980196,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.103203,
+              "mean_wall_ms": 0.0005109059405940594,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.24038800000000002,
+              "mean_wall_ms": 0.0011900396039603962,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 202,
+              "total_wall_ms": 0.3021249999999998,
+              "mean_wall_ms": 0.0014956683168316823,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 202,
+              "total_wall_ms": 2670.8012979999985,
+              "mean_wall_ms": 13.22178860396039,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 202,
+              "total_wall_ms": 12.484893000000005,
+              "mean_wall_ms": 0.061806400990099035,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 206,
+              "total_wall_ms": 2.2675799999999997,
+              "mean_wall_ms": 0.011007669902912619,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 202,
+              "total_wall_ms": 38.50549599999999,
+              "mean_wall_ms": 0.1906212673267326,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 206,
+              "total_wall_ms": 763.7325939999998,
+              "mean_wall_ms": 3.707439776699028,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 206,
+              "total_wall_ms": 1575.0705960000003,
+              "mean_wall_ms": 7.645973766990292,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 1616,
+              "total_wall_ms": 1338.4013599999998,
+              "mean_wall_ms": 0.8282186633663365,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 21.55513199999999,
+              "mean_wall_ms": 1.3471957499999994,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 824,
+              "total_wall_ms": 5933.699459999992,
+              "mean_wall_ms": 7.201091577669893,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 824,
+              "total_wall_ms": 1031.1550710000004,
+              "mean_wall_ms": 1.2514017851941752,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 808,
+              "total_wall_ms": 1999.8770719999986,
+              "mean_wall_ms": 2.4750953861386122,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 840,
+              "total_wall_ms": 0.2823199999999996,
+              "mean_wall_ms": 0.00033609523809523766,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.007360999999999972,
+              "mean_wall_ms": 0.0001533541666666661,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 206,
+              "total_wall_ms": 1534.1160210000007,
+              "mean_wall_ms": 7.44716515048544,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 2472,
+              "total_wall_ms": 365.4859919999994,
+              "mean_wall_ms": 0.14785032038834928,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 808,
+              "total_wall_ms": 723.4912259999996,
+              "mean_wall_ms": 0.8954099331683164,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 206,
+              "total_wall_ms": 74.33673200000001,
+              "mean_wall_ms": 0.36085792233009717,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 202,
+              "total_wall_ms": 2683.4448169999987,
+              "mean_wall_ms": 13.284380282178212,
+              "baseline_present": true,
+              "export_start_ns": 1791399213185209088,
+              "export_end_ns": 1791399217185476096
+            }
+          ]
+        },
+        {
+          "tier": "c8",
+          "stages": [
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_bucket_validate"
+              },
+              "observations": 494,
+              "total_wall_ms": 1.4944370000000022,
+              "mean_wall_ms": 0.0030251761133603286,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_cache_invalidate_before"
+              },
+              "observations": 494,
+              "total_wall_ms": 1.9905740000000014,
+              "mean_wall_ms": 0.004029502024291501,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_capacity_update"
+              },
+              "observations": 494,
+              "total_wall_ms": 1.4222880000000007,
+              "mean_wall_ms": 0.0028791255060728756,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_encryption_prepare"
+              },
+              "observations": 494,
+              "total_wall_ms": 11.088787000000004,
+              "mean_wall_ms": 0.02244693724696357,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_object_lock_config_lookup"
+              },
+              "observations": 494,
+              "total_wall_ms": 1.0718129999999981,
+              "mean_wall_ms": 0.0021696619433198344,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_post_store_bookkeeping"
+              },
+              "observations": 494,
+              "total_wall_ms": 8.453556000000015,
+              "mean_wall_ms": 0.01711246153846157,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_put_opts_build"
+              },
+              "observations": 494,
+              "total_wall_ms": 3.306567000000001,
+              "mean_wall_ms": 0.006693455465587047,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_quota_check"
+              },
+              "observations": 494,
+              "total_wall_ms": 1.6463800000000006,
+              "mean_wall_ms": 0.003332753036437248,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_replication_decision"
+              },
+              "observations": 494,
+              "total_wall_ms": 2.843104,
+              "mean_wall_ms": 0.005755271255060729,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_request_shape"
+              },
+              "observations": 494,
+              "total_wall_ms": 4.360428000000004,
+              "mean_wall_ms": 0.008826777327935232,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_response_build"
+              },
+              "observations": 494,
+              "total_wall_ms": 0.19284799999999996,
+              "mean_wall_ms": 0.0003903805668016194,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_sse_config_lookup"
+              },
+              "observations": 494,
+              "total_wall_ms": 0.7079789999999997,
+              "mean_wall_ms": 0.0014331558704453436,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_lookup"
+              },
+              "observations": 494,
+              "total_wall_ms": 0.6490959999999999,
+              "mean_wall_ms": 0.0013139595141700403,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "app_store_put"
+              },
+              "observations": 494,
+              "total_wall_ms": 21618.922392000008,
+              "mean_wall_ms": 43.76300079352228,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "ingress_prepare"
+              },
+              "observations": 494,
+              "total_wall_ms": 40.477566000000024,
+              "mean_wall_ms": 0.08193839271255066,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "put_object_commit_namespace_lock_wait"
+              },
+              "observations": 498,
+              "total_wall_ms": 7.463304999999996,
+              "mean_wall_ms": 0.01498655622489959,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "request_ingress_to_context"
+              },
+              "observations": 494,
+              "total_wall_ms": 88.30344499999985,
+              "mean_wall_ms": 0.1787519129554653,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_encode"
+              },
+              "observations": 498,
+              "total_wall_ms": 5807.583816000008,
+              "mean_wall_ms": 11.66181489156628,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename"
+              },
+              "observations": 498,
+              "total_wall_ms": 11182.256142999988,
+              "mean_wall_ms": 22.454329604417648,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_ancestor_dir_fsync"
+              },
+              "observations": 3952,
+              "total_wall_ms": 5406.89855000002,
+              "mean_wall_ms": 1.3681423456477784,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_backup_dir_fsync"
+              },
+              "observations": 16,
+              "total_wall_ms": 51.93547199999999,
+              "mean_wall_ms": 3.2459669999999994,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_disk_wait"
+              },
+              "observations": 1992,
+              "total_wall_ms": 40405.46789500002,
+              "mean_wall_ms": 20.283869425200816,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_dst_dir_fsync"
+              },
+              "observations": 1992,
+              "total_wall_ms": 6409.560999999993,
+              "mean_wall_ms": 3.2176511044176674,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_fdatasync"
+              },
+              "observations": 1976,
+              "total_wall_ms": 9474.26776499998,
+              "mean_wall_ms": 4.794669921558695,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_file_sync_permit_wait"
+              },
+              "observations": 2008,
+              "total_wall_ms": 0.676925,
+              "mean_wall_ms": 0.0003371140438247012,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_global_file_sync_permit_wait"
+              },
+              "observations": 48,
+              "total_wall_ms": 0.00917699999999999,
+              "mean_wall_ms": 0.00019118749999999982,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_quorum_wait"
+              },
+              "observations": 498,
+              "total_wall_ms": 10561.210509000008,
+              "mean_wall_ms": 21.207250018072305,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_rename_syscall"
+              },
+              "observations": 5976,
+              "total_wall_ms": 7119.223465000009,
+              "mean_wall_ms": 1.1913024539825985,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_rename_src_dir_fsync"
+              },
+              "observations": 1976,
+              "total_wall_ms": 5125.377251999985,
+              "mean_wall_ms": 2.593814398785417,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "set_disk_writer_setup"
+              },
+              "observations": 498,
+              "total_wall_ms": 1454.9920939999986,
+              "mean_wall_ms": 2.921670871485941,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            },
+            {
+              "metric": "rustfs_s3_put_object_stage_duration_ms",
+              "attributes": {
+                "stage": "store_commit"
+              },
+              "observations": 494,
+              "total_wall_ms": 21668.234751000015,
+              "mean_wall_ms": 43.862823382591124,
+              "baseline_present": true,
+              "export_start_ns": 1791399218185577984,
+              "export_end_ns": 1791399222185828864
+            }
+          ]
+        }
+      ],
+      "raw_requests_sha256": "5ccfc7273b8180a99ed3ef0968fe553c09d20840f3bc7633bf656c13bf8d613d",
+      "stdout_sha256": "7b11a39f16082f3fc5ab544abf6ca2bd0898c5071970be23e8861e5b5b1741fa",
+      "otlp_batches": [
+        {
+          "file": "batch-0.bin",
+          "received_realtime_ns": 1791399212188713807,
+          "content_encoding": "gzip",
+          "sha256": "9728b5b8ce377eea012e9fe1a25b35a356a9def725295b14bf96e626c7a210f0"
+        },
+        {
+          "file": "batch-1.bin",
+          "received_realtime_ns": 1791399213187395715,
+          "content_encoding": "gzip",
+          "sha256": "0869ef4c2db7b7ae7824597e933ff6448c3e42a0498228bbbb419e7b4fb792f0"
+        },
+        {
+          "file": "batch-2.bin",
+          "received_realtime_ns": 1791399214187561937,
+          "content_encoding": "gzip",
+          "sha256": "1b94df061e3ac00fcd684a80fd23542364d5d91a8f1cbe239baca66ba74cbf96"
+        },
+        {
+          "file": "batch-3.bin",
+          "received_realtime_ns": 1791399215187752415,
+          "content_encoding": "gzip",
+          "sha256": "9df4bbffb74f2d8c344154174f35622637dfa83284bf33c08114ed7c9af2407d"
+        },
+        {
+          "file": "batch-4.bin",
+          "received_realtime_ns": 1791399216187883671,
+          "content_encoding": "gzip",
+          "sha256": "bd4f95fe8811d6816368b9bb7b7980448705124b38ad0907894ba90b21eb156e"
+        },
+        {
+          "file": "batch-5.bin",
+          "received_realtime_ns": 1791399217187712798,
+          "content_encoding": "gzip",
+          "sha256": "188b0c614a60a1084bb0400bf7a30c07c7b5c1464227c9a51eac367466403abf"
+        },
+        {
+          "file": "batch-6.bin",
+          "received_realtime_ns": 1791399218187857980,
+          "content_encoding": "gzip",
+          "sha256": "3377b135f9c7e5f9021fcc4d03611ec0520b3ed9b50990602a07fb4c36c9589e"
+        },
+        {
+          "file": "batch-7.bin",
+          "received_realtime_ns": 1791399219189638490,
+          "content_encoding": "gzip",
+          "sha256": "e2986c6fa8ffb081e12c696002bb3f991a54308c4051f509806cd4292b25dae3"
+        },
+        {
+          "file": "batch-8.bin",
+          "received_realtime_ns": 1791399220188805492,
+          "content_encoding": "gzip",
+          "sha256": "227050fe605864540cbea7ef6d5f6b26fa3370430d2a508db1546afd874b06ef"
+        },
+        {
+          "file": "batch-9.bin",
+          "received_realtime_ns": 1791399221191159430,
+          "content_encoding": "gzip",
+          "sha256": "5912352415ec075127dc63f4946f64fd35df63a431da9bc7f33de44916cedc3b"
+        },
+        {
+          "file": "batch-10.bin",
+          "received_realtime_ns": 1791399222188025302,
+          "content_encoding": "gzip",
+          "sha256": "3e1e6a072625407aae9682f70a2c24a05fba25da9c0bd9d85291088a95c6f784"
+        },
+        {
+          "file": "batch-11.bin",
+          "received_realtime_ns": 1791399223188297213,
+          "content_encoding": "gzip",
+          "sha256": "a8eb0d2f5ffbc3041d6112931562f93eaf4980d69de1a36635b8d68a3b682ef6"
+        },
+        {
+          "file": "batch-12.bin",
+          "received_realtime_ns": 1791399223779689263,
+          "content_encoding": "gzip",
+          "sha256": "c5093e13cc1fe1d05b02245855839341d9948ed87d08803151d2b2370c253f25"
+        }
+      ]
+    }
+  ]
+}
