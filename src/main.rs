@@ -1058,9 +1058,11 @@ struct LoadTierMetrics {
     concurrency: usize,
     offered_load_rps: f64,
     achieved_rps: f64,
+    planned_requests: usize,
     attempted_requests: usize,
     completed_requests: usize,
     failed_requests: usize,
+    unattempted_requests: usize,
     lat_min_ms: f64,
     lat_p50_ms: f64,
     lat_p95_ms: f64,
@@ -1081,6 +1083,24 @@ fn run_network_service_load_tier(
     client_pacing: Duration,
     chunk_compute: Duration,
 ) -> LoadTierMetrics {
+    run_network_service_load_tier_internal(
+        workers,
+        concurrency,
+        requests_per_client,
+        client_pacing,
+        chunk_compute,
+        None,
+    )
+}
+
+fn run_network_service_load_tier_internal(
+    workers: usize,
+    concurrency: usize,
+    requests_per_client: usize,
+    client_pacing: Duration,
+    chunk_compute: Duration,
+    target_addr_override: Option<std::net::SocketAddr>,
+) -> LoadTierMetrics {
     let session = InstrumentedSession::new(workers);
     let stock_rec = session.stock_rec.clone();
 
@@ -1099,7 +1119,7 @@ fn run_network_service_load_tier(
 
     session.runtime.as_ref().unwrap().block_on(async {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
+        let addr = target_addr_override.unwrap_or_else(|| listener.local_addr().unwrap());
 
         let s_shutdown = shutdown_signal.clone();
         let accept_handle = dial9_tokio_telemetry::spawn(async move {
@@ -1158,12 +1178,15 @@ fn run_network_service_load_tier(
             let f_count = failed_count.clone();
 
             client_threads.push(std::thread::spawn(move || {
+                if requests_per_client == 0 {
+                    return;
+                }
                 let stream_res = std::net::TcpStream::connect(addr);
                 let mut stream = match stream_res {
                     Ok(s) => s,
                     Err(_) => {
-                        f_count.fetch_add(requests_per_client, Ordering::SeqCst);
-                        a_count.fetch_add(requests_per_client, Ordering::SeqCst);
+                        a_count.fetch_add(1, Ordering::SeqCst);
+                        f_count.fetch_add(1, Ordering::SeqCst);
                         return;
                     }
                 };
@@ -1297,13 +1320,26 @@ fn run_network_service_load_tier(
         0.0
     };
 
+    let planned_requests = concurrency * requests_per_client;
+    let unattempted_requests = planned_requests.saturating_sub(attempted);
+    assert_eq!(
+        attempted,
+        completed + failed,
+        "invariant violated: attempted ({}) != completed ({}) + failed ({})",
+        attempted,
+        completed,
+        failed
+    );
+
     LoadTierMetrics {
         concurrency,
         offered_load_rps: offered_rps,
         achieved_rps,
+        planned_requests,
         attempted_requests: attempted,
         completed_requests: completed,
         failed_requests: failed,
+        unattempted_requests,
         lat_min_ms: l_min,
         lat_p50_ms: l_p50,
         lat_p95_ms: l_p95,
@@ -1639,10 +1675,10 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
     ];
 
     println!(
-        "Conc  Offered(rps)  Achieved(rps)  Attempted  Completed  Failed  Lat p50(ms)  Lat p95(ms)  Lat max(ms)  Stock p50  Stock p95  Dial9 p50  Dial9 p95"
+        "Conc  Offered(rps)  Achieved(rps)  Planned/iter  Attempted/iter  Completed/iter  Fail(total/rate)  Unattempted  Lat p50(ms)  Lat p95(ms)  Lat max(ms)  Stock p50  Stock p95  Dial9 p50  Dial9 p95"
     );
     println!(
-        "----------------------------------------------------------------------------------------------------------------------------------------------------"
+        "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
     );
 
     for (conc, reqs_per_client, pacing, _desc) in tiers {
@@ -1709,7 +1745,7 @@ fn run_network_service_load_sweep(workers: usize, iterations: usize) {
         );
     }
     println!(
-        "----------------------------------------------------------------------------------------------------------------------------------------------------"
+        "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
     );
     println!("Closed-Loop Load Testing Methodology & Discrepancy Notes:");
     println!(
@@ -2328,8 +2364,42 @@ fn main() {
 mod tests {
     use super::*;
 
+    static TEST_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn test_failure_count_reporting() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let closed_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed_addr = closed_listener.local_addr().unwrap();
+        drop(closed_listener);
+
+        let metrics = run_network_service_load_tier_internal(
+            2,
+            2,
+            10,
+            Duration::from_millis(1),
+            Duration::from_millis(1),
+            Some(closed_addr),
+        );
+
+        assert_eq!(metrics.concurrency, 2);
+        assert_eq!(metrics.attempted_requests, 2);
+        assert_eq!(metrics.failed_requests, 2);
+        assert_eq!(metrics.completed_requests, 0);
+        assert_eq!(metrics.unattempted_requests, 18);
+        assert_eq!(
+            metrics.attempted_requests,
+            metrics.completed_requests + metrics.failed_requests
+        );
+
+        let fail_rate = metrics.failed_requests as f64 / metrics.attempted_requests as f64;
+        assert_eq!(fail_rate, 1.0);
+    }
+
     #[test]
     fn test_network_service_load_tiers() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let compute = Duration::from_millis(5);
 
         // Tier 1: Concurrency 1 baseline
@@ -2337,6 +2407,10 @@ mod tests {
         assert_eq!(
             baseline.failed_requests, 0,
             "baseline tier must complete with 0 failures"
+        );
+        assert_eq!(
+            baseline.unattempted_requests, 0,
+            "baseline tier must have 0 unattempted requests"
         );
         assert_eq!(
             baseline.completed_requests, baseline.attempted_requests,
@@ -2348,6 +2422,10 @@ mod tests {
         assert_eq!(
             oversubscribed.failed_requests, 0,
             "oversubscribed tier must complete with 0 failures"
+        );
+        assert_eq!(
+            oversubscribed.unattempted_requests, 0,
+            "oversubscribed tier must have 0 unattempted requests"
         );
         assert_eq!(
             oversubscribed.completed_requests, oversubscribed.attempted_requests,
@@ -2366,6 +2444,7 @@ mod tests {
 
     #[test]
     fn test_controlled_saturation_driver_delay() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let workers = 2;
         let session = InstrumentedSession::new(workers);
         let stock_rec = session.stock_rec.clone();
