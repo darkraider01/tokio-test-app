@@ -1052,6 +1052,83 @@ fn simulate_chunk_processing(duration: Duration) -> u32 {
     hash
 }
 
+// Pinned Tokio readiness bitflags (tokio/src/io/ready.rs:8-10,128)
+// ScheduledIo::wake only dispatches read wakers if `ready.is_readable()`
+// (i.e. READABLE | READ_CLOSED flags are set).
+const TOKIO_READABLE_FLAG: usize = 0b0_01;
+const TOKIO_READ_CLOSED_FLAG: usize = 0b0_0100;
+
+#[inline]
+fn is_readable_readiness(ready: usize) -> bool {
+    (ready & (TOKIO_READABLE_FLAG | TOKIO_READ_CLOSED_FLAG)) != 0
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum ReadinessAttribution {
+    Unambiguous { readiness_ns: u64, token: usize },
+    Ambiguous { candidate_tokens: Vec<usize> },
+    Unavailable,
+}
+
+fn correlate_unambiguous_readiness(
+    events: &[ProbeEvent],
+    target_tid: u64,
+    ext_write_start: u64,
+) -> ReadinessAttribution {
+    let target_wake = events.iter().enumerate().find(|(_, ev)| {
+        matches!(
+            ev,
+            ProbeEvent::TaskWakeByVal { task_id, submitted: true, t_ns }
+            | ProbeEvent::TaskWakeByRef { task_id, submitted: true, t_ns }
+            if *task_id == target_tid && *t_ns >= ext_write_start
+        )
+    });
+    let (w_idx, _wake_t_ns) = match target_wake {
+        Some((idx, ProbeEvent::TaskWakeByVal { t_ns, .. }))
+        | Some((idx, ProbeEvent::TaskWakeByRef { t_ns, .. })) => (idx, *t_ns),
+        _ => return ReadinessAttribution::Unavailable,
+    };
+
+    // Filter events occurring between stimulus and wake that satisfy readable readiness semantics.
+    let candidates: Vec<(u64, usize)> = events[..w_idx]
+        .iter()
+        .filter_map(|ev| {
+            if let ProbeEvent::IoReadinessObserved {
+                t_ns, token, ready, ..
+            } = ev
+            {
+                if *t_ns >= ext_write_start && is_readable_readiness(*ready) {
+                    Some((*t_ns, *token))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if candidates.is_empty() {
+        return ReadinessAttribution::Unavailable;
+    }
+
+    // Do not assume one distinct token means one relevant event.
+    // If multiple candidate readiness events occurred, attribution is ambiguous.
+    if candidates.len() > 1 {
+        let mut distinct: Vec<usize> = candidates.iter().map(|(_, tok)| *tok).collect();
+        distinct.sort_unstable();
+        distinct.dedup();
+        return ReadinessAttribution::Ambiguous {
+            candidate_tokens: distinct,
+        };
+    }
+
+    ReadinessAttribution::Unambiguous {
+        readiness_ns: candidates[0].0,
+        token: candidates[0].1,
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
 struct LoadTierMetrics {
@@ -1497,30 +1574,27 @@ fn test_network_service_workload(workers: usize) {
         }
     }
 
-    // Correlate the specific IoReadinessObserved event that woke target_tid
-    let mut target_wake_idx = None;
-    for (idx, ev) in gt_events.iter().enumerate() {
-        if let ProbeEvent::TaskWakeByVal {
-            t_ns,
-            task_id,
-            submitted,
-        } = ev
-        {
-            if *task_id == target_tid && *submitted && *t_ns >= ext_write_start {
-                target_wake_idx = Some(idx);
-                break;
-            }
+    let attribution = correlate_unambiguous_readiness(&gt_events, target_tid, ext_write_start);
+    match attribution {
+        ReadinessAttribution::Unambiguous {
+            readiness_ns,
+            token,
+        } => {
+            tokio_io_ready = readiness_ns;
+            println!(
+                "  [Readiness Attribution: Unambiguous token {} at +{:.3} ms]",
+                token,
+                readiness_ns as f64 / 1_000_000.0
+            );
         }
-    }
-
-    if let Some(w_idx) = target_wake_idx {
-        for ev in gt_events[..w_idx].iter().rev() {
-            if let ProbeEvent::IoReadinessObserved { t_ns, .. } = ev {
-                if *t_ns >= ext_write_start {
-                    tokio_io_ready = *t_ns;
-                    break;
-                }
-            }
+        ReadinessAttribution::Ambiguous { candidate_tokens } => {
+            println!(
+                "  [Readiness Attribution: AMBIGUOUS (multiple candidate tokens {:?})]",
+                candidate_tokens
+            );
+        }
+        ReadinessAttribution::Unavailable => {
+            println!("  [Readiness Attribution: UNAVAILABLE (no candidate event found)]");
         }
     }
 
@@ -2367,6 +2441,135 @@ mod tests {
     static TEST_SESSION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
+    fn test_ambiguous_readiness_rejection() {
+        let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Reproduction case from review:
+        // token 1: writable readiness at t=100 (ready = WRITABLE = 2)
+        // token 1: readable readiness at t=110 (ready = READABLE = 1)
+        // target task wake at t=120
+        // Helper must attribute readiness to t=110 (the readable event), ignoring writable
+        let write_read_events = vec![
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 100,
+                token: 1,
+                ready: 2, // Writable flag only
+                count: 1,
+            },
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 110,
+                token: 1,
+                ready: 1, // Readable flag
+                count: 1,
+            },
+            ProbeEvent::TaskWakeByVal {
+                t_ns: 120,
+                task_id: 42,
+                submitted: true,
+            },
+        ];
+        let attr_flags = correlate_unambiguous_readiness(&write_read_events, 42, 50);
+        assert_eq!(
+            attr_flags,
+            ReadinessAttribution::Unambiguous {
+                readiness_ns: 110,
+                token: 1
+            },
+            "writable event must be excluded by readiness flags, attributing to readable event at 110"
+        );
+
+        // Multiple readable events for the same token must be rejected as ambiguous
+        let multi_readable_events = vec![
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 100,
+                token: 1,
+                ready: 1,
+                count: 1,
+            },
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 110,
+                token: 1,
+                ready: 1,
+                count: 1,
+            },
+            ProbeEvent::TaskWakeByVal {
+                t_ns: 120,
+                task_id: 42,
+                submitted: true,
+            },
+        ];
+        let attr_multi_read = correlate_unambiguous_readiness(&multi_readable_events, 42, 50);
+        assert_eq!(
+            attr_multi_read,
+            ReadinessAttribution::Ambiguous {
+                candidate_tokens: vec![1]
+            },
+            "multiple readable events on the same token must be rejected as ambiguous"
+        );
+
+        // Multiple distinct candidate tokens between stimulus and wake must be rejected
+        let events = vec![
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 100,
+                token: 1,
+                ready: 1,
+                count: 1,
+            },
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 110,
+                token: 2,
+                ready: 1,
+                count: 1,
+            },
+            ProbeEvent::TaskWakeByVal {
+                t_ns: 120,
+                task_id: 42,
+                submitted: true,
+            },
+        ];
+        let attr = correlate_unambiguous_readiness(&events, 42, 50);
+        assert_eq!(
+            attr,
+            ReadinessAttribution::Ambiguous {
+                candidate_tokens: vec![1, 2]
+            },
+            "multiple distinct candidate tokens must be rejected as ambiguous"
+        );
+
+        // Missing readiness candidate
+        let attr_missing = correlate_unambiguous_readiness(&events, 42, 115);
+        assert_eq!(
+            attr_missing,
+            ReadinessAttribution::Unavailable,
+            "missing candidate readiness must be reported as unavailable"
+        );
+
+        // Single unambiguous token
+        let single_event = vec![
+            ProbeEvent::IoReadinessObserved {
+                t_ns: 100,
+                token: 1,
+                ready: 1,
+                count: 1,
+            },
+            ProbeEvent::TaskWakeByVal {
+                t_ns: 120,
+                task_id: 42,
+                submitted: true,
+            },
+        ];
+        let attr_single = correlate_unambiguous_readiness(&single_event, 42, 50);
+        assert_eq!(
+            attr_single,
+            ReadinessAttribution::Unambiguous {
+                readiness_ns: 100,
+                token: 1
+            },
+            "single candidate token must be unambiguously attributed"
+        );
+    }
+
+    #[test]
     fn test_failure_count_reporting() {
         let _guard = TEST_SESSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -2454,7 +2657,7 @@ mod tests {
         let shutdown_signal = Arc::new(AtomicBool::new(false));
 
         let mut ext_write_start = 0u64;
-        let mut tokio_io_ready = 0u64;
+        let mut ext_write_done = 0u64;
         let mut task_sched = 0u64;
         let mut task_polled = 0u64;
 
@@ -2509,6 +2712,10 @@ mod tests {
                 use std::io::{Read, Write};
                 ground_truth_probes::record_external_stimulus("WRITE_BEGIN", "Test probe write");
                 probe_stream.write_all(&req).unwrap();
+                ground_truth_probes::record_external_stimulus(
+                    "WRITE_DONE",
+                    "Test probe write done",
+                );
                 let mut resp = [0u8; 8];
                 probe_stream.read_exact(&mut resp).unwrap();
             });
@@ -2533,6 +2740,9 @@ mod tests {
                 ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_BEGIN" => {
                     ext_write_start = *t_ns;
                 }
+                ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_DONE" => {
+                    ext_write_done = *t_ns;
+                }
                 ProbeEvent::TaskScheduled { t_ns, task_id, .. }
                     if *task_id == target_tid && task_sched == 0 && *t_ns >= ext_write_start =>
                 {
@@ -2547,37 +2757,23 @@ mod tests {
             }
         }
 
-        // Correlate the specific IoReadinessObserved event that woke target_tid
-        let mut target_wake_idx = None;
-        for (idx, ev) in gt_events.iter().enumerate() {
-            if let ProbeEvent::TaskWakeByVal {
-                t_ns,
-                task_id,
-                submitted,
-            } = ev
-            {
-                if *task_id == target_tid && *submitted && *t_ns >= ext_write_start {
-                    target_wake_idx = Some(idx);
-                    break;
-                }
-            }
-        }
-
-        if let Some(w_idx) = target_wake_idx {
-            for ev in gt_events[..w_idx].iter().rev() {
-                if let ProbeEvent::IoReadinessObserved { t_ns, .. } = ev {
-                    if *t_ns >= ext_write_start {
-                        tokio_io_ready = *t_ns;
-                        break;
-                    }
-                }
-            }
-        }
+        let attribution = correlate_unambiguous_readiness(&gt_events, target_tid, ext_write_start);
+        let tokio_io_ready = match attribution {
+            ReadinessAttribution::Unambiguous { readiness_ns, .. } => readiness_ns,
+            other => panic!(
+                "expected unambiguous readiness for target task {}, got {:?}",
+                target_tid, other
+            ),
+        };
 
         assert!(ext_write_start > 0, "write start must be recorded");
         assert!(
-            tokio_io_ready > ext_write_start,
-            "driver readiness must occur after write"
+            tokio_io_ready >= ext_write_start,
+            "driver readiness observation must occur after WRITE_BEGIN"
+        );
+        assert!(
+            ext_write_done >= ext_write_start,
+            "WRITE_DONE must occur at or after WRITE_BEGIN"
         );
         let delta_driver_ms = (tokio_io_ready - ext_write_start) as f64 / 1_000_000.0;
 
