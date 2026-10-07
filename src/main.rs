@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -1058,25 +1058,26 @@ struct LoadTierMetrics {
     concurrency: usize,
     offered_load_rps: f64,
     achieved_rps: f64,
-    total_requests: usize,
-    successful_requests: usize,
+    attempted_requests: usize,
+    completed_requests: usize,
     failed_requests: usize,
     lat_min_ms: f64,
     lat_p50_ms: f64,
     lat_p95_ms: f64,
     lat_p99_ms: f64,
     lat_max_ms: f64,
-    driver_delay_p50_ms: f64,
-    driver_delay_p95_ms: f64,
-    driver_delay_max_ms: f64,
-    stock_sched_p50_ms: f64,
-    dial9_delay_p50_ms: f64,
+    handler_stock_sched_p50_ms: f64,
+    handler_stock_sched_p95_ms: f64,
+    handler_stock_sched_max_ms: f64,
+    handler_dial9_delay_p50_ms: f64,
+    handler_dial9_delay_p95_ms: f64,
+    handler_dial9_delay_max_ms: f64,
 }
 
 fn run_network_service_load_tier(
     workers: usize,
     concurrency: usize,
-    total_requests: usize,
+    requests_per_client: usize,
     client_pacing: Duration,
     chunk_compute: Duration,
 ) -> LoadTierMetrics {
@@ -1086,8 +1087,11 @@ fn run_network_service_load_tier(
     let server_shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_signal = server_shutdown.clone();
 
+    let handler_task_ids = Arc::new(Mutex::new(std::collections::HashSet::new()));
+    let h_ids = handler_task_ids.clone();
+
     let client_latencies = Arc::new(Mutex::new(Vec::new()));
-    let client_send_times: Arc<Mutex<Vec<(u64, u64)>>> = Arc::new(Mutex::new(Vec::new()));
+    let attempted_count = Arc::new(AtomicUsize::new(0));
     let completed_count = Arc::new(AtomicUsize::new(0));
     let failed_count = Arc::new(AtomicUsize::new(0));
 
@@ -1103,7 +1107,7 @@ fn run_network_service_load_tier(
                 match listener.accept().await {
                     Ok((socket, _)) => {
                         let conn_shutdown = s_shutdown.clone();
-                        dial9_tokio_telemetry::spawn(async move {
+                        let conn_task = dial9_tokio_telemetry::spawn(async move {
                             let mut socket = socket;
                             let _ = socket.set_nodelay(true);
                             let mut req_buf = [0u8; 8];
@@ -1130,24 +1134,26 @@ fn run_network_service_load_tier(
                                 }
                             }
                         });
+                        if let Ok(tid) = conn_task.id().to_string().parse::<u64>() {
+                            h_ids.lock().unwrap().insert(tid);
+                        }
                     }
                     Err(_) => break,
                 }
             }
         });
 
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(15)).await;
 
         stock_rec.reset();
         ground_truth_probes::reset_base_time();
         ground_truth_probes::enable();
 
-        let requests_per_client = (total_requests / concurrency).max(1);
         let mut client_threads = Vec::new();
 
         for client_idx in 0..concurrency {
             let lat_sink = client_latencies.clone();
-            let send_sink = client_send_times.clone();
+            let a_count = attempted_count.clone();
             let c_count = completed_count.clone();
             let f_count = failed_count.clone();
 
@@ -1157,6 +1163,7 @@ fn run_network_service_load_tier(
                     Ok(s) => s,
                     Err(_) => {
                         f_count.fetch_add(requests_per_client, Ordering::SeqCst);
+                        a_count.fetch_add(requests_per_client, Ordering::SeqCst);
                         return;
                     }
                 };
@@ -1169,6 +1176,7 @@ fn run_network_service_load_tier(
                     if !client_pacing.is_zero() && req_i > 0 {
                         std::thread::sleep(client_pacing);
                     }
+                    a_count.fetch_add(1, Ordering::SeqCst);
                     let req_id = ((client_idx * 100_000) + req_i) as u32;
                     let compute_us = chunk_compute.as_micros() as u32;
 
@@ -1177,18 +1185,10 @@ fn run_network_service_load_tier(
                     req_buf[4..8].copy_from_slice(&compute_us.to_le_bytes());
 
                     let t_send = ground_truth_probes::now_ns();
-                    ground_truth_probes::record_external_stimulus(
-                        "WRITE_BEGIN",
-                        "Client request write",
-                    );
                     if stream.write_all(&req_buf).is_err() {
                         f_count.fetch_add(1, Ordering::SeqCst);
                         break;
                     }
-                    ground_truth_probes::record_external_stimulus(
-                        "WRITE_DONE",
-                        "Client request sent",
-                    );
 
                     let mut resp_buf = [0u8; 8];
                     if stream.read_exact(&mut resp_buf).is_err() {
@@ -1196,10 +1196,17 @@ fn run_network_service_load_tier(
                         break;
                     }
                     let t_recv = ground_truth_probes::now_ns();
-                    let lat_ms = t_recv.saturating_sub(t_send) as f64 / 1_000_000.0;
+                    let resp_id =
+                        u32::from_le_bytes([resp_buf[0], resp_buf[1], resp_buf[2], resp_buf[3]]);
+                    let resp_hash =
+                        u32::from_le_bytes([resp_buf[4], resp_buf[5], resp_buf[6], resp_buf[7]]);
+                    if resp_id != req_id || resp_hash == 0 {
+                        f_count.fetch_add(1, Ordering::SeqCst);
+                        break;
+                    }
 
+                    let lat_ms = t_recv.saturating_sub(t_send) as f64 / 1_000_000.0;
                     lat_sink.lock().unwrap().push(lat_ms);
-                    send_sink.lock().unwrap().push((t_send, t_recv));
                     c_count.fetch_add(1, Ordering::SeqCst);
                 }
             }));
@@ -1215,11 +1222,11 @@ fn run_network_service_load_tier(
     });
 
     let tier_duration = tier_start.elapsed().as_secs_f64();
-    let (gt_events, stock_events, dial9_events) = session.finish();
+    let (_gt_events, stock_events, dial9_events) = session.finish();
 
+    let attempted = attempted_count.load(Ordering::SeqCst);
     let completed = completed_count.load(Ordering::SeqCst);
     let failed = failed_count.load(Ordering::SeqCst);
-    let total = completed + failed;
 
     let mut lat_stats = Stats::default();
     for lat in client_latencies.lock().unwrap().iter() {
@@ -1227,42 +1234,57 @@ fn run_network_service_load_tier(
     }
     let (l_min, l_p50, l_p95, l_p99, l_max) = lat_stats.summarize_with_p99();
 
-    let mut io_ready_timestamps: Vec<u64> = gt_events
-        .iter()
-        .filter_map(|ev| match ev {
-            ProbeEvent::IoReadinessObserved { t_ns, .. } => Some(*t_ns),
-            _ => None,
-        })
-        .collect();
-    io_ready_timestamps.sort_unstable();
-
-    let mut driver_delay_stats = Stats::default();
-    let send_times = client_send_times.lock().unwrap();
-    for (t_send, t_recv) in send_times.iter() {
-        if let Some(&t_ready) = io_ready_timestamps
-            .iter()
-            .find(|&&t| t >= *t_send && t <= *t_recv)
-        {
-            let delay_ms = t_ready.saturating_sub(*t_send) as f64 / 1_000_000.0;
-            driver_delay_stats.add(delay_ms);
-        }
-    }
-    let (_, dd_p50, dd_p95, _, dd_max) = driver_delay_stats.summarize_with_p99();
-
+    // Filter Stock Tokio schedule latency strictly for the identified handler tasks
+    let target_tids = handler_task_ids.lock().unwrap().clone();
     let mut stock_sched_stats = Stats::default();
     for ev in &stock_events {
-        if let Some(lat_ns) = ev.schedule_latency_ns {
-            stock_sched_stats.add(lat_ns as f64 / 1_000_000.0);
+        if let Some(tid) = ev.task_id {
+            if target_tids.contains(&tid) {
+                if let Some(lat_ns) = ev.schedule_latency_ns {
+                    stock_sched_stats.add(lat_ns as f64 / 1_000_000.0);
+                }
+            }
         }
     }
-    let (_, stock_p50, _, _, _) = stock_sched_stats.summarize_with_p99();
+    let (_, s_p50, s_p95, _, s_max) = stock_sched_stats.summarize_with_p99();
 
-    let dial9_delays = compute_wake_to_poll_delays(&dial9_events);
+    // Filter Dial9 wake-to-poll delays strictly for the identified handler tasks
+    let mut dial9_wakes_by_task: std::collections::HashMap<u64, Vec<u64>> =
+        std::collections::HashMap::new();
+    for e in &dial9_events {
+        if let Dial9Event::WakeEvent(w) = e {
+            if target_tids.contains(&w.woken_task_id) {
+                dial9_wakes_by_task
+                    .entry(w.woken_task_id)
+                    .or_default()
+                    .push(w.timestamp_ns);
+            }
+        }
+    }
+    for v in dial9_wakes_by_task.values_mut() {
+        v.sort_unstable();
+    }
+    let mut dial9_handler_delays = Vec::new();
+    for e in &dial9_events {
+        if let Dial9Event::PollStartEvent(p) = e {
+            if target_tids.contains(&p.task_id) {
+                if let Some(wakes) = dial9_wakes_by_task.get(&p.task_id) {
+                    let idx = wakes.partition_point(|&t| t <= p.timestamp_ns);
+                    if idx > 0 {
+                        let delay = p.timestamp_ns - wakes[idx - 1];
+                        if delay > 0 && delay < 1_000_000_000 {
+                            dial9_handler_delays.push(delay);
+                        }
+                    }
+                }
+            }
+        }
+    }
     let mut dial9_stats = Stats::default();
-    for d_ns in dial9_delays {
+    for d_ns in dial9_handler_delays {
         dial9_stats.add(d_ns as f64 / 1_000_000.0);
     }
-    let (_, dial9_p50, _, _, _) = dial9_stats.summarize_with_p99();
+    let (_, d_p50, d_p95, _, d_max) = dial9_stats.summarize_with_p99();
 
     let achieved_rps = if tier_duration > 0.0 {
         completed as f64 / tier_duration
@@ -1270,7 +1292,7 @@ fn run_network_service_load_tier(
         0.0
     };
     let offered_rps = if tier_duration > 0.0 {
-        total as f64 / tier_duration
+        attempted as f64 / tier_duration
     } else {
         0.0
     };
@@ -1279,26 +1301,27 @@ fn run_network_service_load_tier(
         concurrency,
         offered_load_rps: offered_rps,
         achieved_rps,
-        total_requests: total,
-        successful_requests: completed,
+        attempted_requests: attempted,
+        completed_requests: completed,
         failed_requests: failed,
         lat_min_ms: l_min,
         lat_p50_ms: l_p50,
         lat_p95_ms: l_p95,
         lat_p99_ms: l_p99,
         lat_max_ms: l_max,
-        driver_delay_p50_ms: dd_p50,
-        driver_delay_p95_ms: dd_p95,
-        driver_delay_max_ms: dd_max,
-        stock_sched_p50_ms: stock_p50,
-        dial9_delay_p50_ms: dial9_p50,
+        handler_stock_sched_p50_ms: s_p50,
+        handler_stock_sched_p95_ms: s_p95,
+        handler_stock_sched_max_ms: s_max,
+        handler_dial9_delay_p50_ms: d_p50,
+        handler_dial9_delay_p95_ms: d_p95,
+        handler_dial9_delay_max_ms: d_max,
     }
 }
 
 fn test_network_service_workload(workers: usize) {
     println!("\n=======================================================");
     println!(
-        "EXPERIMENT: REALISTIC NETWORK-SERVICE WORKLOAD (RustFS Pattern, workers={})",
+        "CONTROLLED REPRODUCTION: S3 Chunk Ingestion Under Forced Worker Saturation (workers={})",
         workers
     );
     println!("=======================================================");
@@ -1307,10 +1330,13 @@ fn test_network_service_workload(workers: usize) {
     let stock_rec = session.stock_rec.clone();
 
     let mut ext_write_start = 0u64;
+    let mut ext_write_done = 0u64;
     let mut tokio_io_ready = 0u64;
     let mut task_sched = 0u64;
     let mut task_polled = 0u64;
-    let mut target_task_id = 0u64;
+
+    let probe_handler_task_id = Arc::new(AtomicU64::new(0));
+    let p_tid = probe_handler_task_id.clone();
 
     let shutdown_signal = Arc::new(AtomicBool::new(false));
 
@@ -1318,42 +1344,29 @@ fn test_network_service_workload(workers: usize) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        let s_shut = shutdown_signal.clone();
         let accept_handle = dial9_tokio_telemetry::spawn(async move {
-            while !s_shut.load(Ordering::Relaxed) {
-                match listener.accept().await {
-                    Ok((socket, _)) => {
-                        let c_shut = s_shut.clone();
-                        dial9_tokio_telemetry::spawn(async move {
-                            let mut socket = socket;
-                            let _ = socket.set_nodelay(true);
-                            let mut req_buf = [0u8; 8];
-                            while !c_shut.load(Ordering::Relaxed) {
-                                match socket.read_exact(&mut req_buf).await {
-                                    Ok(_) => {
-                                        let req_id = u32::from_le_bytes([
-                                            req_buf[0], req_buf[1], req_buf[2], req_buf[3],
-                                        ]);
-                                        let compute_us = u32::from_le_bytes([
-                                            req_buf[4], req_buf[5], req_buf[6], req_buf[7],
-                                        ]);
-                                        let hash = simulate_chunk_processing(
-                                            Duration::from_micros(compute_us as u64),
-                                        );
-                                        let mut resp = [0u8; 8];
-                                        resp[0..4].copy_from_slice(&req_id.to_le_bytes());
-                                        resp[4..8].copy_from_slice(&hash.to_le_bytes());
-                                        if socket.write_all(&resp).await.is_err() {
-                                            break;
-                                        }
-                                    }
-                                    Err(_) => break,
-                                }
-                            }
-                        });
+            if let Ok((socket, _)) = listener.accept().await {
+                let mut socket = socket;
+                let _ = socket.set_nodelay(true);
+                let h_task = dial9_tokio_telemetry::spawn(async move {
+                    let mut req_buf = [0u8; 8];
+                    if socket.read_exact(&mut req_buf).await.is_ok() {
+                        let req_id =
+                            u32::from_le_bytes([req_buf[0], req_buf[1], req_buf[2], req_buf[3]]);
+                        let compute_us =
+                            u32::from_le_bytes([req_buf[4], req_buf[5], req_buf[6], req_buf[7]]);
+                        let hash =
+                            simulate_chunk_processing(Duration::from_micros(compute_us as u64));
+                        let mut resp = [0u8; 8];
+                        resp[0..4].copy_from_slice(&req_id.to_le_bytes());
+                        resp[4..8].copy_from_slice(&hash.to_le_bytes());
+                        let _ = socket.write_all(&resp).await;
                     }
-                    Err(_) => break,
+                });
+                if let Ok(tid) = h_task.id().to_string().parse::<u64>() {
+                    p_tid.store(tid, Ordering::SeqCst);
                 }
+                let _ = h_task.await;
             }
         });
 
@@ -1362,6 +1375,7 @@ fn test_network_service_workload(workers: usize) {
         let mut probe_stream = std::net::TcpStream::connect(addr).unwrap();
         probe_stream.set_nodelay(true).unwrap();
 
+        // Wait for connection to be accepted and reader task to be parked on read_exact
         tokio::time::sleep(Duration::from_millis(30)).await;
 
         stock_rec.reset();
@@ -1413,39 +1427,33 @@ fn test_network_service_workload(workers: usize) {
         tokio::time::sleep(Duration::from_millis(20)).await;
         ground_truth_probes::disable();
         shutdown_signal.store(true, Ordering::SeqCst);
-        accept_handle.abort();
+        let _ = accept_handle.await;
     });
 
     let (gt_events, stock_events, dial9_events) = session.finish();
+    let target_tid = probe_handler_task_id.load(Ordering::SeqCst);
 
     for ev in &gt_events {
         match ev {
             ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_BEGIN" => {
                 ext_write_start = *t_ns;
             }
-            ProbeEvent::IoReadinessObserved { t_ns, .. }
-                if ext_write_start > 0 && tokio_io_ready == 0 && *t_ns >= ext_write_start =>
-            {
-                tokio_io_ready = *t_ns;
-            }
-            ProbeEvent::TaskWakeByVal {
-                t_ns,
-                task_id,
-                submitted,
-            } if tokio_io_ready > 0
-                && target_task_id == 0
-                && *t_ns >= tokio_io_ready
-                && *submitted =>
-            {
-                target_task_id = *task_id;
+            ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_DONE" => {
+                ext_write_done = *t_ns;
             }
             ProbeEvent::TaskScheduled { t_ns, task_id, .. }
-                if target_task_id > 0 && *task_id == target_task_id && task_sched == 0 =>
+                if target_tid > 0
+                    && *task_id == target_tid
+                    && task_sched == 0
+                    && *t_ns >= ext_write_start =>
             {
                 task_sched = *t_ns;
             }
             ProbeEvent::WorkerPollStart { t_ns, task_id, .. }
-                if target_task_id > 0 && *task_id == target_task_id && task_polled == 0 =>
+                if target_tid > 0
+                    && *task_id == target_tid
+                    && task_polled == 0
+                    && *t_ns >= ext_write_start =>
             {
                 task_polled = *t_ns;
             }
@@ -1453,15 +1461,73 @@ fn test_network_service_workload(workers: usize) {
         }
     }
 
+    // Correlate the specific IoReadinessObserved event that woke target_tid
+    let mut target_wake_idx = None;
+    for (idx, ev) in gt_events.iter().enumerate() {
+        if let ProbeEvent::TaskWakeByVal {
+            t_ns,
+            task_id,
+            submitted,
+        } = ev
+        {
+            if *task_id == target_tid && *submitted && *t_ns >= ext_write_start {
+                target_wake_idx = Some(idx);
+                break;
+            }
+        }
+    }
+
+    if let Some(w_idx) = target_wake_idx {
+        for ev in gt_events[..w_idx].iter().rev() {
+            if let ProbeEvent::IoReadinessObserved { t_ns, .. } = ev {
+                if *t_ns >= ext_write_start {
+                    tokio_io_ready = *t_ns;
+                    break;
+                }
+            }
+        }
+    }
+
     print_three_view_timeline(
         &format!(
-            "REALISTIC NETWORK SERVICE: S3 Chunk Ingestion Under Load (workers={})",
-            workers
+            "CONTROLLED REPRODUCTION: S3 Chunk Ingestion Under Forced Saturation (workers={}, task_id={})",
+            workers, target_tid
         ),
         &gt_events,
         &stock_events,
         &dial9_events,
     );
+
+    // Extract exact Stock Tokio schedule latency for target_tid
+    let stock_target_lat = stock_events.iter().find_map(|ev| {
+        if ev.task_id == Some(target_tid) {
+            ev.schedule_latency_ns
+        } else {
+            None
+        }
+    });
+
+    // Extract exact Dial9 delay for target_tid
+    let mut d_wake = 0u64;
+    let mut d_poll = 0u64;
+    for ev in &dial9_events {
+        match ev {
+            Dial9Event::WakeEvent(w) if w.woken_task_id == target_tid && d_wake == 0 => {
+                d_wake = w.timestamp_ns;
+            }
+            Dial9Event::PollStartEvent(p)
+                if p.task_id == target_tid && d_wake > 0 && d_poll == 0 =>
+            {
+                d_poll = p.timestamp_ns;
+            }
+            _ => {}
+        }
+    }
+    let dial9_target_delay = if d_poll > d_wake {
+        Some(d_poll - d_wake)
+    } else {
+        None
+    };
 
     if ext_write_start > 0 && tokio_io_ready > 0 && task_sched > 0 && task_polled > 0 {
         let delta_driver = tokio_io_ready.saturating_sub(ext_write_start) as f64 / 1_000_000.0;
@@ -1469,131 +1535,194 @@ fn test_network_service_workload(workers: usize) {
         let delta_poll = task_polled.saturating_sub(task_sched) as f64 / 1_000_000.0;
         let delta_e2e = task_polled.saturating_sub(ext_write_start) as f64 / 1_000_000.0;
 
-        println!("\n--- [REALISTIC NETWORK SERVICE DISCREPANCY ANALYSIS] ---");
+        println!("\n--- [CONTROLLED FORCED-SATURATION DISCREPANCY ANALYSIS] ---");
+        println!("  Target Task ID:             {}", target_tid);
         println!(
-            "  T(external_stimulus):       +{:>8.3} ms",
+            "  T(external_write_begin):    +{:>8.3} ms (client initiated write_all)",
             ext_write_start as f64 / 1_000_000.0
         );
         println!(
-            "  T(tokio_io_readiness):       +{:>8.3} ms",
+            "  T(external_write_done):     +{:>8.3} ms (client finished write_all)",
+            ext_write_done as f64 / 1_000_000.0
+        );
+        println!(
+            "  T(tokio_io_readiness):       +{:>8.3} ms (Driver::turn runs epoll_wait and observes socket readiness)",
             tokio_io_ready as f64 / 1_000_000.0
         );
         println!(
-            "  T(task_scheduled):           +{:>8.3} ms",
+            "  T(task_scheduled):           +{:>8.3} ms (task waker called, placed on worker queue)",
             task_sched as f64 / 1_000_000.0
         );
         println!(
-            "  T(task_polled):              +{:>8.3} ms",
+            "  T(task_polled):              +{:>8.3} ms (worker polls request handler task)",
             task_polled as f64 / 1_000_000.0
         );
-        println!("  --------------------------------------------------");
         println!(
-            "  Δio_driver (Driver Service Delay): {:>8.3} ms <=== INVISIBLE TO TOKIO & DIAL9!",
+            "  --------------------------------------------------------------------------------------------------"
+        );
+        println!(
+            "  Δdriver_observation (Write Init -> Driver Ready): {:>8.3} ms <=== INVISIBLE TO TOKIO & DIAL9!",
             delta_driver
         );
         println!(
-            "  Δschedule (Ready -> Sched):        {:>8.3} ms",
+            "  Δschedule (Ready -> Sched):                      {:>8.3} ms",
             delta_sched
         );
         println!(
-            "  Δpoll (Sched -> Poll):             {:>8.3} ms",
+            "  Δpoll (Sched -> Poll):                           {:>8.3} ms",
             delta_poll
         );
-        println!("  Δend_to_end (Real Queue Delay):    {:>8.3} ms", delta_e2e);
+        println!(
+            "  Δtotal_real (Write Init -> Task Poll):           {:>8.3} ms",
+            delta_e2e
+        );
+        if let Some(s_lat) = stock_target_lat {
+            println!(
+                "  Stock Tokio Schedule Latency (Task {}):          {:>8.3} ms",
+                target_tid,
+                s_lat as f64 / 1_000_000.0
+            );
+        }
+        if let Some(d_delay) = dial9_target_delay {
+            println!(
+                "  Dial9 Wake-to-Poll Delay (Task {}):              {:>8.3} ms",
+                target_tid,
+                d_delay as f64 / 1_000_000.0
+            );
+        }
     }
 
-    // Run bounded load sweep
-    run_network_service_load_sweep(workers);
+    // Run bounded load sweep (single overview run)
+    run_network_service_load_sweep(workers, 1);
 }
 
-fn run_network_service_load_sweep(workers: usize) {
+fn run_network_service_load_sweep(workers: usize, iterations: usize) {
     println!(
         "\n========================================================================================================================"
     );
     println!(
-        "BOUNDED LOAD SWEEP: REALISTIC NETWORK SERVICE (RustFS Ingestion Model, workers={})",
-        workers
+        "CLOSED-LOOP CONCURRENCY LOAD SWEEP: S3 Ingestion Model (workers={}, iterations={})",
+        workers, iterations
     );
     println!(
         "========================================================================================================================"
     );
+
+    // Constant chunk compute cost across all tiers: 5 ms per request
+    let constant_compute = Duration::from_millis(5);
 
     let tiers = vec![
         (
             1,
             20,
             Duration::from_millis(15),
-            Duration::from_millis(5),
-            "Tier 1: Concurrency 1 (Low Load Baseline, 15ms pacing)",
+            "Tier 1: Concurrency 1 (Low-Load Baseline, 15ms pacing)",
         ),
         (
             2,
             30,
             Duration::ZERO,
-            Duration::from_millis(5),
             "Tier 2: Concurrency 2 (Balanced Capacity, 0ms pacing)",
         ),
         (
             4,
             40,
             Duration::ZERO,
-            Duration::from_millis(5),
-            "Tier 3: Concurrency 4 (2x Oversubscribed, 0ms pacing)",
+            "Tier 3: Concurrency 4 (2x Oversubscription, 0ms pacing)",
         ),
         (
             8,
             48,
             Duration::ZERO,
-            Duration::from_millis(5),
-            "Tier 4: Concurrency 8 (4x Saturated, 0ms pacing)",
+            "Tier 4: Concurrency 8 (4x Oversubscription, 0ms pacing)",
         ),
     ];
 
-    let mut results = Vec::new();
-    for (conc, reqs, pacing, comp, desc) in tiers {
-        print!("  Running {} ... ", desc);
-        let m = run_network_service_load_tier(workers, conc, reqs, pacing, comp);
-        println!("Done.");
-        results.push(m);
-    }
-
     println!(
-        "\n------------------------------------------------------------------------------------------------------------------------"
+        "Conc  Offered(rps)  Achieved(rps)  Attempted  Completed  Failed  Lat p50(ms)  Lat p95(ms)  Lat max(ms)  Stock p50  Stock p95  Dial9 p50  Dial9 p95"
     );
     println!(
-        "Conc  Offered(rps)  Achieved(rps)  Failures  Lat p50(ms)  Lat p95(ms)  Lat max(ms)  Δdriver p50  Stock p50  Dial9 p50  Blind Spot"
-    );
-    println!(
-        "------------------------------------------------------------------------------------------------------------------------"
+        "----------------------------------------------------------------------------------------------------------------------------------------------------"
     );
 
-    for m in &results {
-        let real_queue_delay = m.driver_delay_p50_ms;
-        let visible_delay = m.stock_sched_p50_ms.max(m.dial9_delay_p50_ms);
-        let blind_spot_pct = if real_queue_delay > 0.001 {
-            ((real_queue_delay - visible_delay).max(0.0) / real_queue_delay * 100.0)
-                .clamp(0.0, 99.99)
-        } else {
-            0.0
-        };
+    for (conc, reqs_per_client, pacing, _desc) in tiers {
+        let mut off_stats = Stats::default();
+        let mut ach_stats = Stats::default();
+        let mut lat_p50_stats = Stats::default();
+        let mut lat_p95_stats = Stats::default();
+        let mut lat_max_stats = Stats::default();
+        let mut stock_p50_stats = Stats::default();
+        let mut stock_p95_stats = Stats::default();
+        let mut dial9_p50_stats = Stats::default();
+        let mut dial9_p95_stats = Stats::default();
+        let mut total_attempted = 0usize;
+        let mut total_completed = 0usize;
+        let mut total_failed = 0usize;
+
+        for _ in 0..iterations {
+            let m = run_network_service_load_tier(
+                workers,
+                conc,
+                reqs_per_client,
+                pacing,
+                constant_compute,
+            );
+            off_stats.add(m.offered_load_rps);
+            ach_stats.add(m.achieved_rps);
+            lat_p50_stats.add(m.lat_p50_ms);
+            lat_p95_stats.add(m.lat_p95_ms);
+            lat_max_stats.add(m.lat_max_ms);
+            stock_p50_stats.add(m.handler_stock_sched_p50_ms);
+            stock_p95_stats.add(m.handler_stock_sched_p95_ms);
+            dial9_p50_stats.add(m.handler_dial9_delay_p50_ms);
+            dial9_p95_stats.add(m.handler_dial9_delay_p95_ms);
+            total_attempted += m.attempted_requests;
+            total_completed += m.completed_requests;
+            total_failed += m.failed_requests;
+        }
+
+        let (_, off_p50, _, _) = off_stats.summarize();
+        let (_, ach_p50, _, _) = ach_stats.summarize();
+        let (_, l50_p50, _, _) = lat_p50_stats.summarize();
+        let (_, l95_p50, _, _) = lat_p95_stats.summarize();
+        let (_, lmax_p50, _, _) = lat_max_stats.summarize();
+        let (_, s50_p50, _, _) = stock_p50_stats.summarize();
+        let (_, s95_p50, _, _) = stock_p95_stats.summarize();
+        let (_, d50_p50, _, _) = dial9_p50_stats.summarize();
+        let (_, d95_p50, _, _) = dial9_p95_stats.summarize();
 
         println!(
-            "{:>4}  {:>12.1}  {:>13.1}  {:>8}  {:>11.2}  {:>11.2}  {:>11.2}  {:>10.3}ms  {:>8.3}ms  {:>8.3}ms  {:>9.1}%",
-            m.concurrency,
-            m.offered_load_rps,
-            m.achieved_rps,
-            m.failed_requests,
-            m.lat_p50_ms,
-            m.lat_p95_ms,
-            m.lat_max_ms,
-            m.driver_delay_p50_ms,
-            m.stock_sched_p50_ms,
-            m.dial9_delay_p50_ms,
-            blind_spot_pct,
+            "{:>4}  {:>12.1}  {:>13.1}  {:>9}  {:>9}  {:>6}  {:>11.2}  {:>11.2}  {:>11.2}  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms  {:>8.3}ms",
+            conc,
+            off_p50,
+            ach_p50,
+            total_attempted / iterations,
+            total_completed / iterations,
+            total_failed / iterations,
+            l50_p50,
+            l95_p50,
+            lmax_p50,
+            s50_p50,
+            s95_p50,
+            d50_p50,
+            d95_p50,
         );
     }
     println!(
-        "------------------------------------------------------------------------------------------------------------------------"
+        "----------------------------------------------------------------------------------------------------------------------------------------------------"
+    );
+    println!("Closed-Loop Load Testing Methodology & Discrepancy Notes:");
+    println!(
+        "  - Client Latency measures full round-trip time: client write -> OS socket queuing -> driver turn -> task sched -> compute -> client read."
+    );
+    println!(
+        "  - Stock Tokio & Dial9 latencies strictly measure the identified request handler tasks (excluding unrelated background runtime tasks)."
+    );
+    println!(
+        "  - Socket-level driver delay is not attributed individually in concurrent sweeps because Tokio's internal `ScheduledIo` token is an unexported pointer."
+    );
+    println!(
+        "  - Controlled single-request driver starvation is verified with task-level ground-truth attribution in the isolated trace above."
     );
 }
 
@@ -2137,8 +2266,8 @@ fn run_distribution_benchmarks(runs: usize) {
         str_min, str_p50, str_p95, str_max
     );
 
-    // Realistic Network Service Load Sweep Benchmark
-    run_network_service_load_sweep(2);
+    // Closed-Loop Concurrency Load Sweep Benchmark (5 repeated iterations per tier)
+    run_network_service_load_sweep(2, 5);
 }
 
 fn main() {
@@ -2185,13 +2314,13 @@ fn main() {
     test_adversarial_wake_coalescing(2);
     test_adversarial_work_stealing(2);
 
-    println!("\n>>> RUNNING REALISTIC NETWORK SERVICE (RustFS Model) <<<");
+    println!("\n>>> RUNNING CONTROLLED NETWORK SERVICE WORKLOAD (RustFS Model) <<<");
     test_network_service_workload(2);
 
     println!("\n===============================================================");
     println!("INVESTIGATION RUN COMPLETED");
-    println!("Run with `--benchmark` to compute 30-run statistical distributions.");
-    println!("Run with `--service` to run the realistic network-service workload.");
+    println!("Run with `--benchmark` to compute statistical distributions.");
+    println!("Run with `--service` to run the network-service workload.");
     println!("===============================================================");
 }
 
@@ -2201,47 +2330,205 @@ mod tests {
 
     #[test]
     fn test_network_service_load_tiers() {
-        let baseline = run_network_service_load_tier(
-            2,
-            1,
-            10,
-            Duration::from_millis(10),
-            Duration::from_millis(2),
-        );
+        let compute = Duration::from_millis(5);
+
+        // Tier 1: Concurrency 1 baseline
+        let baseline = run_network_service_load_tier(2, 1, 10, Duration::from_millis(10), compute);
         assert_eq!(
             baseline.failed_requests, 0,
-            "baseline should have 0 failures"
+            "baseline tier must complete with 0 failures"
         );
-        assert!(
-            baseline.driver_delay_p50_ms < 2.0,
-            "baseline driver delay should be low when workers are unparked"
+        assert_eq!(
+            baseline.completed_requests, baseline.attempted_requests,
+            "all attempted requests in baseline tier must complete"
         );
 
-        let saturated =
-            run_network_service_load_tier(2, 4, 16, Duration::ZERO, Duration::from_millis(10));
+        // Tier 3: Concurrency 4 oversubscribed
+        let oversubscribed = run_network_service_load_tier(2, 4, 10, Duration::ZERO, compute);
         assert_eq!(
-            saturated.failed_requests, 0,
-            "saturated tier should have 0 failures"
+            oversubscribed.failed_requests, 0,
+            "oversubscribed tier must complete with 0 failures"
         );
+        assert_eq!(
+            oversubscribed.completed_requests, oversubscribed.attempted_requests,
+            "all attempted requests in oversubscribed tier must complete"
+        );
+
+        // Monotonicity check under identical compute cost:
+        // Closed-loop request latency increases with concurrency oversubscription
         assert!(
-            saturated.lat_p50_ms > baseline.lat_p50_ms,
-            "saturated latency must be higher than baseline"
-        );
-        eprintln!(
-            "DEBUG TEST: baseline lat={:.3}ms, driver_delay={:.3}ms | saturated lat={:.3}ms, driver_delay={:.3}ms, stock_sched={:.3}ms",
+            oversubscribed.lat_p50_ms > baseline.lat_p50_ms,
+            "closed-loop request latency p50 must increase under concurrency oversubscription (baseline={:.2}ms, oversubscribed={:.2}ms)",
             baseline.lat_p50_ms,
-            baseline.driver_delay_p50_ms,
-            saturated.lat_p50_ms,
-            saturated.driver_delay_p50_ms,
-            saturated.stock_sched_p50_ms
+            oversubscribed.lat_p50_ms
+        );
+    }
+
+    #[test]
+    fn test_controlled_saturation_driver_delay() {
+        let workers = 2;
+        let session = InstrumentedSession::new(workers);
+        let stock_rec = session.stock_rec.clone();
+
+        let probe_handler_task_id = Arc::new(AtomicU64::new(0));
+        let p_tid = probe_handler_task_id.clone();
+        let shutdown_signal = Arc::new(AtomicBool::new(false));
+
+        let mut ext_write_start = 0u64;
+        let mut tokio_io_ready = 0u64;
+        let mut task_sched = 0u64;
+        let mut task_polled = 0u64;
+
+        session.runtime.as_ref().unwrap().block_on(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+
+            let accept_handle = dial9_tokio_telemetry::spawn(async move {
+                if let Ok((socket, _)) = listener.accept().await {
+                    let mut socket = socket;
+                    let _ = socket.set_nodelay(true);
+                    let h_task = dial9_tokio_telemetry::spawn(async move {
+                        let mut req_buf = [0u8; 8];
+                        if socket.read_exact(&mut req_buf).await.is_ok() {
+                            let _ = socket.write_all(&req_buf).await;
+                        }
+                    });
+                    if let Ok(tid) = h_task.id().to_string().parse::<u64>() {
+                        p_tid.store(tid, Ordering::SeqCst);
+                    }
+                    let _ = h_task.await;
+                }
+            });
+
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let mut probe_stream = std::net::TcpStream::connect(addr).unwrap();
+            probe_stream.set_nodelay(true).unwrap();
+
+            tokio::time::sleep(Duration::from_millis(30)).await;
+
+            stock_rec.reset();
+            ground_truth_probes::reset_base_time();
+            ground_truth_probes::enable();
+
+            let bg_started = Arc::new(AtomicUsize::new(0));
+            let mut compute_handles = Vec::new();
+            for _ in 0..workers {
+                let cs = bg_started.clone();
+                compute_handles.push(dial9_tokio_telemetry::spawn(async move {
+                    cs.fetch_add(1, Ordering::SeqCst);
+                    simulate_chunk_processing(Duration::from_millis(40));
+                }));
+            }
+
+            let cs = bg_started.clone();
+            let target_handle = std::thread::spawn(move || {
+                while cs.load(Ordering::SeqCst) < workers {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                std::thread::sleep(Duration::from_millis(10));
+                let req = [1u8; 8];
+                use std::io::{Read, Write};
+                ground_truth_probes::record_external_stimulus("WRITE_BEGIN", "Test probe write");
+                probe_stream.write_all(&req).unwrap();
+                let mut resp = [0u8; 8];
+                probe_stream.read_exact(&mut resp).unwrap();
+            });
+
+            target_handle.join().unwrap();
+            for ch in compute_handles {
+                ch.await.unwrap();
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            ground_truth_probes::disable();
+            shutdown_signal.store(true, Ordering::SeqCst);
+            let _ = accept_handle.await;
+        });
+
+        let (gt_events, stock_events, _) = session.finish();
+        let target_tid = probe_handler_task_id.load(Ordering::SeqCst);
+        assert!(target_tid > 0, "probe handler task id must be recorded");
+
+        for ev in &gt_events {
+            match ev {
+                ProbeEvent::ExternalIoStimulus { t_ns, phase, .. } if *phase == "WRITE_BEGIN" => {
+                    ext_write_start = *t_ns;
+                }
+                ProbeEvent::TaskScheduled { t_ns, task_id, .. }
+                    if *task_id == target_tid && task_sched == 0 && *t_ns >= ext_write_start =>
+                {
+                    task_sched = *t_ns;
+                }
+                ProbeEvent::WorkerPollStart { t_ns, task_id, .. }
+                    if *task_id == target_tid && task_polled == 0 && *t_ns >= ext_write_start =>
+                {
+                    task_polled = *t_ns;
+                }
+                _ => {}
+            }
+        }
+
+        // Correlate the specific IoReadinessObserved event that woke target_tid
+        let mut target_wake_idx = None;
+        for (idx, ev) in gt_events.iter().enumerate() {
+            if let ProbeEvent::TaskWakeByVal {
+                t_ns,
+                task_id,
+                submitted,
+            } = ev
+            {
+                if *task_id == target_tid && *submitted && *t_ns >= ext_write_start {
+                    target_wake_idx = Some(idx);
+                    break;
+                }
+            }
+        }
+
+        if let Some(w_idx) = target_wake_idx {
+            for ev in gt_events[..w_idx].iter().rev() {
+                if let ProbeEvent::IoReadinessObserved { t_ns, .. } = ev {
+                    if *t_ns >= ext_write_start {
+                        tokio_io_ready = *t_ns;
+                        break;
+                    }
+                }
+            }
+        }
+
+        assert!(ext_write_start > 0, "write start must be recorded");
+        assert!(
+            tokio_io_ready > ext_write_start,
+            "driver readiness must occur after write"
+        );
+        let delta_driver_ms = (tokio_io_ready - ext_write_start) as f64 / 1_000_000.0;
+
+        assert!(
+            delta_driver_ms > 15.0,
+            "driver delay must be > 15ms due to worker compute saturation (observed {:.2}ms)",
+            delta_driver_ms
+        );
+
+        let stock_sched_ms = stock_events
+            .iter()
+            .find_map(|ev| {
+                if ev.task_id == Some(target_tid) {
+                    ev.schedule_latency_ns.map(|ns| ns as f64 / 1_000_000.0)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0.0);
+
+        assert!(
+            stock_sched_ms < 1.0,
+            "stock schedule latency for newly woken task must be sub-millisecond (observed {:.3}ms)",
+            stock_sched_ms
         );
         assert!(
-            saturated.driver_delay_p50_ms > baseline.driver_delay_p50_ms,
-            "driver delay must increase under saturation"
-        );
-        assert!(
-            saturated.driver_delay_p50_ms > saturated.stock_sched_p50_ms,
-            "ground truth driver delay must exceed stock schedule latency"
+            delta_driver_ms > stock_sched_ms * 10.0,
+            "physical driver delay ({:.2}ms) must exceed stock schedule latency ({:.3}ms) by >10x",
+            delta_driver_ms,
+            stock_sched_ms
         );
     }
 }

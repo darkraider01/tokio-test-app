@@ -8,16 +8,16 @@ RUNNING STATISTICAL BENCHMARKS (30 iterations per case)
 =======================================================
 
 --- [CASE D: I/O While Parked Distribution (N=30, valid=30)] ---
-  Δio_driver:  min=0.076ms  p50=0.101ms  p95=0.140ms  max=0.169ms
-  Δschedule:   min=0.003ms  p50=0.003ms  p95=0.004ms  max=0.005ms
-  Δpoll:       min=0.018ms  p50=0.024ms  p95=0.035ms  max=0.053ms
-  Δend_to_end: min=0.099ms  p50=0.128ms  p95=0.176ms  max=0.205ms
+  Δio_driver:  min=0.032ms  p50=0.052ms  p95=0.068ms  max=0.080ms
+  Δschedule:   min=0.002ms  p50=0.002ms  p95=0.004ms  max=0.004ms
+  Δpoll:       min=0.012ms  p50=0.016ms  p95=0.033ms  max=0.037ms
+  Δend_to_end: min=0.049ms  p50=0.073ms  p95=0.092ms  max=0.118ms
 
 --- [CASE E: Saturated Workers Distribution (N=30, valid=30)] ---
-  Δio_driver (Driver Service Delay): min=29.787ms  p50=29.844ms  p95=29.871ms  max=29.879ms
-  Δschedule (Ready -> Sched):        min=0.001ms  p50=0.002ms  p95=0.003ms  max=0.003ms
-  Δpoll (Sched -> Poll):             min=0.004ms  p50=0.007ms  p95=0.012ms  max=0.028ms
-  Δend_to_end (Total Real Latency):   min=29.795ms  p50=29.855ms  p95=29.881ms  max=29.889ms
+  Δio_driver (Driver Service Delay): min=29.889ms  p50=29.904ms  p95=29.912ms  max=29.938ms
+  Δschedule (Ready -> Sched):        min=0.001ms  p50=0.001ms  p95=0.001ms  max=0.001ms
+  Δpoll (Sched -> Poll):             min=0.004ms  p50=0.005ms  p95=0.007ms  max=0.007ms
+  Δend_to_end (Total Real Latency):   min=29.896ms  p50=29.912ms  p95=29.920ms  max=29.943ms
 
 --- [ADVERSARIAL: Wake Coalescing Distribution (N=30)] ---
   Attempted runs:                                30
@@ -28,9 +28,25 @@ RUNNING STATISTICAL BENCHMARKS (30 iterations per case)
   Task-correlated worker wake selections: min=1  p50=1  p95=1  max=1
   Task-correlated wake suppressed: min=4  p50=4  p95=4  max=4 (tasks 2-5 coalesced)
   Total target=None decisions:     min=5  p50=5  p95=5  max=5
-  Task 1 Sched->Poll Latency:      min=0.051ms  p50=0.060ms  p95=0.095ms  max=0.096ms
-  Coalesced Tasks Sched->Poll:     min=0.027ms  p50=0.035ms  p95=0.064ms  max=0.072ms
+  Task 1 Sched->Poll Latency:      min=0.020ms  p50=0.024ms  p95=0.032ms  max=0.034ms
+  Coalesced Tasks Sched->Poll:     min=0.021ms  p50=0.024ms  p95=0.032ms  max=0.035ms
 
 --- [ADVERSARIAL: Work Stealing Distribution (N=30)] ---
-  Stolen Tasks Sched->Poll:    min=0.002ms  p50=0.003ms  p95=0.004ms  max=0.005ms
-  Stranded Task Sched->Poll:   min=40.017ms  p50=40.019ms  p95=40.037ms  max=40.044ms
+  Stolen Tasks Sched->Poll:    min=0.002ms  p50=0.002ms  p95=0.003ms  max=0.004ms
+  Stranded Task Sched->Poll:   min=40.012ms  p50=40.014ms  p95=40.016ms  max=40.025ms
+
+========================================================================================================================
+CLOSED-LOOP CONCURRENCY LOAD SWEEP: S3 Ingestion Model (workers=2, iterations=5)
+========================================================================================================================
+Conc  Offered(rps)  Achieved(rps)  Attempted  Completed  Failed  Lat p50(ms)  Lat p95(ms)  Lat max(ms)  Stock p50  Stock p95  Dial9 p50  Dial9 p95
+----------------------------------------------------------------------------------------------------------------------------------------------------
+   1          49.4           49.4         20         20       0         5.11         5.14         5.14     0.009ms     0.016ms     0.013ms     0.028ms
+   2         206.7          206.7         60         60       0        10.09        10.14        10.18     0.003ms     0.016ms     0.004ms     0.017ms
+   4         380.5          380.5        160        160       0        10.09        15.05        15.16     0.006ms     5.032ms     0.007ms     5.031ms
+   8         387.9          387.9        384        384       0        20.16        30.27        35.30     5.044ms    10.117ms     5.045ms    10.113ms
+----------------------------------------------------------------------------------------------------------------------------------------------------
+Closed-Loop Load Testing Methodology & Discrepancy Notes:
+  - Client Latency measures full round-trip time: client write -> OS socket queuing -> driver turn -> task sched -> compute -> client read.
+  - Stock Tokio & Dial9 latencies strictly measure the identified request handler tasks (excluding unrelated background runtime tasks).
+  - Socket-level driver delay is not attributed individually in concurrent sweeps because Tokio's internal `ScheduledIo` token is an unexported pointer.
+  - Controlled single-request driver starvation is verified with task-level ground-truth attribution in the isolated trace above.

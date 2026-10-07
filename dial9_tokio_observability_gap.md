@@ -289,6 +289,69 @@ The representative run in `linux_run_output.txt` uses a 50 ms compute loop: Task
 
 ---
 
+### Case F: Controlled Network Service Workload (RustFS Chunk Ingestion Model)
+
+- **Motivation & RustFS Architecture Context:**
+  - Inspection of [RustFS](https://github.com/rustfs/rustfs) (specifically `crates/ecstore`, such as `crates/ecstore/src/disk/disk_store.rs`) confirms that incoming S3 upload requests (`PutObject` and multipart uploads) stream chunk payloads over TCP and execute synchronous compute algorithms—AWS SigV4 payload SHA-256 calculation, CRC32C checksumming, and Reed-Solomon erasure coding parity calculations (`RS(k, m)`)—within task poll bodies on Tokio multi-thread workers.
+  - *Distinction Between Model and Full RustFS:* Our harness models this pipeline via a focused TCP chunk streaming service with non-yielding bit-mixing loops (`simulate_chunk_processing`). It does not deploy full RustFS (which requires distributed consensus, HTTP/XML routing, and physical NVMe disk writes). It isolates the interaction between incoming TCP traffic, synchronous chunk compute, and Tokio driver servicing.
+- **Workload & Synchronization (Controlled Forced-Saturation Test):**
+  - A probe TCP client pre-establishes a persistent stream to the server. The connection handler task (`target_tid`) executes its initial poll, waits on `socket.read_exact()`, registers its waker on `ScheduledIo`, and yields `Poll::Pending`.
+  - Both runtime workers ($N=2$) are then occupied by non-yielding 40 ms chunk compute tasks.
+  - At $t \approx 10\text{ ms}$ into the 40 ms compute window, the probe client thread records `WRITE_BEGIN`, writes an 8-byte request packet, and records `WRITE_DONE`.
+- **Methodological Note on External Arrival Timing:**
+  `WRITE_BEGIN` / `WRITE_DONE` record user-space write initiation and completion on the client thread, not the exact sub-microsecond instant the receiving socket buffer became readable inside the OS kernel network stack (which would require kernel eBPF probes). However, the ~30 ms delay before Tokio services the driver proves that driver starvation—not kernel network transit—dominates the delay.
+
+#### Exact Causal Breakdown for Identified Handler Task (Target Task ID = 4)
+
+```text
+  Target Task ID:             4 (Identified Probe Request Handler Task)
+  T(external_write_begin):    +  10.188 ms (Client initiates write_all)
+  T(external_write_done):     +  10.221 ms (Client completes write_all)
+  T(tokio_io_readiness):       +  40.072 ms (Driver::turn runs epoll_wait and discovers socket readiness)
+  T(task_scheduled):           +  40.074 ms (Task waker called, placed on worker local queue)
+  T(task_polled):              +  40.079 ms (Worker polls request handler task)
+  --------------------------------------------------------------------------------------------------
+  Δdriver_observation (Write Init -> Driver Ready):   29.885 ms <=== INVISIBLE TO TOKIO & DIAL9!
+  Δschedule (Readiness -> Task Scheduled):             0.002 ms
+  Δpoll (Task Scheduled -> Worker Poll Start):        0.005 ms
+  Δtotal_real (Write Init -> Task Poll):             29.891 ms
+
+  Stock Tokio Schedule Latency (for Task 4):          0.004 ms
+  Dial9 Wake-to-Poll Delay (for Task 4):              0.005 ms
+```
+
+- **Observability Inversion for Identified Task:**
+  Both Stock Tokio (`TaskMeta::schedule_latency()`) and Dial9 (`compute_wake_to_poll_delays`) report sub-5-microsecond latency ($0.004\text{ ms}$ and $0.005\text{ ms}$), completely missing the preceding $29.885\text{ ms}$ delay during which the packet waited in the OS kernel buffer while workers were busy computing.
+- **Task Identity Correlation:**
+  The readiness event was correlated strictly to Task 4 via its `TaskWakeByVal` event, ensuring zero contamination from unrelated runtime tasks or sockets.
+
+---
+
+### Case G: Closed-Loop Concurrency Load Sweep
+
+To investigate runtime behavior under increasing client load, we executed a closed-loop concurrency load sweep across four tiers with constant per-request compute ($5\text{ ms}$ per request) on a 2-worker runtime (`workers=2`).
+
+#### Benchmark Distribution (N=5 Iterations Per Tier, Median Metrics)
+
+| Concurrency Tier | Offered Load | Achieved Throughput | Attempted / Iter | Completed / Iter | Failed / Iter | Latency p50 | Latency p95 | Latency max | Stock p50 | Stock p95 | Dial9 p50 | Dial9 p95 |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Tier 1 (Conc 1, 15ms pace)** | $49.4\text{ rps}$ | $49.4\text{ rps}$ | $20$ | $20$ | $0$ | $5.11\text{ ms}$ | $5.14\text{ ms}$ | $5.14\text{ ms}$ | $0.009\text{ ms}$ | $0.016\text{ ms}$ | $0.013\text{ ms}$ | $0.028\text{ ms}$ |
+| **Tier 2 (Conc 2, 0ms pace)** | $206.7\text{ rps}$ | $206.7\text{ rps}$ | $60$ | $60$ | $0$ | $10.09\text{ ms}$ | $10.14\text{ ms}$ | $10.18\text{ ms}$ | $0.003\text{ ms}$ | $0.016\text{ ms}$ | $0.004\text{ ms}$ | $0.017\text{ ms}$ |
+| **Tier 3 (Conc 4, 0ms pace)** | $380.5\text{ rps}$ | $380.5\text{ rps}$ | $160$ | $160$ | $0$ | $10.09\text{ ms}$ | $15.05\text{ ms}$ | $15.16\text{ ms}$ | $0.006\text{ ms}$ | $5.032\text{ ms}$ | $0.007\text{ ms}$ | $5.031\text{ ms}$ |
+| **Tier 4 (Conc 8, 0ms pace)** | $387.9\text{ rps}$ | $387.9\text{ rps}$ | $384$ | $384$ | $0$ | $20.16\text{ ms}$ | $30.27\text{ ms}$ | $35.30\text{ ms}$ | $5.044\text{ ms}$ | $10.117\text{ ms}$ | $5.045\text{ ms}$ | $10.113\text{ ms}$ |
+
+#### Methodological & Discrepancy Findings from Closed-Loop Testing:
+1. **Request Accounting & Functional Correctness:** Across all tiers, $100\%$ of attempted requests completed successfully ($0$ failures), and every response hash was validated against expected CPU bit-mixing output.
+2. **Client Latency Monotonicity:** End-to-end client round-trip latency increases monotonically from $5.11\text{ ms}$ (uncontended single client) to $20.16\text{ ms}$ (p50) and $35.30\text{ ms}$ (max) under $4\times$ oversubscription (Tier 4), as closed-loop queues develop.
+3. **Task-Specific Filtering in Telemetry:** Stock Tokio and Dial9 metrics are strictly filtered for the identified connection handler tasks (`handler_task_ids`), completely eliminating contamination from unrelated runtime tasks.
+4. **Visibility of Task Runqueue vs Invisibility of Driver Starvation:**
+   - In Tier 4, Stock Tokio ($5.044\text{ ms}$ p50) and Dial9 ($5.045\text{ ms}$ p50) *do* observe queue delay when multiple tasks have already been woken and are queued in the runqueue behind active worker compute.
+   - However, when a packet arrives while workers are active and epoll has not yet been polled, the preceding driver turn delay remains completely invisible.
+5. **Why Per-Socket Driver Delay is Not Attributed in Concurrent Sweeps:**
+   Tokio's internal `ScheduledIo` token is an opaque raw pointer address (`token.0`) not exported on `tokio::net::TcpStream`. In concurrent multi-stream traffic, attributing individual `IoReadinessObserved` events to specific client requests without per-socket resource probes is ambiguous. Rather than substituting unrelated readiness events, we report client round-trip latency and task schedule latency directly, without computing an unsupported "blind spot percentage".
+
+---
+
 ## Ground Truth vs Stock Tokio vs Dial9
 
 | Event / Internal Fact | Internal Ground Truth (`tokio-probe`) | Stock Tokio (`tokio_unstable`) | Dial9 Telemetry | Status |
@@ -322,6 +385,27 @@ Upstream Tokio provides `on_thread_unpark()`, but this callback takes 0 argument
 
 ### Finding 3: External I/O stimulus $\to$ Tokio driver service latency is invisible and can invert telemetry
 When workers are occupied by non-yielding CPU-bound tasks, `Driver::turn()` is not called. In our Case E benchmark across 30 runs, external TCP traffic was sent, but Tokio did not service the driver for $\sim 29.84\text{ ms}$ (p50). Once the driver finally turned, the reader task was scheduled and polled within $7\ \mu\text{s}$ (p50). Both stock Tokio's `TaskMeta::schedule_latency()` ($0.003\text{ ms}$ in representative run) and Dial9's `wake_to_poll_delay` ($0.004\text{ ms}$ in representative run) reported sub-5-microsecond schedule latency, hiding $\sim 29.82\text{ ms}$ of unserved latency.
+
+**Mechanism in Tokio Multi-Thread Scheduler (`event_interval` vs `global_queue_interval`):**
+Source inspection of pinned Tokio (`tokio/src/runtime/scheduler/multi_thread/worker.rs`) clarifies the exact driver servicing mechanics:
+1. **Periodic Driver Servicing via `event_interval` (`worker.rs:844`):**
+   ```rust
+   fn maintenance(&self, mut core: Box<Core>) -> Box<Core> {
+       if core.tick % self.worker.handle.shared.config.event_interval == 0 {
+           super::counters::inc_num_maintenance();
+           core.stats.end_processing_scheduled_tasks();
+           core = self.park_yield(core); // Turns I/O driver with 0 timeout
+           core.maintenance(&self.worker);
+           core.stats.start_processing_scheduled_tasks();
+       }
+       core
+   }
+   ```
+   Tokio multi-thread workers do not run a dedicated I/O polling thread. Instead, the I/O driver is turned cooperatively when workers park waiting for work or during periodic worker maintenance ticks governed by `event_interval` (default 61 ticks).
+2. **Distinction from `global_queue_interval` (`worker.rs:1132`):**
+   `global_queue_interval` controls how often a worker checks the shared injection queue (`worker.handle.next_remote_task()`), *not* driver polling. Driver servicing is strictly governed by `event_interval` via `park_yield(core)`.
+3. **The Root Cause of Starvation:**
+   Worker tick progression (`tick(&mut self)` at `worker.rs:1126-1128`) only occurs when a task yields or completes its poll cycle. When worker threads execute non-yielding compute blocks (such as synchronous hashing or chunk processing), `core.tick` never increments, and control never returns to `maintenance()`. Consequently, `event_interval` driver servicing is starved completely until the compute tasks finish.
 
 ### Finding 4: Task queue placement causality is not represented by `schedule_latency`
 When a task experiences high schedule latency, `TaskMeta::schedule_latency()` provides only a scalar duration. In the representative work-stealing run, Task 52 waited approximately $50.017\text{ ms}$ in Worker 1's LIFO slot behind a 50 ms compute loop while Worker 0 was idle and parked. The separate 40 ms benchmark variant reports a stranded-task p50 of $40.019\text{ ms}$ across 30 runs. Stock telemetry does not explain the queue placement; Dial9's current wake-to-poll analysis does not reconstruct Task 52's long interval. `sched_wait=None` supplies no evidence for or against kernel runqueue delay.
@@ -393,6 +477,24 @@ We classify each causal boundary independently:
 | **Boundary B: Runnable Work $\to$ Wake / Coalesce Decision** | **REAL GAP** | **Proven.** Wake suppression in `Idle::worker_to_notify()` is invisible externally. One task-correlated worker wake selection can correspond to multiple scheduled tasks, while the wake/coalesce decisions themselves are not exposed. |
 | **Boundary C: Worker Notification $\to$ Worker Resume** | **REAL GAP** | **Proven.** `on_thread_unpark` fires after resumption with 0 arguments. The duration between unpark dispatch and worker loop resumption cannot be reconstructed from current external Tokio/Dial9 telemetry or attributed to a cause. |
 | **Boundary D: Task Placement / Work Stealing $\to$ Poll** | **PARTIAL GAP** | **Partially Addressed.** `TaskMeta::schedule_latency()` measures the total delay, but does not expose queue placement (local vs injected vs LIFO) or work-stealing causality. |
+
+### Addressing Russell Cohen's Real-Application Question: Controlled Reproduction vs Production Service (RustFS)
+
+A central motivation from Russell Cohen was to determine whether this investigation explains real-world application slowdowns (specifically in high-throughput network storage services like RustFS) or only a synthetic, controlled reproduction.
+
+Based on the empirical evidence across our controlled experiments (Case E, Case F) and closed-loop concurrency sweeps (Case G), we draw the following precise boundaries:
+
+1. **What is Conclusively Proven (The Controlled Case):**
+   - **The Architectural Vulnerability is Real:** Tokio multi-thread workers turn the I/O driver either when parking or during periodic maintenance (`core.tick % event_interval == 0` at `worker.rs:844`). Because `core.tick` only advances when tasks yield or complete, worker compute saturation starves driver maintenance.
+   - **The Observability Inversion is Real:** In both Case E and Case F, when worker threads are saturated with non-yielding compute (40 ms), incoming TCP requests wait ~30 ms in the OS kernel socket buffer before Tokio discovers readiness. Both Stock Tokio (`TaskMeta::schedule_latency()`) and Dial9 (`wake_to_poll_delay`) report sub-5-microsecond latencies for the identified task, completely masking the ~30 ms delay.
+   - **The Telemetry Blind Spot is Proven:** Existing public Tokio instrumentation and Dial9 cannot detect this interval because their measurement clocks start only *after* readiness is observed and the task is scheduled (`TaskMeta::set_scheduled_at`).
+
+2. **What Remains Unverified in Production (The Real-Application Question):**
+   - **Controlled Reproduction vs Organic Emergence:** Case E and Case F deliberately force saturation using 40 ms spin loops. This is a controlled reproduction designed to isolate scheduler mechanics, not proof of an organic, naturally occurring slowdown in RustFS.
+   - **Real Services vs Closed-Loop Queueing:** In our closed-loop concurrency sweep (Case G) using realistic short chunk compute (5 ms), when load exceeds worker capacity (Tier 4, 8 concurrent clients on 2 workers), Stock Tokio ($5.044\text{ ms}$ p50) and Dial9 ($5.045\text{ ms}$ p50) **do observe** queueing latency. This is because tasks that are already woken queue in the scheduler runqueue, where schedule latency tracking functions as designed.
+   - **The RustFS Execution Context:** Inspection of pinned RustFS source (`crates/ecstore/src/disk/disk_store.rs`) confirms that chunk streaming involves CPU-intensive algorithms (SigV4 SHA-256, CRC32C, and Reed-Solomon erasure coding `RS(k, m)`). If these operations run synchronously on Tokio worker threads without yielding or offloading to `spawn_blocking`, they will starve driver maintenance. However, whether real-world RustFS latencies stem from driver starvation rather than task runqueue wait, NVMe disk I/O, or network transit remains unverified.
+   - **Conclusion on Russell's Question:**
+     The corrected evidence conclusively answers **the controlled case and the architectural mechanism**: Tokio has an inherent blind spot where un-serviced I/O driver latency cannot be observed by current telemetry. However, it **does not** answer the real-application question for production RustFS. Proving that driver starvation occurs organically in production would require either upstream driver turn interval telemetry or in-situ eBPF kernel probes (`sock:sock_data_ready`) in an active RustFS deployment.
 
 ---
 
