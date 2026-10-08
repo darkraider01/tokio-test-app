@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 from analyze import analyze
 from fs_probe import (HEADER, KIND_JOB_END, KIND_JOB_START, KIND_JOIN_READY,
-                      KIND_SEND_OK, KIND_SUBMIT, RECORD, analyze_run,
-                      build_poll_index,
-                      containing_poll, group_jobs, job_intervals, op_hash,
-                      pair_polls, read_probe, reconstruct_wait, step_hash,
-                      summarize_jobs)
+                      KIND_SEND_OK, KIND_SUB, KIND_SUBMIT, RECORD, analyze_run,
+                      build_poll_index, classify_pool_tids,
+                      containing_poll, group_jobs, job_calls, job_intervals,
+                      job_stages, op_hash, operation_job_rows, pair_polls,
+                      read_probe, reconstruct_wait, step_hash, summarize_jobs)
 from load import run_tier
 from stage_metrics import read_histograms, summarize_tier
 from syscalls import read_syscalls
@@ -175,6 +175,36 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(step_hash("make_dir_all"), 2398025995)
         self.assertEqual(step_hash("rename"), 2180167635)
         self.assertEqual(step_hash("rename_no_owner"), 3779027443)
+
+    def test_commit_path_and_sub_tag_hashes_match_the_rust_probe(self):
+        # Same vectors as `fs_probe::step_hash_vectors` in the probe's
+        # `src/fs_probe.rs`, verified by `cargo test --lib step_hashes_match`.
+        for tag, expected in [
+            ("dest_meta_read", 3173220776),
+            ("staged_meta_write", 1136281453),
+            ("src_dir_sync", 3702088569),
+            ("rename_data_dir", 3947226104),
+            ("rename_meta", 64001953),
+            ("dst_dir_fsync", 379138918),
+            ("ancestor_fsync", 2435288110),
+            ("sub_scan", 1830077803),
+            ("sub_prep_open", 2700932782),
+            ("sub_prep_write", 3442534505),
+            ("sub_fdatasync", 3828332939),
+            ("sub_fsync_files", 2779959459),
+            ("sub_dir_open", 605670494),
+            ("sub_dir_sync", 1793101661),
+            ("sub_rename", 3645352792),
+            ("sub_scan_end", 2660144945),
+            ("sub_prep_open_end", 1884947536),
+            ("sub_prep_write_end", 1276132143),
+            ("sub_fdatasync_end", 2941781905),
+            ("sub_fsync_files_end", 3871831177),
+            ("sub_dir_open_end", 169304928),
+            ("sub_dir_sync_end", 1067621507),
+            ("sub_rename_end", 3128992490),
+        ]:
+            self.assertEqual(step_hash(tag), expected, tag)
 
     def test_probe_dump_round_trip_preserves_header_and_records(self):
         records = [
@@ -349,6 +379,165 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(result["missing"], ["send", "resume_poll"])
         self.assertIsNone(result["send_ts"])
 
+    def test_quorum_send_fields_decode_when_recorded_and_stay_null_when_absent(self):
+        op = op_hash("acceptance", "c8/259.bin")
+        wait_begin = self._record(12, 1_000, tid=30, a=op)
+        wait_end = self._record(13, 4_000, tid=30, a=op)
+        # New probe encoding: step=results_seen, id=write_quorum,
+        # reserved2=disk_count (the fanout size).
+        send = dict(self._record(14, 3_000, tid=20, a=op, task_id=3))
+        send["step"] = 4
+        send["reserved2"] = 4
+        polls = [{"tid": 30, "worker_id": 1, "start": 3_100, "end": 5_000,
+                  "spawn_loc": None, "task_id": 7, "local_queue": 0}]
+        result = reconstruct_wait([wait_begin, wait_end, send],
+                                  build_poll_index(polls), wait_begin, wait_end, op)
+        self.assertEqual(result["results_seen"], 4)
+        self.assertEqual(result["write_quorum"], 3)
+        self.assertEqual(result["disk_count"], 4)
+        # Pre-extension captures record all three fields as 0 -> reported as
+        # null, never as a fabricated zero quorum.
+        legacy = dict(self._record(14, 3_000, tid=20, a=op))
+        legacy["reserved2"] = 0
+        result = reconstruct_wait([wait_begin, wait_end, legacy],
+                                  build_poll_index(polls), wait_begin, wait_end, op)
+        self.assertIsNone(result["results_seen"])
+        self.assertIsNone(result["write_quorum"])
+        self.assertIsNone(result["disk_count"])
+
+    def test_job_cpu_and_offcpu_come_from_the_thread_clock(self):
+        # job_start/job_end carry CLOCK_THREAD_CPUTIME_ID in `a`.
+        start = self._record(2, 1_000_000, tid=30, task_id=42, a=5_000_000)
+        end = self._record(3, 3_000_000, tid=30, task_id=42, a=6_500_000)
+        summary = job_intervals({"job_start": start, "job_end": end}, None)
+        self.assertEqual(summary["start_to_end_ms"], 2.0)
+        self.assertEqual(summary["closure_cpu_ms"], 1.5)
+        self.assertEqual(summary["closure_offcpu_ms"], 0.5)
+        # Captures before the extension carry a=0: nulls, never zeros.
+        legacy = job_intervals({"job_start": self._record(2, 1_000_000, tid=30, task_id=42),
+                                "job_end": self._record(3, 3_000_000, tid=30, task_id=42)},
+                               None)
+        self.assertIsNone(legacy["closure_cpu_ms"])
+        self.assertIsNone(legacy["closure_offcpu_ms"])
+        self.assertEqual(legacy["start_to_end_ms"], 2.0)
+        # A CPU clock running backwards across boundaries would be nonsense:
+        # it stays null instead of producing a negative cpu figure.
+        backwards = job_intervals({"job_start": self._record(2, 1_000_000, tid=30, task_id=42, a=9_000_000),
+                                   "job_end": self._record(3, 3_000_000, tid=30, task_id=42, a=8_000_000)},
+                                  None)
+        self.assertIsNone(backwards["closure_cpu_ms"])
+        self.assertIsNone(backwards["closure_offcpu_ms"])
+        # One endpoint missing: cpu stays null while wall time still reports.
+        half = job_intervals({"job_start": start}, None)
+        self.assertIsNone(half["closure_cpu_ms"])
+        self.assertIsNone(half["start_to_end_ms"])
+
+    def test_sub_markers_group_into_named_stages(self):
+        start = self._record(KIND_JOB_START, 1_000, tid=30, task_id=42)
+        markers = [self._record(KIND_SUB, 2_500, tid=30, task_id=42,
+                                step=step_hash("sub_dir_open")),
+                   self._record(KIND_SUB, 3_000, tid=30, task_id=42,
+                                step=step_hash("sub_dir_sync"))]
+        end = self._record(KIND_JOB_END, 10_000, tid=30, task_id=42)
+        # A marker for a job that never appeared is counted, not silently kept.
+        orphan = self._record(KIND_SUB, 2_600, tid=30, task_id=99,
+                              step=step_hash("sub_scan"))
+        jobs, counters = group_jobs([end, orphan] + markers + [start])
+        self.assertEqual(counters["orphan_sub_markers"], 1)
+        self.assertEqual(len(jobs[42].get("subs", [])), 2)
+        stages = job_stages(jobs[42])
+        # Marker names the stage starting at its timestamp; the lead before
+        # the first marker is its own segment; the last stage runs to job_end.
+        self.assertEqual(stages[0], {"tag": "lead", "from_start_ms": 0.0,
+                                     "dur_ms": 0.0015})
+        self.assertEqual(stages[1]["tag"], "sub_dir_open")
+        self.assertEqual(stages[1]["dur_ms"], 0.0005)
+        self.assertEqual(stages[2]["tag"], "sub_dir_sync")
+        self.assertEqual(stages[2]["dur_ms"], 0.007)
+        # Without markers (or without a complete closure) stages are null.
+        self.assertIsNone(job_stages({"job_start": start, "job_end": end}))
+        self.assertIsNone(job_stages({"job_start": start}))
+
+    def test_job_calls_pair_delimited_calls_and_skip_unpaired(self):
+        # Job A: a delimited call whose end marker is last — residue runs to
+        # job_end. Job B: a start marker whose `?`-failure skipped its end
+        # marker, plus a stray end with no pending start.
+        start_a = self._record(KIND_JOB_START, 1_000, tid=30, task_id=42)
+        end_a = self._record(KIND_JOB_END, 95_000, tid=30, task_id=42)
+        markers_a = [self._record(KIND_SUB, 2_000, tid=30, task_id=42,
+                                  step=step_hash("sub_dir_sync")),
+                     self._record(KIND_SUB, 92_000, tid=30, task_id=42,
+                                  step=step_hash("sub_dir_sync_end"))]
+        start_b = self._record(KIND_JOB_START, 1_000, tid=31, task_id=43)
+        end_b = self._record(KIND_JOB_END, 9_000, tid=31, task_id=43)
+        markers_b = [self._record(KIND_SUB, 2_000, tid=31, task_id=43,
+                                  step=step_hash("sub_dir_open")),
+                     self._record(KIND_SUB, 5_000, tid=31, task_id=43,
+                                  step=step_hash("sub_prep_open_end"))]
+        jobs, _ = group_jobs([end_a, end_b] + markers_a + markers_b + [start_a, start_b])
+        calls = job_calls(jobs[42])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["tag"], "sub_dir_sync")
+        self.assertEqual(calls[0]["from_start_ms"], 0.001)
+        self.assertEqual(calls[0]["dur_ms"], 0.09)
+        self.assertEqual(calls[0]["post_call_ms"], 0.003)
+        # Unpaired start or stray end: no row and no guessed duration.
+        self.assertIsNone(job_calls(jobs[43]))
+        # Captures without end markers (v2) report None, never a wrapper guess.
+        self.assertIsNone(job_calls({"job_start": start_a, "job_end": end_a}))
+
+    def test_pool_classification_uses_tagged_worker_and_count_evidence(self):
+        records, job_id = [], 0
+        for tid, count, step, op_value in [(10, 60, step_hash("mkdir"), 1),
+                                           (20, 60, 0, 1),
+                                           (50, 3, step_hash("ancestor_fsync"), 1)]:
+            for _ in range(count):
+                job_id += 1
+                records += [self._record(KIND_SUBMIT, job_id * 10, tid=tid,
+                                         task_id=job_id, step=step, a=op_value),
+                            self._record(KIND_JOB_START, job_id * 10 + 1, tid=tid,
+                                         task_id=job_id),
+                            self._record(KIND_JOB_END, job_id * 10 + 2, tid=tid,
+                                         task_id=job_id)]
+        # A tid carrying tags from both pools: conflicting evidence is
+        # reported as ambiguous, never silently resolved to one pool.
+        for step in (step_hash("mkdir"), step_hash("mkdir"),
+                     step_hash("ancestor_fsync")):
+            job_id += 1
+            records += [self._record(KIND_SUBMIT, job_id * 10, tid=60,
+                                     task_id=job_id, step=step, a=2),
+                        self._record(KIND_JOB_START, job_id * 10 + 1, tid=60,
+                                     task_id=job_id),
+                        self._record(KIND_JOB_END, job_id * 10 + 2, tid=60,
+                                     task_id=job_id)]
+        # Worker run-loop: a single OP_NONE job with no job_end.
+        job_id += 1
+        records += [self._record(KIND_SUBMIT, 1_000_000, tid=30, task_id=job_id),
+                    self._record(KIND_JOB_START, 1_000_001, tid=30, task_id=job_id)]
+        # A thread with only a few untagged jobs: not enough evidence.
+        for _ in range(3):
+            job_id += 1
+            records += [self._record(KIND_SUBMIT, job_id * 10, tid=40,
+                                     task_id=job_id, a=2),
+                        self._record(KIND_JOB_START, job_id * 10 + 1, tid=40,
+                                     task_id=job_id),
+                        self._record(KIND_JOB_END, job_id * 10 + 2, tid=40,
+                                     task_id=job_id)]
+        jobs, _ = group_jobs(records)
+        pools = classify_pool_tids(jobs)
+        # tid 50 proves the primary rule: few jobs, but fsync-pool tags only.
+        self.assertEqual(pools, {10: "main", 20: "fsync", 30: "worker_loop",
+                                 40: "unknown", 50: "fsync", 60: "ambiguous"})
+        # Operation rows attach the pool and tag names to each job.
+        rows = operation_job_rows(jobs, 0, pools)
+        self.assertEqual(rows[0]["pool"], "main")
+        self.assertEqual(rows[0]["step_tag"], "mkdir")
+        fsync_row = next(row for row in rows if row["pool"] == "fsync")
+        self.assertEqual(fsync_row["step_tag"], "untagged")
+        loop_row = next(row for row in rows if row["pool"] == "worker_loop")
+        self.assertIn("job_end", loop_row["missing"])
+        self.assertIsNone(loop_row["wall_ms"])
+
     def test_summarize_jobs_counts_complete_and_incomplete_jobs(self):
         complete = [self._record(1, 100, task_id=1), self._record(2, 200, task_id=1),
                     self._record(3, 300, task_id=1), self._record(4, 400, task_id=1),
@@ -424,7 +613,9 @@ class FsProbeTests(unittest.TestCase):
             self._record(3, attempt + 25_000_000, tid=10, task_id=42),
             self._record(4, attempt + 26_000_000, tid=10, task_id=42),
             self._record(12, attempt + 30_000_000, tid=30, a=op),
-            self._record(14, attempt + 55_000_000, tid=10, a=op),
+            # step=results_seen mirrors the quorum encoding: it must not be
+            # mistaken for a tag hash in run-level step_hashes.
+            self._record(14, attempt + 55_000_000, tid=10, a=op, step=4),
             self._record(5, attempt + 57_000_000, tid=30, task_id=42),
             self._record(13, attempt + 60_000_000, tid=30, a=op),
             self._record(11, attempt + 62_000_000, tid=30, a=op),
@@ -468,6 +659,7 @@ class FsProbeTests(unittest.TestCase):
         wait = tier["waits"][0]
         self.assertEqual(wait["missing"], [])
         self.assertEqual(wait["send_kind"], "send_ok")
+        self.assertEqual(wait["results_seen"], 4)
         self.assertEqual(wait["wait_total_ms"], 30.0)
         self.assertEqual(wait["wait_begin_to_send_ms"], 25.0)
         self.assertEqual(wait["send_to_resume_poll_ms"], 1.0)

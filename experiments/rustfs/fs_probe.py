@@ -27,6 +27,8 @@ KIND_JOB_START = 2
 KIND_JOB_END = 3
 KIND_JOB_COMPLETE = 4
 KIND_JOIN_READY = 5
+# Inner-boundary marker inside a running blocking closure (`id` = job id).
+KIND_SUB = 6
 KIND_OP_BEGIN = 10
 KIND_OP_END = 11
 KIND_WAIT_BEGIN = 12
@@ -40,6 +42,7 @@ KIND_NAMES = {
     KIND_JOB_END: "job_end",
     KIND_JOB_COMPLETE: "job_complete",
     KIND_JOIN_READY: "join_ready",
+    KIND_SUB: "sub",
     KIND_OP_BEGIN: "op_begin",
     KIND_OP_END: "op_end",
     KIND_WAIT_BEGIN: "wait_begin",
@@ -50,8 +53,35 @@ KIND_NAMES = {
 
 OP_NONE = 0
 
-# Tag names must match the `scope_step` call sites in the probe build.
-STEP_TAGS = ("mkdir", "make_dir_all", "rename", "rename_no_owner")
+# Tag names must match the `scope_step` call sites in the probe build
+# (fs.rs, os.rs, and commit.rs). Frozen: changing a name changes its hash.
+STEP_TAGS = ("mkdir", "make_dir_all", "rename", "rename_no_owner",
+             "dest_meta_read", "staged_meta_write", "src_dir_sync",
+             "rename_data_dir", "rename_meta", "dst_dir_fsync",
+             "ancestor_fsync")
+
+# Inner-boundary markers must match the `sub_step` call sites (os.rs). Frozen
+# the same way; `sub` records exist only when the server ran with
+# RUSTFS_FS_PROBE_SUB set. Each wrapped call `X` is delimited by a start
+# marker `X` and an explicit end marker `X_end`; an error path that
+# `?`-propagates before the end marker simply has no paired end (see
+# `job_calls`).
+SUB_TAGS = ("sub_scan", "sub_prep_open", "sub_prep_write", "sub_fdatasync",
+            "sub_fsync_files", "sub_dir_open", "sub_dir_sync", "sub_rename",
+            "sub_scan_end", "sub_prep_open_end", "sub_prep_write_end",
+            "sub_fdatasync_end", "sub_fsync_files_end", "sub_dir_open_end",
+            "sub_dir_sync_end", "sub_rename_end")
+
+# Call-site -> pool map for the tags above (pool = which Tokio runtime runs
+# the spawned closure; the two pools are disjoint thread sets):
+# - MAIN_POOL_TAGS: spawn sites are `tokio::fs` wrappers or
+#   `run_blocking_namespace_operation` -> the main runtime's blocking pool.
+# - FSYNC_POOL_TAGS: call chain reaches `fsync_spawn_blocking` -> the
+#   dedicated FSYNC_RUNTIME (os.rs).
+MAIN_POOL_TAGS = frozenset(("mkdir", "make_dir_all", "rename", "rename_no_owner",
+                            "dest_meta_read", "staged_meta_write",
+                            "rename_data_dir", "rename_meta"))
+FSYNC_POOL_TAGS = frozenset(("src_dir_sync", "dst_dir_fsync", "ancestor_fsync"))
 
 
 def fnv1a(data, basis, prime, bits):
@@ -94,9 +124,10 @@ def read_probe(path):
         raise ValueError(f"probe dump record count {count} != min(total_seen {total}, capacity {capacity})")
     records = []
     for offset in range(0, len(body), record_size):
-        kind, _reserved, _pad, step, tid, _reserved2, task_id, ts, a = RECORD.unpack_from(body, offset)
+        kind, _reserved, _pad, step, tid, reserved2, task_id, ts, a = RECORD.unpack_from(body, offset)
         records.append({"kind": kind, "name": KIND_NAMES.get(kind, f"kind_{kind}"),
-                        "step": step, "tid": tid, "id": task_id, "ts": ts, "a": a})
+                        "step": step, "tid": tid, "id": task_id, "ts": ts, "a": a,
+                        "reserved2": reserved2})
     header = {"version": version, "record_size": record_size, "capacity": capacity,
               "total_seen": total, "dropped_records": max(0, total - capacity),
               "flushed_monotonic_ns": flushed_monotonic_ns,
@@ -110,13 +141,22 @@ def group_jobs(records):
     """Group blocking-job records by task id; keep join_ready only for jobs.
 
     Returns `(jobs, counters)`. Each job maps boundary name to its record;
-    absent boundaries stay absent.
+    absent boundaries stay absent. Inner-boundary markers (`sub`) attach to
+    their job as a list under `subs`.
     """
     jobs = {}
-    counters = {"duplicate_boundaries": 0, "non_blocking_join_ready": 0}
+    counters = {"duplicate_boundaries": 0, "non_blocking_join_ready": 0,
+                "orphan_sub_markers": 0}
     for record in sorted(records, key=lambda r: r["ts"]):
         kind = record["kind"]
         if kind == KIND_JOIN_READY:
+            continue
+        if kind == KIND_SUB:
+            job = jobs.get(record["id"])
+            if job is None:
+                counters["orphan_sub_markers"] += 1
+                continue
+            job.setdefault("subs", []).append(record)
             continue
         if kind not in (KIND_SUBMIT, KIND_JOB_START, KIND_JOB_END, KIND_JOB_COMPLETE):
             continue
@@ -230,9 +270,17 @@ def job_intervals(job, poll_index):
                                  "job_complete", "join_ready") if name not in job]
     resume_poll = containing_poll(poll_index, join["ts"], join["tid"]) if join else None
     resume_start = resume_poll["start"] if resume_poll else None
+    # job_start/job_end carry the executor thread's CPU clock (ns) in `a`.
+    # Captures written before that extension carry 0 -> reported as null, not 0.
+    cpu_ns = None
+    if start and end and start["a"] and end["a"] and end["a"] >= start["a"]:
+        cpu_ns = end["a"] - start["a"]
+    wall_ns = (end["ts"] - start["ts"]) if start and end else None
     intervals = {
         "submit_to_start_ms": _millis(start["ts"] - submit["ts"]) if submit and start else None,
-        "start_to_end_ms": _millis(end["ts"] - start["ts"]) if start and end else None,
+        "start_to_end_ms": _millis(wall_ns),
+        "closure_cpu_ms": _millis(cpu_ns),
+        "closure_offcpu_ms": _millis(wall_ns - cpu_ns) if wall_ns is not None and cpu_ns is not None else None,
         "end_to_complete_ms": _millis(complete["ts"] - end["ts"]) if end and complete else None,
         "completion_to_poll_start_proxy_ms": _millis(resume_start - complete["ts"]) if complete and resume_start else None,
         "poll_start_to_join_ready_ms": _millis(join["ts"] - resume_start) if join and resume_start else None,
@@ -255,7 +303,8 @@ def job_intervals(job, poll_index):
 def summarize_jobs(jobs, poll_index=None):
     summaries = [job_intervals(job, poll_index) for job in jobs.values()]
     complete = [s for s in summaries if not s["missing"]]
-    fields = ("submit_to_start_ms", "start_to_end_ms", "end_to_complete_ms",
+    fields = ("submit_to_start_ms", "start_to_end_ms", "closure_cpu_ms",
+              "closure_offcpu_ms", "end_to_complete_ms",
               "completion_to_poll_start_proxy_ms", "poll_start_to_join_ready_ms",
               "total_submit_to_join_ready_ms")
     stats = {}
@@ -283,6 +332,12 @@ def reconstruct_wait(records, poll_index, wait_begin, wait_end, op):
     return {
         "send_kind": None if first_send is None else KIND_NAMES[first_send["kind"]],
         "send_ts": None if first_send is None else first_send["ts"],
+        # Quorum dependency recorded at the send: `step` = results the join loop
+        # had processed, `id` = write_quorum, `reserved2` = fanout disk_count.
+        # Captures written before that extension carry 0 -> reported as null.
+        "results_seen": (first_send or {}).get("step") or None,
+        "write_quorum": (first_send or {}).get("id") or None,
+        "disk_count": (first_send or {}).get("reserved2", 0) or None,
         "wait_total_ms": _millis(wait_end["ts"] - wait_begin["ts"]),
         "wait_begin_to_send_ms": _millis(first_send["ts"] - wait_begin["ts"]) if first_send else None,
         "send_to_resume_poll_ms": _millis(resume_start - first_send["ts"]) if first_send and resume_start else None,
@@ -312,6 +367,185 @@ def step_names(step_hashes):
     return {known.get(value, "unknown"): value for value in sorted(set(step_hashes))}
 
 
+def sub_names(step_hashes):
+    """Map observed inner-boundary hashes back to their marker names."""
+    known = {step_hash(tag): tag for tag in SUB_TAGS}
+    return {known.get(value, "unknown"): value for value in sorted(set(step_hashes))}
+
+
+def job_stages(job):
+    """Sub-boundary segments of one closure, or None when markers are absent.
+
+    A marker names the stage that starts at its timestamp; the stage runs to
+    the next marker or to `job_end`. Time from `job_start` to the first marker
+    is reported as `lead`. Markers exist only for servers built and run with
+    `RUSTFS_FS_PROBE_SUB` set.
+    """
+    start = job.get("job_start")
+    end = job.get("job_end")
+    markers = sorted(job.get("subs") or (), key=lambda r: r["ts"])
+    if not start or not end or not markers:
+        return None
+    known = {step_hash(tag): tag for tag in SUB_TAGS}
+    stages = []
+    lead = markers[0]["ts"] - start["ts"]
+    if lead > 0:
+        stages.append({"tag": "lead", "from_start_ms": 0.0,
+                       "dur_ms": _millis(lead)})
+    for index, marker in enumerate(markers):
+        if marker["ts"] >= end["ts"]:
+            break
+        finish = end["ts"] if index + 1 == len(markers) else markers[index + 1]["ts"]
+        finish = max(finish, marker["ts"])
+        stages.append({
+            "tag": known.get(marker["step"], "unknown"),
+            "from_start_ms": (marker["ts"] - start["ts"]) / 1e6,
+            "dur_ms": _millis(finish - marker["ts"]),
+        })
+    return stages or None
+
+
+def job_calls(job):
+    """Paired call-wrapper intervals of one closure, or None when absent.
+
+    Pairs each start marker `X` with its explicit end marker `X_end`
+    (emitted on every success path that reaches the marker; the `-v2`
+    captures predate end markers and return None here). `dur_ms` is the
+    start-marker-to-end-marker interval: the wrapped call plus any code
+    between the markers, on one thread — a call-wrapper interval, not a
+    kernel entry/exit measurement. `post_call_ms` is the residue from the
+    end marker to the next marker or `job_end` (trailing cleanup or
+    descheduling after the call returned). A call that failed via `?`
+    before its end marker was recorded has no row rather than an estimated
+    duration.
+    """
+    start = job.get("job_start")
+    end = job.get("job_end")
+    markers = sorted(job.get("subs") or (), key=lambda r: r["ts"])
+    if not start or not end or not markers:
+        return None
+    known = {step_hash(tag): tag for tag in SUB_TAGS}
+    pending = {}
+    calls = []
+    for index, marker in enumerate(markers):
+        if marker["ts"] >= end["ts"]:
+            break
+        name = known.get(marker["step"], "unknown")
+        if name.endswith("_end"):
+            begin = pending.pop(name[:-4], None)
+            if begin is None:
+                continue
+            finish = end["ts"] if index + 1 == len(markers) else markers[index + 1]["ts"]
+            finish = max(finish, marker["ts"])
+            calls.append({
+                "tag": name[:-4],
+                "from_start_ms": (begin - start["ts"]) / 1e6,
+                "dur_ms": _millis(marker["ts"] - begin),
+                "post_call_ms": _millis(finish - marker["ts"]),
+            })
+        else:
+            pending.setdefault(name, marker["ts"])
+    return calls or None
+
+
+def classify_pool_tids(jobs):
+    """Classify each executor tid's blocking pool: main | fsync | worker_loop | ambiguous | unknown.
+
+    Primary rule is the call-site name of the tags the tid executed: every
+    tag maps to exactly one spawn site (see `MAIN_POOL_TAGS` /
+    `FSYNC_POOL_TAGS`) and the pools are disjoint runtimes, so one proven
+    site fixes the tid. A tid that executed tags from *both* sets is
+    reported as **ambiguous** — the evidence conflicts (e.g. an unknown
+    tagging bug), and the classifier refuses to guess; no such tid was
+    observed in the current captures, and operation rows for one would be
+    labeled `ambiguous` rather than silently resolved. Fallbacks cover
+    captures from before those tags existed (v2: only mkdir/rename-family
+    tags existed and fsync sites were untagged):
+
+    - a tid whose only job is an OP_NONE job spanning the capture (no
+      `job_end`, or wall > 1 s) is labeled **worker_loop**: its *shape*
+      matches the main- and fsync-runtime worker run-loops, but the label
+      describes the shape, not a verified thread identity;
+    - a never-tagged tid with >= 50 jobs is labeled **fsync**: fsync-pool
+      call sites were untagged then, and with ~13 % of all jobs tagged the
+      probability of a main-pool thread drawing zero tags over 50 jobs is
+      < 1e-5 — a probability argument, not a proof;
+    - everything else is **unknown** (too little evidence either way).
+    """
+    known = {step_hash(tag): tag for tag in STEP_TAGS}
+    per_tid = {}
+    for job in jobs.values():
+        start = job.get("job_start")
+        if start is None:
+            continue
+        tid = start["tid"]
+        info = per_tid.setdefault(tid, {"jobs": 0, "main": False, "fsync": False,
+                                        "worker_loop": True})
+        info["jobs"] += 1
+        submit = job.get("submit")
+        end = job.get("job_end")
+        tag = known.get(submit["step"]) if submit else None
+        if tag is not None:
+            info["main"] = info["main"] or tag in MAIN_POOL_TAGS
+            info["fsync"] = info["fsync"] or tag in FSYNC_POOL_TAGS
+            info["worker_loop"] = False
+        elif submit is None or submit["a"] != OP_NONE:
+            info["worker_loop"] = False
+        elif end is not None and end["ts"] - start["ts"] <= 1_000_000_000:
+            info["worker_loop"] = False
+    pools = {}
+    for tid, info in per_tid.items():
+        if info["main"] and info["fsync"]:
+            pools[tid] = "ambiguous"
+        elif info["main"]:
+            pools[tid] = "main"
+        elif info["fsync"]:
+            pools[tid] = "fsync"
+        elif info["worker_loop"] and info["jobs"] == 1:
+            pools[tid] = "worker_loop"
+        elif info["jobs"] >= 50:
+            pools[tid] = "fsync"
+        else:
+            pools[tid] = "unknown"
+    return pools
+
+
+def operation_job_rows(op_jobs, attempt_mono_ns, pools=None, poll_index=None):
+    """Per-job detail rows for one operation's timeline."""
+    known = {step_hash(tag): tag for tag in STEP_TAGS}
+    ordered = sorted(op_jobs.values(),
+                     key=lambda job: (job.get("submit") or job.get("job_start")
+                                      or {}).get("ts", 0))
+    rows = []
+    for job in ordered:
+        summary = job_intervals(job, poll_index)
+        submit = job.get("submit")
+        start = job.get("job_start")
+        end = job.get("job_end")
+        rows.append({
+            "task_id": summary["task_id"],
+            "step_hash": summary["step_hash"],
+            "step_tag": (known.get(summary["step_hash"], "unknown")
+                         if summary["step_hash"] else "untagged"),
+            "submit_offset_ms": ((submit["ts"] - attempt_mono_ns) / 1e6
+                                 if submit else None),
+            "job_start_offset_ms": ((start["ts"] - attempt_mono_ns) / 1e6
+                                    if start else None),
+            "job_end_offset_ms": ((end["ts"] - attempt_mono_ns) / 1e6
+                                  if end else None),
+            "wall_ms": summary["start_to_end_ms"],
+            "cpu_ms": summary["closure_cpu_ms"],
+            "offcpu_ms": summary["closure_offcpu_ms"],
+            "submit_tid": summary["submit_tid"],
+            "job_tid": summary["job_tid"],
+            "pool": (pools or {}).get(summary["job_tid"]),
+            "stages": job_stages(job),
+            "calls": job_calls(job),
+            "missing": summary["missing"],
+        })
+    return rows
+
+
 def read_dial9(root):
     """Read every converted Dial9 trace under `root/telemetry`."""
     events = []
@@ -339,6 +573,10 @@ def analyze_run(root):
                     if clock_sync else None)
 
     jobs, job_counters = group_jobs(records)
+    pools = classify_pool_tids(jobs)
+    pool_counts = {}
+    for pool in pools.values():
+        pool_counts[pool] = pool_counts.get(pool, 0) + 1
     op_begins = {r["a"]: r for r in records if r["kind"] == KIND_OP_BEGIN}
     kind_counts = {}
     for record in records:
@@ -359,12 +597,19 @@ def analyze_run(root):
                   else probe_offset - dial9_offset},
         "jobs": summarize_jobs(jobs, poll_index),
         "job_counters": job_counters,
+        "blocking_pools": {"counts": pool_counts,
+                           "tid_pools": {str(tid): pool for tid, pool in sorted(pools.items())}},
         "polls": {"paired": len(polls), **poll_counters},
-        "step_hashes": step_names(r["step"] for r in records if r["step"]),
+        "step_hashes": step_names(r["step"] for r in records
+                                  if r["kind"] == KIND_SUBMIT and r["step"]),
+        "sub_hashes": sub_names(r["step"] for r in records
+                                if r["kind"] == KIND_SUB and r["step"]),
         "tiers": [],
         "limitations": [
             "Blocking-job boundaries are observed wall time on one host, not CPU time",
-            "Blocking-job start-to-end is wall time inside the closure: filesystem calls, CPU work, locks, and OS descheduling are not separated",
+            "Blocking-job start-to-end is wall time inside the closure: job_start/job_end carry the thread CPU clock so captures with that extension report cpu and offcpu separately, but off-CPU time still mixes kernel waits, lock waits, and OS descheduling",
+            "Inner-boundary stage records (sub) exist only for servers built and run with RUSTFS_FS_PROBE_SUB set; without them per-job stages are null",
+            "Executor pool classification (main/fsync/worker_loop/ambiguous) is a documented heuristic over tag call-sites, job counts, and OP_NONE worker-loop shape: a worker_loop label describes a job shape rather than a verified thread identity, and the >= 50-job fallback is a probability argument, not a runtime fact",
             "T3' completion is recorded after task.run() stores the output and wakes the joiner; completion_to_poll_start_proxy_ms and the poll containing join_ready are diagnostic proxies, not directly measured scheduling latency",
             "Poll containment resolves the poll by OS thread id; a record outside every Dial9 poll is reported as missing",
             "Recording stops at ring capacity; total_seen beyond capacity is reported as dropped_records",
@@ -421,6 +666,8 @@ def analyze_run(root):
             "operation_records": timeline_offsets(op_records, attempt_mono),
             "waits": wait_pairs,
             "jobs_for_operation": summarize_jobs(op_jobs, poll_index),
+            "operation_jobs": operation_job_rows(op_jobs, attempt_mono, pools,
+                                                 poll_index),
             "job_steps": step_names(job.get("submit", {}).get("step", 0)
                                     for job in op_jobs.values()
                                     if job.get("submit", {}).get("step")),

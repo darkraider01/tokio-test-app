@@ -142,7 +142,11 @@ def main():
                            RUST_LOG="info,rustfs_ecstore=debug",
                            OTEL_BSP_SCHEDULE_DELAY="1000", OTEL_BSP_MAX_QUEUE_SIZE="16384")
             if args.fs_probe:
-                env.update(RUSTFS_FS_PROBE_OUT=str((out / "fs-probe.bin").resolve()))
+                # RUSTFS_FS_PROBE_SUB adds inner-closure stage markers; the
+                # analyzer reports stages as null when it is unset. With the
+                # ring capacity at 1<<20 a full run stays well inside capacity.
+                env.update(RUSTFS_FS_PROBE_OUT=str((out / "fs-probe.bin").resolve()),
+                           RUSTFS_FS_PROBE_SUB="1")
             tiers = []
             with (out / "rustfs.log").open("w") as log:
                 command = [str(args.binary)]
