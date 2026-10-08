@@ -1,0 +1,571 @@
+diff -ruN a/src/fs_probe.rs b/src/fs_probe.rs
+--- a/src/fs_probe.rs	1970-01-01 05:30:00.000000000 +0530
++++ b/src/fs_probe.rs	2026-10-08 19:24:13.000000000 +0530
+@@ -0,0 +1,420 @@
++//! Diagnostic probe for blocking-pool job boundaries.
++//!
++//! Compiled only with `--cfg rustfs_fs_probe` (Linux only). Records raw
++//! `CLOCK_MONOTONIC` nanoseconds, the same clock Dial9 uses for trace
++//! timestamps, so probe records and Dial9 poll events share one time domain
++//! and join by containment on the OS thread id (`gettid`).
++//!
++//! Observed boundaries per blocking job, keyed by the Tokio task id:
++//!
++//! * `T0` `KIND_SUBMIT`      – recorded in `spawn_blocking_inner` immediately
++//!   before the job is pushed to the blocking pool queue; carries the `OP`
++//!   and `STEP` task-local context of the spawning task.
++//! * `T1` `KIND_JOB_START`   – recorded in `BlockingTask::poll` immediately
++//!   before the closure runs on a blocking thread.
++//! * `T2` `KIND_JOB_END`     – recorded immediately after the closure returns.
++//! * `T3'` `KIND_JOB_COMPLETE` – recorded after `task.run()` returns in the
++//!   blocking worker loop; the task harness has stored the output and woken
++//!   the join waker inside `run()`, so this is an upper bound on the instant
++//!   the result became available.
++//! * `T5` `KIND_JOIN_READY`  – recorded when `JoinHandle::poll` observes
++//!   `Ready` inside the awaiting task.
++//!
++//! Missing records stay missing: analysis reports incomplete intervals rather
++//! than fabricating zeros. Recording stops at ring capacity instead of
++//! wrapping (wrapping would race a descheduled writer's store), and
++//! `total_seen` keeps counting so records never stored stay visible.
++//!
++//! Runtime gate: records are written only when `RUSTFS_FS_PROBE_OUT` is set
++//! to a non-empty path. `flush_to_env` writes the buffer there after the
++//! runtime has shut down.
++
++use std::cell::{Cell, UnsafeCell};
++use std::future::Future;
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::sync::OnceLock;
++
++/// Sentinel for "no operation context" in the `a` field of `T0` records.
++pub const OP_NONE: u64 = 0;
++
++pub const KIND_SUBMIT: u8 = 1;
++pub const KIND_JOB_START: u8 = 2;
++pub const KIND_JOB_END: u8 = 3;
++pub const KIND_JOB_COMPLETE: u8 = 4;
++pub const KIND_JOIN_READY: u8 = 5;
++/// Inner boundary inside a running blocking closure (`id` = job id, `step` =
++/// sub-tag hash). Recorded only when `RUSTFS_FS_PROBE_SUB` is set, because it
++/// multiplies record volume.
++pub const KIND_SUB: u8 = 6;
++pub const KIND_OP_BEGIN: u8 = 10;
++pub const KIND_OP_END: u8 = 11;
++pub const KIND_WAIT_BEGIN: u8 = 12;
++pub const KIND_WAIT_END: u8 = 13;
++pub const KIND_SEND_OK: u8 = 14;
++pub const KIND_SEND_ERR: u8 = 15;
++
++// The keys are built directly instead of with `task_local!` because that
++// macro cannot be invoked by absolute path from inside the defining crate.
++/// Operation context (`op_hash`) of the enclosing application operation.
++pub static OP: crate::task::LocalKey<u64> = {
++    std::thread_local! {
++        static PROBE_OP: std::cell::RefCell<Option<u64>> = const { std::cell::RefCell::new(None) };
++    }
++    crate::task::LocalKey { inner: PROBE_OP }
++};
++
++/// Call-site tag hash of the enclosing filesystem await.
++pub static STEP: crate::task::LocalKey<u32> = {
++    std::thread_local! {
++        static PROBE_STEP: std::cell::RefCell<Option<u32>> = const { std::cell::RefCell::new(None) };
++    }
++    crate::task::LocalKey { inner: PROBE_STEP }
++};
++
++/// FNV-1a (64-bit) over `bucket/object`, with the `OP_NONE` sentinel mapped
++/// to `1` so a real operation is never recorded as "unlinked". The analysis
++/// script recomputes the same function to join probe records with OTLP spans.
++pub fn op_hash(bucket: &str, object: &str) -> u64 {
++    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
++    for bytes in [bucket.as_bytes(), b"/", object.as_bytes()] {
++        for &byte in bytes {
++            hash ^= u64::from(byte);
++            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
++        }
++    }
++    if hash == OP_NONE { 1 } else { hash }
++}
++
++fn step_hash(tag: &str) -> u32 {
++    let mut hash: u32 = 0x811c_9dc5;
++    for &byte in tag.as_bytes() {
++        hash ^= u32::from(byte);
++        hash = hash.wrapping_mul(0x0100_0193);
++    }
++    if hash == 0 { 1 } else { hash }
++}
++
++/// Tag the enclosing await's blocking jobs with a call-site name.
++pub fn scope_step<O>(tag: &'static str, future: impl Future<Output = O>) -> impl Future<Output = O> {
++    STEP.scope(step_hash(tag), future)
++}
++
++/// Synchronous variant of [`scope_step`] for call sites that spawn from poll
++/// context (no future to wrap): the tag applies to `f`, so any `spawn_blocking`
++/// issued inside it is tagged on submit.
++pub fn scope_step_sync<T>(tag: &'static str, f: impl FnOnce() -> T) -> T {
++    STEP.sync_scope(step_hash(tag), f)
++}
++
++/// Propagate the caller's `OP` task-local into a freshly spawned task so that
++/// blocking jobs spawned inside it stay linked to the operation. Records with
++/// `OP_NONE` when spawned outside an operation scope.
++pub fn propagate_op<F: Future>(future: F) -> impl Future<Output = F::Output> {
++    let op = OP.try_get().unwrap_or(OP_NONE);
++    async move {
++        if op == OP_NONE {
++            future.await
++        } else {
++            OP.scope(op, future).await
++        }
++    }
++}
++
++/// Record an application-side event (`id` = 0; join via `OP`/time context).
++pub fn record(kind: u8, step: u32, a: u64) {
++    if !enabled() {
++        return;
++    }
++    push(kind, step, 0, a);
++}
++
++/// Record a quorum-gated send with its dependency snapshot: `step` =
++/// `results_seen` processed by the join loop, `id` = `write_quorum`, and
++/// `reserved2` = fanout `disk_count` (so the tail after the ack is derivable).
++/// `a` carries the operation hash, matching the other op-scoped records.
++pub fn record_quorum_send(kind: u8, results_seen: u32, write_quorum: u32, disk_count: u32, a: u64) {
++    if !enabled() {
++        return;
++    }
++    push_full(
++        kind,
++        results_seen,
++        disk_count,
++        u64::from(write_quorum),
++        a,
++    );
++}
++
++/// Marker inside a running blocking closure; pairs with the enclosing job's
++/// `id` so the analyzer can split closure wall time into sub-stages. No-op
++/// unless `RUSTFS_FS_PROBE_SUB` is set and the thread is inside a job.
++pub fn sub_step(tag: &'static str) {
++    if !sub_enabled() {
++        return;
++    }
++    let id = CURRENT_JOB.with(|current| current.get());
++    if id == 0 {
++        return;
++    }
++    push(KIND_SUB, step_hash(tag), id, 0);
++}
++
++pub(crate) fn spawn_submit(id: u64) {
++    if !enabled() {
++        return;
++    }
++    let op = OP.try_get().unwrap_or(OP_NONE);
++    let step = STEP.try_get().unwrap_or(0);
++    push(KIND_SUBMIT, step, id, op);
++}
++
++pub(crate) fn job_start(id: u64) {
++    if !enabled() {
++        return;
++    }
++    CURRENT_JOB.with(|current| current.set(id));
++    // `a` carries the thread CPU clock at entry so the analyzer can derive the
++    // closure's CPU time (wall time minus CPU = off-CPU wait). Captured on the
++    // same thread that runs `func()`.
++    push(KIND_JOB_START, 0, id, thread_cpu_ns());
++}
++
++pub(crate) fn job_end(id: u64) {
++    if !enabled() {
++        return;
++    }
++    push(KIND_JOB_END, 0, id, thread_cpu_ns());
++}
++
++pub(crate) fn job_complete() {
++    if !enabled() {
++        return;
++    }
++    let id = CURRENT_JOB.with(|current| current.replace(0));
++    if id != 0 {
++        push(KIND_JOB_COMPLETE, 0, id, 0);
++    }
++}
++
++pub(crate) fn join_ready(id: u64) {
++    if !enabled() {
++        return;
++    }
++    push(KIND_JOIN_READY, 0, id, 0);
++}
++
++fn enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var_os("RUSTFS_FS_PROBE_OUT").is_some_and(|value| !value.is_empty()))
++}
++
++fn sub_enabled() -> bool {
++    static SUB_ENABLED: OnceLock<bool> = OnceLock::new();
++    *SUB_ENABLED.get_or_init(|| std::env::var_os("RUSTFS_FS_PROBE_SUB").is_some_and(|value| !value.is_empty()))
++}
++
++thread_local! {
++    static CURRENT_JOB: Cell<u64> = const { Cell::new(0) };
++    static TID: u32 = {
++        // SAFETY: `SYS_gettid` takes no arguments and always succeeds.
++        unsafe { libc::syscall(libc::SYS_gettid) as u32 }
++    };
++}
++
++fn tid() -> u32 {
++    TID.with(|value| *value)
++}
++
++/// Raw `CLOCK_MONOTONIC` nanoseconds; identical to Dial9's trace clock.
++fn now_ns() -> u64 {
++    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
++    // SAFETY: `ts` is a valid out-pointer for `clock_gettime`.
++    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
++    ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
++}
++
++/// Thread CPU time in nanoseconds (`CLOCK_THREAD_CPUTIME_ID`); read around a
++/// blocking closure so its off-CPU wait (kernel fsync/lock wait, descheduling)
++/// is `wall - (end - start)` of this clock.
++fn thread_cpu_ns() -> u64 {
++    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
++    // SAFETY: `ts` is a valid out-pointer for `clock_gettime`.
++    unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut ts) };
++    ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
++}
++
++fn realtime_ns() -> u64 {
++    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
++    // SAFETY: `ts` is a valid out-pointer for `clock_gettime`.
++    unsafe { libc::clock_gettime(libc::CLOCK_REALTIME, &mut ts) };
++    ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64
++}
++
++/// One probe record; serialized little-endian with the layout
++/// `kind:u8, reserved:u8, pad:u16, step:u32, tid:u32, reserved2:u32,
++/// id:u64, ts:u64, a:u64` (40 bytes). `reserved`/`pad` are zero;
++/// `reserved2` is zero except on quorum sends (fanout `disk_count`).
++#[repr(C)]
++#[derive(Clone, Copy)]
++struct Record {
++    kind: u8,
++    reserved: u8,
++    pad: u16,
++    step: u32,
++    tid: u32,
++    reserved2: u32,
++    id: u64,
++    ts: u64,
++    a: u64,
++}
++
++impl Record {
++    const ZERO: Record = Record {
++        kind: 0,
++        reserved: 0,
++        pad: 0,
++        step: 0,
++        tid: 0,
++        reserved2: 0,
++        id: 0,
++        ts: 0,
++        a: 0,
++    };
++}
++
++// Doubled from `1 << 19` when inner-boundary records (`RUSTFS_FS_PROBE_SUB`)
++// were added, so a full tagged run keeps headroom over the ~459k records of the
++// untagged baseline captures (recording still stops at capacity; the header
++// reports `total_seen` beyond capacity as dropped).
++const CAPACITY: usize = 1 << 20;
++
++struct Ring(UnsafeCell<[Record; CAPACITY]>);
++
++// SAFETY: every record index below `CAPACITY` is claimed exactly once by the
++// `WRITE` counter and recording stops at capacity, so no two writers ever
++// touch the same slot even if a writer is descheduled between claiming and
++// storing; the flush that reads the buffer runs after the runtime joined
++// every writer.
++unsafe impl Sync for Ring {}
++
++static RING: Ring = Ring(UnsafeCell::new([Record::ZERO; CAPACITY]));
++static WRITE: AtomicU64 = AtomicU64::new(0);
++
++fn push(kind: u8, step: u32, id: u64, a: u64) {
++    push_full(kind, step, 0, id, a);
++}
++
++fn push_full(kind: u8, step: u32, reserved2: u32, id: u64, a: u64) {
++    let index = WRITE.fetch_add(1, Ordering::Relaxed);
++    if index >= CAPACITY as u64 {
++        // Capacity reached: stop recording rather than wrap onto a slot a
++        // descheduled writer may still be storing to (wrapping would race two
++        // non-atomic stores). `total_seen` keeps counting so the flush reports
++        // these records as dropped.
++        return;
++    }
++    let record = Record { kind, reserved: 0, pad: 0, step, tid: tid(), reserved2, id, ts: now_ns(), a };
++    // SAFETY: `index < CAPACITY` was claimed exactly once; see `Ring`'s note.
++    unsafe { (*RING.0.get()).as_mut_ptr().add(index as usize).write(record) };
++}
++
++fn get(slot: usize) -> Record {
++    // SAFETY: flush runs after all writers were joined.
++    unsafe { (*RING.0.get())[slot] }
++}
++
++fn put_u16(buffer: &mut Vec<u8>, value: u16) {
++    buffer.extend_from_slice(&value.to_le_bytes());
++}
++
++fn put_u32(buffer: &mut Vec<u8>, value: u32) {
++    buffer.extend_from_slice(&value.to_le_bytes());
++}
++
++fn put_u64(buffer: &mut Vec<u8>, value: u64) {
++    buffer.extend_from_slice(&value.to_le_bytes());
++}
++
++/// Write the ring buffer to `RUSTFS_FS_PROBE_OUT`. Call after runtime
++/// shutdown so every writer thread has been joined. The 64-byte header
++/// carries a `(monotonic, realtime)` pair that ties probe timestamps to the
++/// OTLP span clock, plus `total_seen` so records never stored beyond
++/// capacity stay visible as dropped.
++pub fn flush_to_env() {
++    let Some(path) = std::env::var_os("RUSTFS_FS_PROBE_OUT") else {
++        return;
++    };
++    if path.is_empty() {
++        return;
++    }
++    let total = WRITE.load(Ordering::Relaxed);
++    // Recording stops at capacity, so slots 0..kept hold the first `kept`
++    // records in claim order; every claimed slot was stored before its
++    // writer was joined.
++    let kept = total.min(CAPACITY as u64);
++    let monotonic_start = now_ns();
++    let realtime = realtime_ns();
++    let monotonic = monotonic_start + (now_ns() - monotonic_start) / 2;
++
++    let mut buffer: Vec<u8> = Vec::with_capacity(64 + kept as usize * std::mem::size_of::<Record>());
++    buffer.extend_from_slice(b"RFSPRB01");
++    put_u32(&mut buffer, 1);
++    put_u32(&mut buffer, std::mem::size_of::<Record>() as u32);
++    put_u64(&mut buffer, CAPACITY as u64);
++    put_u64(&mut buffer, total);
++    put_u64(&mut buffer, monotonic);
++    put_u64(&mut buffer, realtime);
++    put_u32(&mut buffer, libc::CLOCK_MONOTONIC as u32);
++    put_u32(&mut buffer, 0);
++    put_u64(&mut buffer, u64::from(std::process::id()));
++    for index in 0..kept {
++        let record = get(index as usize);
++        buffer.push(record.kind);
++        buffer.push(record.reserved);
++        put_u16(&mut buffer, record.pad);
++        put_u32(&mut buffer, record.step);
++        put_u32(&mut buffer, record.tid);
++        put_u32(&mut buffer, record.reserved2);
++        put_u64(&mut buffer, record.id);
++        put_u64(&mut buffer, record.ts);
++        put_u64(&mut buffer, record.a);
++    }
++    if let Err(error) = std::fs::write(&path, &buffer) {
++        eprintln!("rustfs fs-probe flush to {:?} failed: {error}", std::path::Path::new(&path));
++    }
++}
++
++#[cfg(test)]
++mod step_hash_vectors {
++    use super::step_hash;
++
++    /// Same vectors as `experiments/rustfs/test_experiment.py`; the analyzer's
++    /// Python mirror of `step_hash` must agree with this implementation for
++    /// every tag name either side records.
++    #[test]
++    fn step_hashes_match_the_python_analyzer() {
++        for (tag, expected) in [
++            ("mkdir", 2883839448),
++            ("make_dir_all", 2398025995),
++            ("rename", 2180167635),
++            ("rename_no_owner", 3779027443),
++            ("dest_meta_read", 3173220776),
++            ("staged_meta_write", 1136281453),
++            ("src_dir_sync", 3702088569),
++            ("rename_data_dir", 3947226104),
++            ("rename_meta", 64001953),
++            ("dst_dir_fsync", 379138918),
++            ("ancestor_fsync", 2435288110),
++            ("sub_scan", 1830077803),
++            ("sub_prep_open", 2700932782),
++            ("sub_prep_write", 3442534505),
++            ("sub_fdatasync", 3828332939),
++            ("sub_fsync_files", 2779959459),
++            ("sub_dir_open", 605670494),
++            ("sub_dir_sync", 1793101661),
++            ("sub_rename", 3645352792),
++        ] {
++            assert_eq!(step_hash(tag), expected, "tag {tag}");
++        }
++    }
++}
+diff -ruN a/src/fs_probe_stub.rs b/src/fs_probe_stub.rs
+--- a/src/fs_probe_stub.rs	1970-01-01 05:30:00.000000000 +0530
++++ b/src/fs_probe_stub.rs	2026-10-08 01:57:42.000000000 +0530
+@@ -0,0 +1,30 @@
++//! No-op counterpart of [`crate::fs_probe`] used when the `rustfs_fs_probe`
++//! cfg is absent, so instrumentation call sites compile unchanged. Every
++//! function is a zero-cost stub.
++
++use std::future::Future;
++
++pub const OP_NONE: u64 = 0;
++
++pub fn record(_kind: u8, _step: u32, _a: u64) {}
++
++pub fn flush_to_env() {}
++
++pub fn propagate_op<F: Future>(future: F) -> F {
++    future
++}
++
++#[allow(dead_code)]
++pub(crate) fn spawn_submit(_id: u64) {}
++
++#[allow(dead_code)]
++pub(crate) fn job_start(_id: u64) {}
++
++#[allow(dead_code)]
++pub(crate) fn job_end(_id: u64) {}
++
++#[allow(dead_code)]
++pub(crate) fn job_complete() {}
++
++#[allow(dead_code)]
++pub(crate) fn join_ready(_id: u64) {}
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2006-07-24 06:51:28.000000000 +0530
++++ b/src/lib.rs	2026-10-08 11:47:04.000000000 +0530
+@@ -525,6 +525,21 @@
+ 
+ mod future;
+ 
++// Diagnostic blocking-pool boundary probe; see the module docs.
++//
++// The probe reads raw clocks through `libc`, which tokio declares as an
++// optional dependency. Feature unification gives the runtime units the
++// `libc` feature (via `net`/`process`/`signal`), but the build-dependency
++// units tokio is compiled into do not enable it; those units fall back to
++// the stub, so build scripts record nothing (the probe only matters in the
++// server binary, whose tokio units always carry `libc`).
++#[cfg(all(rustfs_fs_probe, feature = "libc"))]
++#[path = "fs_probe.rs"]
++pub mod fs_probe;
++#[cfg(not(all(rustfs_fs_probe, feature = "libc")))]
++#[path = "fs_probe_stub.rs"]
++pub mod fs_probe;
++
+ pub mod io;
+ pub mod net;
+ 
+diff -ruN a/src/runtime/blocking/pool.rs b/src/runtime/blocking/pool.rs
+--- a/src/runtime/blocking/pool.rs	2006-07-24 06:51:28.000000000 +0530
++++ b/src/runtime/blocking/pool.rs	2026-10-08 01:58:23.000000000 +0530
+@@ -377,7 +377,7 @@
+     {
+         let id = task::Id::next();
+         let fut =
+-            blocking_task::<F, BlockingTask<F>>(BlockingTask::new(func), spawn_meta, id.as_u64());
++            blocking_task::<F, BlockingTask<F>>(BlockingTask::new(func, id.as_u64()), spawn_meta, id.as_u64());
+ 
+         let (task, handle) = task::unowned(
+             fut,
+@@ -386,6 +386,10 @@
+             task::SpawnLocation::capture(),
+         );
+ 
++        // T0: the job is about to be pushed to the blocking pool queue. The
++        // OP/STEP task-locals are readable here because this runs inside the
++        // spawning task's poll.
++        crate::fs_probe::spawn_submit(id.as_u64());
+         let spawned = self.spawn_task(Task::new(task, is_mandatory), rt);
+         (handle, spawned)
+     }
+@@ -518,6 +522,9 @@
+                 self.metrics.dec_queue_depth();
+                 drop(shared);
+                 task.run();
++                // T3': the harness stored the output and woke the join waker
++                // inside `run()`; this is an upper bound on completion.
++                crate::fs_probe::job_complete();
+ 
+                 shared = self.shared.lock();
+             }
+@@ -566,6 +573,7 @@
+                     drop(shared);
+ 
+                     task.shutdown_or_run_if_mandatory();
++                    crate::fs_probe::job_complete();
+ 
+                     shared = self.shared.lock();
+                 }
+diff -ruN a/src/runtime/blocking/task.rs b/src/runtime/blocking/task.rs
+--- a/src/runtime/blocking/task.rs	2006-07-24 06:51:28.000000000 +0530
++++ b/src/runtime/blocking/task.rs	2026-10-08 01:58:23.000000000 +0530
+@@ -5,12 +5,15 @@
+ /// Converts a function to a future that completes on poll.
+ pub(crate) struct BlockingTask<T> {
+     func: Option<T>,
++    /// Tokio task id of this blocking job, used to correlate the probe's
++    /// T1/T2/T3' records with its T0/T5 records.
++    probe_id: u64,
+ }
+ 
+ impl<T> BlockingTask<T> {
+     /// Initializes a new blocking task from the given function.
+-    pub(crate) fn new(func: T) -> BlockingTask<T> {
+-        BlockingTask { func: Some(func) }
++    pub(crate) fn new(func: T, probe_id: u64) -> BlockingTask<T> {
++        BlockingTask { func: Some(func), probe_id }
+     }
+ }
+ 
+@@ -39,6 +42,12 @@
+         // we want it to start without any budgeting.
+         crate::task::coop::stop();
+ 
+-        Poll::Ready(func())
++        // T1: the closure begins executing on a blocking thread.
++        crate::fs_probe::job_start(self.probe_id);
++        let result = func();
++        // T2: the closure finished; the harness stores the result and wakes
++        // the join handle after this poll returns.
++        crate::fs_probe::job_end(self.probe_id);
++        Poll::Ready(result)
+     }
+ }
+diff -ruN a/src/runtime/task/join.rs b/src/runtime/task/join.rs
+--- a/src/runtime/task/join.rs	2006-07-24 06:51:28.000000000 +0530
++++ b/src/runtime/task/join.rs	2026-10-08 01:58:28.000000000 +0530
+@@ -348,6 +348,8 @@
+ 
+         if ret.is_ready() {
+             coop.made_progress();
++            // T5: the awaiting task observes the completed result.
++            crate::fs_probe::join_ready(self.id().as_u64());
+         }
+ 
+         ret
