@@ -303,31 +303,51 @@ its `Cargo.toml`. Neither the control checkout nor the control binary
 The probe is reproducible from this repository alone: the `.repro/` checkouts
 are working copies, and [patches/](patches) preserves every diagnostic edit —
 Tokio probe modules and hook sites, RustFS-side scopes, the `Cargo.toml` patch
-entry, and the resulting `Cargo.lock` change:
+entry, and the resulting `Cargo.lock` change. Three generations exist: the
+unsuffixed patches reproduce the first `-v2` capture working copies (binary
+`d2fd9f310ea91a50b6a00c4ff45ee80ea0827b56710a14b2f35bef415f22e882`, 2^19-record
+ring, four step tags); the `-v2` patches add the commit-path step tags, the
+`RUSTFS_FS_PROBE_SUB`-gated inner-boundary markers, per-job thread CPU
+samples, quorum-send dependency fields, and the 2^20-record ring (binary
+`fac3b2d1581bbe43d228d6ab6623e52b7481ef93bf28c1ca9d1837627eacb23e`); the
+`-v3` patches add explicit `_end` markers for every sub-marked call on each
+success path (so each call-wrapper interval is delimited instead of running
+to closure end), pair them in the analyzer via `calls`, and extend the hash
+vectors to all 27 tags (binary
+`8fc0577be62b37ae80304c4c8760511f0248cec4870f534ff2647a9adcc65779`):
 
 | Patch | Applies to | SHA-256 |
 | :--- | :--- | :--- |
 | `tokio-1.53.2-fs-probe.patch` | registry `tokio-1.53.2` source | `9a6d5341c8dd297a91110e3beb08e872f562f8846c7ae88a29f9bb24f0aa697b` |
 | `rustfs-probe.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `673a787466ab7d8aaa0c556d1f43fb1e55ab1ef1b9930a77c12e80402b717534` |
+| `tokio-1.53.2-fs-probe-v2.patch` | registry `tokio-1.53.2` source | `d8abefac86da16682e7e4f9a2545ba071ad3511803f7227de466d2f45e872443` |
+| `rustfs-probe-v2.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `3a78be5322eed0c5f7f266af069ab059186020719909791defc9102ff1e35e9d` |
+| `tokio-1.53.2-fs-probe-v3.patch` | registry `tokio-1.53.2` source | `342e86f00e6de3b40fac1460061315e1922b9c9ac55c2943948385b2a9750769` |
+| `rustfs-probe-v3.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `c88196310af6b38649176948a5a3aa51e5d994405b79bbc7aeff9f27bdd353f3` |
 
-Both were verified to apply to pristine sources (fresh registry copy and fresh
-clone at the pinned revision) and reproduce the live checkouts byte-for-byte.
-To recreate the probe working copies (fresh directories; `git apply` works
-without a surrounding repository):
+All six were verified to apply to pristine sources (fresh registry copy and
+fresh clone at the pinned revision); each `-v2` and `-v3` patch was
+additionally applied and its result compared byte-for-byte against the live
+working copies.
+To recreate the current probe working copies (fresh directories; `git apply`
+works without a surrounding repository):
 
 ```sh
 cp -a "$(echo ~/.cargo/registry/src/*/tokio-1.53.2)" .repro/tokio-blocking-probe
 git -C .repro/tokio-blocking-probe apply --check -p1 \
-  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe.patch
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v3.patch
 git -C .repro/tokio-blocking-probe apply -p1 \
-  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe.patch
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v3.patch
 git -C .repro/rustfs worktree add --detach ../rustfs-probe \
   6b1554003ebf8f2037ffb7da9c9b906527e758da
 git -C .repro/rustfs-probe apply --check \
-  ../../experiments/rustfs/patches/rustfs-probe.patch
+  ../../experiments/rustfs/patches/rustfs-probe-v3.patch
 git -C .repro/rustfs-probe apply \
-  ../../experiments/rustfs/patches/rustfs-probe.patch
+  ../../experiments/rustfs/patches/rustfs-probe-v3.patch
 ```
+
+(Substitute the `-v2` patch names to recreate the working copies that produced
+the `fac3b2d1…` v3 captures.)
 
 Build the probe binary (separate target directory, no `--locked` because the
 patch entry rewrites `Cargo.lock`):
@@ -366,10 +386,50 @@ overhead separately from record-writing overhead. Probe runs intentionally omit
 `--request-traces`: Dial9 polls, the probe records, and the client tiers are
 sufficient, and the object-hash join replaces the span join.
 
+The stage/CPU/quorum-instrumented revision (`-v2` patches, binary
+`fac3b2d1…`) and one bounded group-commit control were run as:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fsprobe-run-v3 \
+  --binary .repro/rustfs-probe/target/release/rustfs \
+  --rustfs-source .repro/rustfs-probe \
+  --fs-probe --repetitions 2 --duration 3 --concurrency 1 8
+RUSTFS_EXPERIMENTAL_DST_DIR_FSYNC_GROUP_COMMIT_ENABLE=true \
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-groupcommit-run \
+  --binary .repro/rustfs-probe/target/release/rustfs \
+  --rustfs-source .repro/rustfs-probe \
+  --fs-probe --repetitions 1 --duration 3 --concurrency 1 8
+```
+
+Neither command passes `--rates`, so each also ran the r10/r25/r50 rate tiers
+after c8; probe analysis reads the c1/c8 tiers for comparison. `run.py` sets
+`RUSTFS_FS_PROBE_SUB=1` on every `--fs-probe` server, which enables the
+inner-boundary stage markers; with the flag absent the analyzer reports
+per-job stages as null.
+
+The end-marker revision (`-v3` patches, binary `8fc0577b…`) was run the same
+way:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fsprobe-run-v4 \
+  --binary .repro/rustfs-probe/target/release/rustfs \
+  --rustfs-source .repro/rustfs-probe \
+  --fs-probe --repetitions 2 --duration 3 --concurrency 1 8
+```
+
 The first probe attempt (`.repro/rustfs-fsprobe-run`) predates the detached-commit
 spawn propagation fix below: every `WAIT`/`SEND` record carried `op=0`, so its
 waits could not be joined. It is superseded; `results/fs-probe-diagnostic.json`
-is regenerated from the `-v2` runs only.
+is regenerated from the `-v2` runs only and stays tied to the first-generation
+probe binary (`d2fd9f31…`). The stage/CPU/quorum revision produced
+`results/fs-probe-v3-diagnostic.json` (binary `fac3b2d1…`, two repetitions) and
+`results/fs-probe-groupcommit-diagnostic.json` (the bounded control above);
+the end-marker revision produced `results/fs-probe-v4-diagnostic.json`
+(binary `8fc0577b…`, two repetitions); each records the SHA-256 of its
+`fs-probe.bin` and of the server binary.
 
 Analyze one or more probe runs:
 
@@ -377,6 +437,15 @@ Analyze one or more probe runs:
 PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_probe.py \
   .repro/rustfs-fsprobe-run-v2/run-1 .repro/rustfs-fsprobe-run-v2/run-2 \
   --output experiments/rustfs/results/fs-probe-diagnostic.json
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_probe.py \
+  .repro/rustfs-fsprobe-run-v3/run-1 .repro/rustfs-fsprobe-run-v3/run-2 \
+  --output experiments/rustfs/results/fs-probe-v3-diagnostic.json
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_probe.py \
+  .repro/rustfs-fsprobe-run-v4/run-1 .repro/rustfs-fsprobe-run-v4/run-2 \
+  --output experiments/rustfs/results/fs-probe-v4-diagnostic.json
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_probe.py \
+  .repro/rustfs-groupcommit-run/run-1 \
+  --output experiments/rustfs/results/fs-probe-groupcommit-diagnostic.json
 ```
 
 Probe design notes:
@@ -394,7 +463,8 @@ Probe design notes:
   scheduling latency.
 - The record layout is 40 bytes (`<BBHIIIQQQ`) behind a 64-byte header
   (`<8sIIQQQQIIQ`) carrying a `(monotonic, realtime)` flush pair, `total_seen`,
-  and the pid. The ring holds 2^19 records (~20 MiB); recording stops at
+  and the pid. The ring holds 2^20 records (~40 MiB) in the `-v2` revision
+  (2^19 in the first generation); recording stops at
   capacity instead of wrapping (a wrap could race a descheduled writer's
   store), and `total_seen` beyond capacity is reported as `dropped_records`.
   Analysis never invents a value: a missing
@@ -408,10 +478,48 @@ Probe design notes:
   lose it: the detached commit-owner task (`put_object`'s `tokio::spawn` around
   the commit closure — the first probe attempt recorded every wait with `op=0`
   until this spawn was wrapped), the rename tail-drain spawn, and the per-disk
-  fanout task spawn. Step tags (`mkdir`, `make_dir_all`, `rename`,
-  `rename_no_owner`) are FNV-1a-32 task-locals around the four filesystem awaits.
-  Python mirrors of both hashes are pinned to vectors generated by the Rust
-  implementations in `test_experiment.py`.
+  fanout task spawn. Step tags are FNV-1a-32 task-locals around blocking work:
+  the `-v2` revision tags eleven commit-path sites (`mkdir`, `make_dir_all`,
+  `rename`, `rename_no_owner`, `dest_meta_read`, `staged_meta_write`,
+  `src_dir_sync`, `rename_data_dir`, `rename_meta`, `dst_dir_fsync`,
+  `ancestor_fsync`; the first generation had the first four). Python mirrors
+  of both hashes are pinned to vectors generated by the Rust implementations
+  in `test_experiment.py` and cross-checked by a Rust unit test
+  (`cargo test --lib --features full,test-util step_hashes_match` inside
+  `.repro/tokio-blocking-probe`, with both probe cfgs in `RUSTFLAGS`).
+- The `-v2` revision adds three more record encodings, all backward
+  compatible (older dumps decode them as nulls):
+  * `job_start`/`job_end` carry `CLOCK_THREAD_CPUTIME_ID` nanoseconds in the
+    `a` field, so the analyzer splits closure wall time into `closure_cpu_ms`
+    and `closure_offcpu_ms` (off-CPU still mixes kernel wait, lock wait, and
+    descheduling; it does not separate them);
+  * `kind=6` (`sub`) inner-boundary markers inside a running closure, emitted
+    only when `RUSTFS_FS_PROBE_SUB` is set and `CURRENT_JOB != 0`. In the
+    `-v2` patches a marker is a *start* marker: the analyzer's `stages` split
+    the closure into `lead` plus named segments, each running to the next
+    marker or closure end — call-wrapper intervals (call + trailing cleanup +
+    any descheduling), not kernel entry/exit measurements of the wrapped
+    call (e.g. `sub_dir_sync` starts before `sync_all()` and runs to closure
+    end). The `-v3` patches (exercised by the `-v4` captures) add explicit
+    `_end` markers on every success path, paired by the analyzer's `calls`
+    helper into `dur_ms` (start marker → end marker) and `post_call_ms`
+    (residue from the end marker to the next marker or closure end); a
+    `?`-failure path that skips its `_end` marker yields no row rather than
+    an estimated duration. Even with `_end` markers the pair still bounds a
+    call-wrapper interval — code between the markers plus any descheduling
+    of that thread — and kernel entry/exit tracing is still needed to claim
+    exact syscall duration;
+  * `SEND_OK`/`SEND_ERR` carry the quorum dependency snapshot: `step` =
+    `results_seen`, `id` = `write_quorum`, `reserved2` = fanout `disk_count`.
+- Blocking-pool membership is derived, not assumed: `classify_pool_tids`
+  assigns each executor tid `main`, `fsync`, `worker_loop`, `ambiguous`, or
+  `unknown` from the call-site names of the tags it executed (the two pools
+  are disjoint runtimes; a tid carrying tags from both sets is reported as
+  `ambiguous` rather than silently resolved), falling back to the worker-loop
+  job shape and job counts for captures from before the pool-spanning tags
+  existed; the fallbacks and their probability argument are documented at the
+  function (a `worker_loop` label describes a job shape, not a verified
+  thread identity) and surfaced as a limitation in the output.
 - Behavior changes in the probe build, all confined to the diagnostic worktree:
   the `[patch.crates-io]` entry, the `rustfs_fs_probe`-gated scopes listed above,
   `propagate_op` wrappers at those three spawn sites (identity functions when
