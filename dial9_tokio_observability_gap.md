@@ -677,7 +677,38 @@ The [request-span diagnostic](experiments/rustfs/README.md#existing-request-span
 
 Request `c8/259.bin` took 99.69 ms at the client. The matching server request ID identifies a 92.851 ms HTTP span. Its selected trace contains 54 spans with all exported parent references resolved; the erasure-set storage operation spans 85.989 ms. A nested directory-creation operation takes 19.830 ms, including an exported 19.110 ms span-idle interval. This wrapper awaits `tokio::fs` operations. The span counters are wall time around enter/exit, not CPU time or a measured blocking-pool queue delay; filesystem work, queueing, scheduling, and diagnostic overhead remain indistinguishable within the await.
 
-An additional object-matched metadata trace has a separate trace ID and is preserved without inventing a causal parent link. The selected hierarchy locates most server elapsed time inside storage and identifies a substantial await interval, but does not fully explain that interval or establish complete request coverage. The next causal boundary to measure is request-linked filesystem/queue completion and task resumption. Kernel socket readiness and driver discovery are still absent; the evidence does not establish driver starvation in this RustFS workload.
+An additional object-matched metadata trace has a separate trace ID and is preserved without inventing a causal parent link. The selected hierarchy locates most server elapsed time inside storage and identifies a substantial await interval, but does not fully explain that interval or establish complete request coverage. The next causal boundary to measure is request-linked filesystem/queue completion and task resumption; §10 measures it directly with the blocking-pool probe. Kernel socket readiness and driver discovery are still absent; the evidence does not establish driver starvation in this RustFS workload.
+
+### 10. Blocking-Pool Probe: Decomposing the Remaining Delay
+
+The [blocking-pool probe diagnostic](experiments/rustfs/README.md#blocking-pool-probe-diagnostic) instruments Tokio's own blocking-pool and `JoinHandle` boundaries in an isolated patched copy (byte copy of registry `tokio-1.53.2`, wired only into the `.repro/rustfs-probe` worktree; the control binary is untouched, SHA-256 `dc577ce7…`). It observes five boundaries directly — `T0` submit, `T1` job start, `T2` job end, `T3'` completion recorded after `task.run()`, and `T5` join-ready — plus `SEND`/`WAIT` records around `commit_rx.await`, and joins everything to the client request by an FNV hash of `bucket/object`. Two probe repetitions (concurrency 1 and 8, 1 MiB PUTs, 3 s tiers) recorded 458,882 and 471,759 records with zero drops; probe↔Dial9 clock offsets agree within 11–20 ns; 167,665+ Dial9 polls were paired with no unmatched boundaries.
+
+**Strongest finding: the delay is filesystem execution, not Tokio scheduling.** For the slowest PUT of every tier, the `commit_rx.await` wait — the boundary the span diagnostic could only show as "an await with zero polls" — accounts for 65–86% of client latency, and within that wait:
+
+| Representative PUT | client | wait | wait = begin→send | send→resume poll | resume→wait end |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| run-1 `c1/209.bin` | 19.5 ms | 12.720 ms | 12.717 ms | 0.69 µs | 1.82 µs |
+| run-1 `c8/351.bin` | 135.4 ms | 115.111 ms | 115.108 ms | 0.94 µs | 2.12 µs |
+| run-2 `c1/6.bin` | 29.5 ms | 22.578 ms | 22.575 ms | 0.94 µs | 2.16 µs |
+| run-2 `c8/204.bin` | 87.5 ms | 74.851 ms | 74.849 ms | 0.46 µs | 1.37 µs |
+
+The wait is over 99.99% "not yet sent": the operation is waiting for the quorum `SEND_OK` to be produced, and once the send fires the resumed task is polled within ~1 µs and closes the wait ~2 µs later. Runnable-to-resumption is not the cost.
+
+The wait window is occupied by the operation's own blocking jobs: 97.3–98.9% of each window is covered by `[submit..end]` segments of that PUT's jobs, with total dispatch overlap (`submit→start` inside the window) of only 0.26–0.83 ms and roughly four jobs executing concurrently (452 ms of clipped job execution inside the 115 ms run-1 c8 window). Per representative PUT, 56 blocking jobs join: 44 untagged commit-phase jobs (rename/fsync; the `rename`/`rename_no_owner` step tags never fire on this path) hold 455.4 ms of execution — including a single 101.6 ms job — while the 12 tagged `mkdir`/`make_dir_all` jobs total 1.1 ms.
+
+Across all 174,006 jobs in the two probe runs (job aggregates do not depend on the request join):
+
+- **Blocking-pool dispatch (`T0→T1`)**: p50 8 µs, p95 44–50 µs, p99 0.20–0.21 ms, max 3.8 ms — dispatch delay is negligible at the median and sub-millisecond at p99.
+- **Filesystem execution (`T1→T2`)**: p50 20 µs, p95 3.5 ms, p99 6.1–6.2 ms, max 6.4–6.6 s — the heavy tail lives here.
+- **Completion propagation (`T2→T3'`)**: p50 0.8 µs, p99 ~7 µs — free.
+- **Runnable→resume (`T3'→poll`)**: p50 89–101 µs, p95 1.1 ms, p99 2.8–2.9 ms, max 20–35 ms — the largest scheduling component, but an order of magnitude below filesystem execution at the tail.
+- **Submit→join-ready total**: p50 0.26–0.27 ms, p95 4.3–4.5 ms, p99 7.1–7.5 ms.
+
+Probe-on p50 latency (14.2–14.4 ms at c1, 32.0–32.8 ms at c8) matches the probe-binary-disabled condition (14.3 / 32.7 ms) and the control (15.3–15.6 / 36.6–42.4 ms); with two 3-second repetitions these runs show no measurable probe overhead, but they are not an overhead benchmark.
+
+One probe defect is part of the record: the first attempt (`.repro/rustfs-fsprobe-run`) lost the operation context at `put_object`'s detached commit-owner spawn, so 797/798 waits recorded `op=0` and could not be joined. The spawn is now wrapped in `propagate_op` like the tail-drain and fanout spawns, and [fs-probe-diagnostic.json](experiments/rustfs/results/fs-probe-diagnostic.json) is regenerated from the fixed `-v2` runs only; that attempt's wait rows are `missing: ["wait_begin"]`, never zero-filled.
+
+**What remains unresolved:** inside the 44 untagged commit-phase blocking jobs — the actual occupants of the wait — wall time cannot yet distinguish device fsync from in-closure queueing or lock waits, and the 6.4 s aggregate outlier job is unexplained. The next measurement is request-linked per-job attribution inside those commit jobs (per-disk rename/fdatasync timers, or off-CPU/stack sampling of the blocking threads), not more scheduler instrumentation: every scheduling boundary around the wait is already µs-scale. Driver readiness remains unmeasured, so no driver-starvation claim follows.
 
 ---
 
