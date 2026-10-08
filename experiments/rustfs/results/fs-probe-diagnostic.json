@@ -1,0 +1,1184 @@
+{
+  "runs": [
+    {
+      "manifest": {
+        "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+        "rustfs_working_tree": " M Cargo.lock\n M Cargo.toml\n M crates/ecstore/src/disk/fs.rs\n M crates/ecstore/src/disk/os.rs\n M crates/ecstore/src/set_disk/core/io_primitives.rs\n M crates/ecstore/src/set_disk/ops/object.rs\n M rustfs/src/startup_entrypoint.rs\n",
+        "dependencies": [
+          {
+            "name": "dial9",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+            "dependencies": [
+              "bon",
+              "dial9-core",
+              "dial9-macro",
+              "dial9-metrique",
+              "dial9-perf-self-profile",
+              "dial9-tokio-telemetry",
+              "dial9-trace-format",
+              "tokio",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-tokio-telemetry",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+            "dependencies": [
+              "bon",
+              "bytes",
+              "dial9-core",
+              "dial9-perf-self-profile",
+              "dial9-trace-format",
+              "flate2",
+              "futures-util",
+              "hostname",
+              "libc",
+              "metrique-timesource",
+              "pin-project-lite",
+              "serde",
+              "serde_json",
+              "smallvec",
+              "tokio",
+              "tokio-util",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-trace-format",
+            "version": "0.5.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+            "dependencies": [
+              "ahash",
+              "dial9-trace-format-derive",
+              "serde",
+              "typeid"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.53.2",
+            "dependencies": [
+              "bytes",
+              "libc",
+              "mio",
+              "pin-project-lite",
+              "signal-hook-registry",
+              "socket2",
+              "tokio-macros",
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-probe/target/release/rustfs",
+        "declared_build_profile": "release",
+        "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+        "workers": 2,
+        "payload_bytes": 1048576,
+        "payload_sha256": "f0f7dbcd20c4a06bc83260c7f79f2a486c25d49ae5a5983544d2bc948a7d2313",
+        "repetitions": 2,
+        "generation_seconds_per_tier": 3.0,
+        "telemetry_enabled": true,
+        "stage_metrics_enabled": false,
+        "request_traces_enabled": false,
+        "fs_probe_enabled": true,
+        "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-fsprobe-run-v2",
+        "limitations": [
+          "HTTP 200 is not a read-back integrity check",
+          "New connection and client signing costs are included in attempt latency",
+          "Declared profile must be verified against the binary build command"
+        ],
+        "binary_sha256": "d2fd9f310ea91a50b6a00c4ff45ee80ea0827b56710a14b2f35bef415f22e882",
+        "decoder_commit": "33b2d780628b42251047909ff2b88fdb97e3c28b",
+        "run_1_exit_code": 0,
+        "run_2_exit_code": 0
+      },
+      "probe_dump": {
+        "version": 1,
+        "record_size": 40,
+        "capacity": 524288,
+        "total_seen": 458882,
+        "dropped_records": 0,
+        "records": 458882,
+        "clock_id": 1,
+        "pid": 162778,
+        "flushed_monotonic_ns": 13860045400277,
+        "flushed_realtime_ns": 1791449900459870425,
+        "sha256": "20f2edce4f7bdc3b4255ec8b587c34a52b238ba8d17cc9880d0421c6173a2240"
+      },
+      "record_counts": {
+        "submit": 85795,
+        "job_start": 85795,
+        "job_end": 85783,
+        "join_ready": 111051,
+        "job_complete": 85783,
+        "op_begin": 941,
+        "op_end": 940,
+        "wait_begin": 932,
+        "send_ok": 931,
+        "wait_end": 931
+      },
+      "clock": {
+        "probe_realtime_minus_monotonic_ns": 1791436040414470148,
+        "dial9_realtime_minus_monotonic_ns": 1791436040414470159,
+        "offset_delta_ns": -11
+      },
+      "jobs": {
+        "jobs": 85795,
+        "complete_jobs": 81780,
+        "incomplete_jobs": 4015,
+        "intervals": {
+          "submit_to_start_ms": {
+            "observations": 85795,
+            "ms": {
+              "p50": 0.007985,
+              "p95": 0.050104,
+              "p99": 0.211288,
+              "max": 3.818689
+            }
+          },
+          "start_to_end_ms": {
+            "observations": 85783,
+            "ms": {
+              "p50": 0.020379,
+              "p95": 3.471305,
+              "p99": 6.211813,
+              "max": 6361.229137
+            }
+          },
+          "end_to_complete_ms": {
+            "observations": 85783,
+            "ms": {
+              "p50": 0.000812,
+              "p95": 0.003426,
+              "p99": 0.006863,
+              "max": 3.987637
+            }
+          },
+          "runnable_to_resume_ms": {
+            "observations": 81619,
+            "ms": {
+              "p50": 0.089057,
+              "p95": 1.109939,
+              "p99": 2.883989,
+              "max": 34.69816
+            }
+          },
+          "resume_to_join_ready_ms": {
+            "observations": 81619,
+            "ms": {
+              "p50": 0.001152,
+              "p95": 0.013686,
+              "p99": 0.030618,
+              "max": 4.363714
+            }
+          },
+          "total_submit_to_join_ready_ms": {
+            "observations": 81780,
+            "ms": {
+              "p50": 0.258717,
+              "p95": 4.347584,
+              "p99": 7.529454,
+              "max": 101.938721
+            }
+          }
+        }
+      },
+      "job_counters": {
+        "duplicate_boundaries": 0,
+        "non_blocking_join_ready": 29271
+      },
+      "polls": {
+        "paired": 167665,
+        "unmatched_poll_ends": 0,
+        "overwritten_poll_starts": 0,
+        "unmatched_poll_starts": 0
+      },
+      "step_hashes": {
+        "make_dir_all": 2398025995,
+        "mkdir": 2883839448
+      },
+      "tiers": [
+        {
+          "tier": "c1",
+          "load": {
+            "tier": "c1",
+            "bucket": "tokio-experiment",
+            "mode": "closed_loop",
+            "concurrency": 1,
+            "target_rps": null,
+            "max_active": 64,
+            "start_realtime_ns": 1791449894393458154,
+            "generation_end_realtime_ns": 1791449897393458154,
+            "end_realtime_ns": 1791449897397320815,
+            "generation_s": 3.0,
+            "elapsed_including_drain_s": 3.003816975,
+            "drain_s": 0.003816975,
+            "planned_arrivals": 210,
+            "attempted": 210,
+            "completed_ok": 210,
+            "failed": 0,
+            "client_shed": 0,
+            "attempts_during_generation_rps": 70.0,
+            "completions_during_generation_rps": 69.66666666666667,
+            "throughput_including_drain_rps": 69.91105042277086,
+            "latency_ms": {
+              "p50": 14.239365,
+              "p95": 14.897274,
+              "p99": 16.481958,
+              "max": 19.491724
+            },
+            "scheduled_to_completion_ms": {
+              "p50": 14.239846,
+              "p95": 14.897815,
+              "p99": 16.482328,
+              "max": 19.492325
+            },
+            "launch_lateness_ms": {
+              "p50": 0.000461,
+              "p95": 0.000692,
+              "p99": 0.000781,
+              "max": 0.001102
+            }
+          },
+          "representative_request": {
+            "key": "c1/209.bin",
+            "scheduled_ns": 13856963187466,
+            "attempted_ns": 13856963188067,
+            "attempted_realtime_ns": 1791449897377660475,
+            "launch_lateness_ms": 0.000601,
+            "status": 200,
+            "server_request_id": "f99c795c-6e5d-4699-824a-b113db9f59fb",
+            "total_ms": 19.442941,
+            "write_ms": 0.423257,
+            "response_headers_wait_ms": 18.376003,
+            "response_wait_ms": 18.387384,
+            "completed_ns": 13856982679791,
+            "attempt_to_completion_ms": 19.491724,
+            "scheduled_to_completion_ms": 19.492325
+          },
+          "op_hash": 4646726278909646597,
+          "bucket": "tokio-experiment",
+          "missing": [],
+          "operation_records": [
+            {
+              "name": "op_begin",
+              "offset_ms": 1.573272,
+              "tid": 162793,
+              "step_hash": 0,
+              "op_hash": 4646726278909646597,
+              "task_id": 0
+            },
+            {
+              "name": "wait_begin",
+              "offset_ms": 6.221142,
+              "tid": 162792,
+              "step_hash": 0,
+              "op_hash": 4646726278909646597,
+              "task_id": 0
+            },
+            {
+              "name": "send_ok",
+              "offset_ms": 18.938432,
+              "tid": 162792,
+              "step_hash": 0,
+              "op_hash": 4646726278909646597,
+              "task_id": 0
+            },
+            {
+              "name": "wait_end",
+              "offset_ms": 18.940947,
+              "tid": 162792,
+              "step_hash": 0,
+              "op_hash": 4646726278909646597,
+              "task_id": 0
+            },
+            {
+              "name": "op_end",
+              "offset_ms": 18.976384,
+              "tid": 162792,
+              "step_hash": 0,
+              "op_hash": 4646726278909646597,
+              "task_id": 0
+            }
+          ],
+          "waits": [
+            {
+              "send_kind": "send_ok",
+              "send_ts": 13856982126499,
+              "wait_total_ms": 12.719805,
+              "wait_begin_to_send_ms": 12.71729,
+              "send_to_resume_poll_ms": 0.000691,
+              "resume_poll_to_wait_end_ms": 0.001824,
+              "resume_poll_start_ns": 13856982127190,
+              "resume_poll_task": 30025,
+              "wait_begin_tid": 162792,
+              "wait_end_tid": 162792,
+              "missing": []
+            }
+          ],
+          "jobs_for_operation": {
+            "jobs": 56,
+            "complete_jobs": 56,
+            "incomplete_jobs": 0,
+            "intervals": {
+              "submit_to_start_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.007394,
+                  "p95": 0.011852,
+                  "p99": 0.018435,
+                  "max": 0.018435
+                }
+              },
+              "start_to_end_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.081834,
+                  "p95": 6.561572,
+                  "p99": 6.857178,
+                  "max": 6.857178
+                }
+              },
+              "end_to_complete_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001874,
+                  "p95": 0.003627,
+                  "p99": 0.006211,
+                  "max": 0.006211
+                }
+              },
+              "runnable_to_resume_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.008777,
+                  "p95": 0.070362,
+                  "p99": 0.097604,
+                  "max": 0.097604
+                }
+              },
+              "resume_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001032,
+                  "p95": 0.010941,
+                  "p99": 0.014257,
+                  "max": 0.014257
+                }
+              },
+              "total_submit_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.112702,
+                  "p95": 6.586699,
+                  "p99": 6.874371,
+                  "max": 6.874371
+                }
+              }
+            }
+          },
+          "job_steps": {
+            "make_dir_all": 2398025995,
+            "mkdir": 2883839448
+          }
+        },
+        {
+          "tier": "c8",
+          "load": {
+            "tier": "c8",
+            "bucket": "tokio-experiment",
+            "mode": "closed_loop",
+            "concurrency": 8,
+            "target_rps": null,
+            "max_active": 64,
+            "start_realtime_ns": 1791449897402432799,
+            "generation_end_realtime_ns": 1791449900402432799,
+            "end_realtime_ns": 1791449900426732773,
+            "generation_s": 3.0,
+            "elapsed_including_drain_s": 3.024109827,
+            "drain_s": 0.024109827,
+            "planned_arrivals": 694,
+            "attempted": 694,
+            "completed_ok": 694,
+            "failed": 0,
+            "client_shed": 0,
+            "attempts_during_generation_rps": 231.33333333333334,
+            "completions_during_generation_rps": 228.66666666666666,
+            "throughput_including_drain_rps": 229.48901981131652,
+            "latency_ms": {
+              "p50": 32.787232,
+              "p95": 47.318337,
+              "p99": 100.702834,
+              "max": 135.362681
+            },
+            "scheduled_to_completion_ms": {
+              "p50": 32.787713,
+              "p95": 47.318798,
+              "p99": 100.703335,
+              "max": 135.363172
+            },
+            "launch_lateness_ms": {
+              "p50": 0.000361,
+              "p95": 0.000752,
+              "p99": 0.000962,
+              "max": 0.001613
+            }
+          },
+          "representative_request": {
+            "key": "c8/351.bin",
+            "scheduled_ns": 13858432777544,
+            "attempted_ns": 13858432778035,
+            "attempted_realtime_ns": 1791449898847249430,
+            "launch_lateness_ms": 0.000491,
+            "status": 200,
+            "server_request_id": "ee09fae5-f889-4961-9bb4-d4b4f471009c",
+            "total_ms": 135.312978,
+            "write_ms": 0.3987,
+            "response_headers_wait_ms": 134.205012,
+            "response_wait_ms": 134.220441,
+            "completed_ns": 13858568140716,
+            "attempt_to_completion_ms": 135.362681,
+            "scheduled_to_completion_ms": 135.363172
+          },
+          "op_hash": 2440140784597922092,
+          "bucket": "tokio-experiment",
+          "missing": [],
+          "operation_records": [
+            {
+              "name": "op_begin",
+              "offset_ms": 4.752486,
+              "tid": 162793,
+              "step_hash": 0,
+              "op_hash": 2440140784597922092,
+              "task_id": 0
+            },
+            {
+              "name": "wait_begin",
+              "offset_ms": 18.864162,
+              "tid": 162792,
+              "step_hash": 0,
+              "op_hash": 2440140784597922092,
+              "task_id": 0
+            },
+            {
+              "name": "send_ok",
+              "offset_ms": 133.972565,
+              "tid": 162793,
+              "step_hash": 0,
+              "op_hash": 2440140784597922092,
+              "task_id": 0
+            },
+            {
+              "name": "wait_end",
+              "offset_ms": 133.97563,
+              "tid": 162793,
+              "step_hash": 0,
+              "op_hash": 2440140784597922092,
+              "task_id": 0
+            },
+            {
+              "name": "op_end",
+              "offset_ms": 134.015265,
+              "tid": 162793,
+              "step_hash": 0,
+              "op_hash": 2440140784597922092,
+              "task_id": 0
+            }
+          ],
+          "waits": [
+            {
+              "send_kind": "send_ok",
+              "send_ts": 13858566750600,
+              "wait_total_ms": 115.111468,
+              "wait_begin_to_send_ms": 115.108403,
+              "send_to_resume_poll_ms": 0.000941,
+              "resume_poll_to_wait_end_ms": 0.002124,
+              "resume_poll_start_ns": 13858566751541,
+              "resume_poll_task": 73507,
+              "wait_begin_tid": 162792,
+              "wait_end_tid": 162793,
+              "missing": []
+            }
+          ],
+          "jobs_for_operation": {
+            "jobs": 56,
+            "complete_jobs": 56,
+            "incomplete_jobs": 0,
+            "intervals": {
+              "submit_to_start_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.009127,
+                  "p95": 0.039204,
+                  "p99": 0.083327,
+                  "max": 0.083327
+                }
+              },
+              "start_to_end_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.19615,
+                  "p95": 101.487091,
+                  "p99": 101.556521,
+                  "max": 101.556521
+                }
+              },
+              "end_to_complete_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.000892,
+                  "p95": 0.003677,
+                  "p99": 0.007575,
+                  "max": 0.007575
+                }
+              },
+              "runnable_to_resume_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.178797,
+                  "p95": 2.367316,
+                  "p99": 2.393817,
+                  "max": 2.393817
+                }
+              },
+              "resume_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001863,
+                  "p95": 0.009107,
+                  "p99": 0.012073,
+                  "max": 0.012073
+                }
+              },
+              "total_submit_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.427816,
+                  "p95": 101.716262,
+                  "p99": 101.938721,
+                  "max": 101.938721
+                }
+              }
+            }
+          },
+          "job_steps": {
+            "make_dir_all": 2398025995,
+            "mkdir": 2883839448
+          }
+        }
+      ],
+      "limitations": [
+        "Blocking-job boundaries are observed wall time on one host, not CPU time",
+        "T5 completion is recorded after task.run() stores the output and wakes the joiner; it is an upper bound on when the result became available",
+        "Poll containment resolves the resume point by OS thread id; a record outside every Dial9 poll is reported as missing",
+        "Ring-buffer wrap drops the oldest records; dropped_records reports how many",
+        "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE"
+      ],
+      "dial9": {
+        "events": 522113,
+        "trace_sha256": {
+          "telemetry/rustfs-tokio/trace.0.jsonl": "b6260cd17ee8e84135acc4063f4ee848e3037389faf98750dbfb1b652e25295d"
+        },
+        "workers": {
+          "0": 162792,
+          "1": 162793
+        }
+      }
+    },
+    {
+      "manifest": {
+        "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+        "rustfs_working_tree": " M Cargo.lock\n M Cargo.toml\n M crates/ecstore/src/disk/fs.rs\n M crates/ecstore/src/disk/os.rs\n M crates/ecstore/src/set_disk/core/io_primitives.rs\n M crates/ecstore/src/set_disk/ops/object.rs\n M rustfs/src/startup_entrypoint.rs\n",
+        "dependencies": [
+          {
+            "name": "dial9",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "b35f95885a2167602b457c77caf898670c02eb0aaba72bef76ac5b0faef86e14",
+            "dependencies": [
+              "bon",
+              "dial9-core",
+              "dial9-macro",
+              "dial9-metrique",
+              "dial9-perf-self-profile",
+              "dial9-tokio-telemetry",
+              "dial9-trace-format",
+              "tokio",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-tokio-telemetry",
+            "version": "0.5.3",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "aee46c0a97dd88ba151f9688c79de60c41cd7efc6855e6eb369af06326cba8f3",
+            "dependencies": [
+              "bon",
+              "bytes",
+              "dial9-core",
+              "dial9-perf-self-profile",
+              "dial9-trace-format",
+              "flate2",
+              "futures-util",
+              "hostname",
+              "libc",
+              "metrique-timesource",
+              "pin-project-lite",
+              "serde",
+              "serde_json",
+              "smallvec",
+              "tokio",
+              "tokio-util",
+              "tracing"
+            ]
+          },
+          {
+            "name": "dial9-trace-format",
+            "version": "0.5.2",
+            "source": "registry+https://github.com/rust-lang/crates.io-index",
+            "checksum": "258116805212db80e607656c81d2bf9830e66d5747e6ed6a29d17eeb2e673ff2",
+            "dependencies": [
+              "ahash",
+              "dial9-trace-format-derive",
+              "serde",
+              "typeid"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.53.2",
+            "dependencies": [
+              "bytes",
+              "libc",
+              "mio",
+              "pin-project-lite",
+              "signal-hook-registry",
+              "socket2",
+              "tokio-macros",
+              "windows-sys 0.61.2"
+            ]
+          }
+        ],
+        "binary": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-probe/target/release/rustfs",
+        "declared_build_profile": "release",
+        "host": "Linux-6.19.10-300.fc44.x86_64-x86_64-with-glibc2.43",
+        "workers": 2,
+        "payload_bytes": 1048576,
+        "payload_sha256": "f0f7dbcd20c4a06bc83260c7f79f2a486c25d49ae5a5983544d2bc948a7d2313",
+        "repetitions": 2,
+        "generation_seconds_per_tier": 3.0,
+        "telemetry_enabled": true,
+        "stage_metrics_enabled": false,
+        "request_traces_enabled": false,
+        "fs_probe_enabled": true,
+        "temporary_volume_parent": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-fsprobe-run-v2",
+        "limitations": [
+          "HTTP 200 is not a read-back integrity check",
+          "New connection and client signing costs are included in attempt latency",
+          "Declared profile must be verified against the binary build command"
+        ],
+        "binary_sha256": "d2fd9f310ea91a50b6a00c4ff45ee80ea0827b56710a14b2f35bef415f22e882",
+        "decoder_commit": "33b2d780628b42251047909ff2b88fdb97e3c28b",
+        "run_1_exit_code": 0,
+        "run_2_exit_code": 0
+      },
+      "probe_dump": {
+        "version": 1,
+        "record_size": 40,
+        "capacity": 524288,
+        "total_seen": 471759,
+        "dropped_records": 0,
+        "records": 471759,
+        "clock_id": 1,
+        "pid": 162918,
+        "flushed_monotonic_ns": 13870743339117,
+        "flushed_realtime_ns": 1791449911157809250,
+        "sha256": "72d1ad76f6f3742904c4ddf34bb445a6748dd8e4457503d88c092f6adcaf02e4"
+      },
+      "record_counts": {
+        "submit": 88211,
+        "job_start": 88211,
+        "job_end": 88199,
+        "job_complete": 88199,
+        "join_ready": 114134,
+        "op_begin": 967,
+        "op_end": 966,
+        "wait_begin": 958,
+        "send_ok": 957,
+        "wait_end": 957
+      },
+      "clock": {
+        "probe_realtime_minus_monotonic_ns": 1791436040414470133,
+        "dial9_realtime_minus_monotonic_ns": 1791436040414470153,
+        "offset_delta_ns": -20
+      },
+      "jobs": {
+        "jobs": 88211,
+        "complete_jobs": 84057,
+        "incomplete_jobs": 4154,
+        "intervals": {
+          "submit_to_start_ms": {
+            "observations": 88211,
+            "ms": {
+              "p50": 0.008295,
+              "p95": 0.043893,
+              "p99": 0.199986,
+              "max": 1.481078
+            }
+          },
+          "start_to_end_ms": {
+            "observations": 88199,
+            "ms": {
+              "p50": 0.020558,
+              "p95": 3.583737,
+              "p99": 6.101386,
+              "max": 6634.548833
+            }
+          },
+          "end_to_complete_ms": {
+            "observations": 88199,
+            "ms": {
+              "p50": 0.000832,
+              "p95": 0.003467,
+              "p99": 0.007294,
+              "max": 2.070858
+            }
+          },
+          "runnable_to_resume_ms": {
+            "observations": 83896,
+            "ms": {
+              "p50": 0.101301,
+              "p95": 1.119408,
+              "p99": 2.813636,
+              "max": 20.151957
+            }
+          },
+          "resume_to_join_ready_ms": {
+            "observations": 83896,
+            "ms": {
+              "p50": 0.001152,
+              "p95": 0.013555,
+              "p99": 0.030427,
+              "max": 3.666482
+            }
+          },
+          "total_submit_to_join_ready_ms": {
+            "observations": 84057,
+            "ms": {
+              "p50": 0.267975,
+              "p95": 4.49382,
+              "p99": 7.149019,
+              "max": 118.323485
+            }
+          }
+        }
+      },
+      "job_counters": {
+        "duplicate_boundaries": 0,
+        "non_blocking_join_ready": 30077
+      },
+      "polls": {
+        "paired": 172267,
+        "unmatched_poll_ends": 0,
+        "overwritten_poll_starts": 0,
+        "unmatched_poll_starts": 0
+      },
+      "step_hashes": {
+        "make_dir_all": 2398025995,
+        "mkdir": 2883839448
+      },
+      "tiers": [
+        {
+          "tier": "c1",
+          "load": {
+            "tier": "c1",
+            "bucket": "tokio-experiment",
+            "mode": "closed_loop",
+            "concurrency": 1,
+            "target_rps": null,
+            "max_active": 64,
+            "start_realtime_ns": 1791449905099554185,
+            "generation_end_realtime_ns": 1791449908099554185,
+            "end_realtime_ns": 1791449908106196349,
+            "generation_s": 3.0,
+            "elapsed_including_drain_s": 3.006604432,
+            "drain_s": 0.006604432,
+            "planned_arrivals": 196,
+            "attempted": 196,
+            "completed_ok": 196,
+            "failed": 0,
+            "client_shed": 0,
+            "attempts_during_generation_rps": 65.33333333333333,
+            "completions_during_generation_rps": 65.0,
+            "throughput_including_drain_rps": 65.18981942350838,
+            "latency_ms": {
+              "p50": 14.374971,
+              "p95": 24.097053,
+              "p99": 27.236774,
+              "max": 29.478042
+            },
+            "scheduled_to_completion_ms": {
+              "p50": 14.375371,
+              "p95": 24.097614,
+              "p99": 27.237245,
+              "max": 29.478423
+            },
+            "launch_lateness_ms": {
+              "p50": 0.000461,
+              "p95": 0.000761,
+              "p99": 0.000862,
+              "max": 0.000892
+            }
+          },
+          "representative_request": {
+            "key": "c1/6.bin",
+            "scheduled_ns": 13864835153229,
+            "attempted_ns": 13864835153610,
+            "attempted_realtime_ns": 1791449905249625927,
+            "launch_lateness_ms": 0.000381,
+            "status": 200,
+            "server_request_id": "25bf720b-c196-456b-b1ba-6ea58c6c9212",
+            "total_ms": 29.420104,
+            "write_ms": 0.351822,
+            "response_headers_wait_ms": 28.319512,
+            "response_wait_ms": 28.332126,
+            "completed_ns": 13864864631652,
+            "attempt_to_completion_ms": 29.478042,
+            "scheduled_to_completion_ms": 29.478423
+          },
+          "op_hash": 4448190313883089446,
+          "bucket": "tokio-experiment",
+          "missing": [],
+          "operation_records": [
+            {
+              "name": "op_begin",
+              "offset_ms": 1.621041,
+              "tid": 162932,
+              "step_hash": 0,
+              "op_hash": 4448190313883089446,
+              "task_id": 0
+            },
+            {
+              "name": "wait_begin",
+              "offset_ms": 6.206123,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 4448190313883089446,
+              "task_id": 0
+            },
+            {
+              "name": "send_ok",
+              "offset_ms": 28.781251,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 4448190313883089446,
+              "task_id": 0
+            },
+            {
+              "name": "wait_end",
+              "offset_ms": 28.784357,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 4448190313883089446,
+              "task_id": 0
+            },
+            {
+              "name": "op_end",
+              "offset_ms": 28.824472,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 4448190313883089446,
+              "task_id": 0
+            }
+          ],
+          "waits": [
+            {
+              "send_kind": "send_ok",
+              "send_ts": 13864863934861,
+              "wait_total_ms": 22.578234,
+              "wait_begin_to_send_ms": 22.575128,
+              "send_to_resume_poll_ms": 0.000942,
+              "resume_poll_to_wait_end_ms": 0.002164,
+              "resume_poll_start_ns": 13864863935803,
+              "resume_poll_task": 4619,
+              "wait_begin_tid": 162933,
+              "wait_end_tid": 162933,
+              "missing": []
+            }
+          ],
+          "jobs_for_operation": {
+            "jobs": 56,
+            "complete_jobs": 56,
+            "incomplete_jobs": 0,
+            "intervals": {
+              "submit_to_start_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.007444,
+                  "p95": 0.011601,
+                  "p99": 0.013966,
+                  "max": 0.013966
+                }
+              },
+              "start_to_end_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.068689,
+                  "p95": 11.709984,
+                  "p99": 11.747254,
+                  "max": 11.747254
+                }
+              },
+              "end_to_complete_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001162,
+                  "p95": 0.003797,
+                  "p99": 0.004608,
+                  "max": 0.004608
+                }
+              },
+              "runnable_to_resume_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.009718,
+                  "p95": 0.066325,
+                  "p99": 0.087174,
+                  "max": 0.087174
+                }
+              },
+              "resume_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001493,
+                  "p95": 0.01036,
+                  "p99": 0.013656,
+                  "max": 0.013656
+                }
+              },
+              "total_submit_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.102753,
+                  "p95": 11.739389,
+                  "p99": 11.780647,
+                  "max": 11.780647
+                }
+              }
+            }
+          },
+          "job_steps": {
+            "make_dir_all": 2398025995,
+            "mkdir": 2883839448
+          }
+        },
+        {
+          "tier": "c8",
+          "load": {
+            "tier": "c8",
+            "bucket": "tokio-experiment",
+            "mode": "closed_loop",
+            "concurrency": 8,
+            "target_rps": null,
+            "max_active": 64,
+            "start_realtime_ns": 1791449908111127802,
+            "generation_end_realtime_ns": 1791449911111127802,
+            "end_realtime_ns": 1791449911127027363,
+            "generation_s": 3.0,
+            "elapsed_including_drain_s": 3.015725403,
+            "drain_s": 0.015725403,
+            "planned_arrivals": 734,
+            "attempted": 734,
+            "completed_ok": 734,
+            "failed": 0,
+            "client_shed": 0,
+            "attempts_during_generation_rps": 244.66666666666666,
+            "completions_during_generation_rps": 242.0,
+            "throughput_including_drain_rps": 243.39086021221544,
+            "latency_ms": {
+              "p50": 32.011081,
+              "p95": 40.050465,
+              "p99": 72.996987,
+              "max": 87.506812
+            },
+            "scheduled_to_completion_ms": {
+              "p50": 32.011251,
+              "p95": 40.050695,
+              "p99": 72.997859,
+              "max": 87.507042
+            },
+            "launch_lateness_ms": {
+              "p50": 0.00038,
+              "p95": 0.000862,
+              "p99": 0.001452,
+              "max": 0.002815
+            }
+          },
+          "representative_request": {
+            "key": "c8/204.bin",
+            "scheduled_ns": 13868492798252,
+            "attempted_ns": 13868492798482,
+            "attempted_realtime_ns": 1791449908907269917,
+            "launch_lateness_ms": 0.00023,
+            "status": 200,
+            "server_request_id": "5dce27ea-369e-4215-8d0d-1198aa60add4",
+            "total_ms": 87.45775,
+            "write_ms": 0.363865,
+            "response_headers_wait_ms": 86.449582,
+            "response_wait_ms": 86.457277,
+            "completed_ns": 13868580305294,
+            "attempt_to_completion_ms": 87.506812,
+            "scheduled_to_completion_ms": 87.507042
+          },
+          "op_hash": 10797759812325562473,
+          "bucket": "tokio-experiment",
+          "missing": [],
+          "operation_records": [
+            {
+              "name": "op_begin",
+              "offset_ms": 2.909237,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 10797759812325562473,
+              "task_id": 0
+            },
+            {
+              "name": "wait_begin",
+              "offset_ms": 11.540175,
+              "tid": 162932,
+              "step_hash": 0,
+              "op_hash": 10797759812325562473,
+              "task_id": 0
+            },
+            {
+              "name": "send_ok",
+              "offset_ms": 86.389359,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 10797759812325562473,
+              "task_id": 0
+            },
+            {
+              "name": "wait_end",
+              "offset_ms": 86.391192,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 10797759812325562473,
+              "task_id": 0
+            },
+            {
+              "name": "op_end",
+              "offset_ms": 86.425146,
+              "tid": 162933,
+              "step_hash": 0,
+              "op_hash": 10797759812325562473,
+              "task_id": 0
+            }
+          ],
+          "waits": [
+            {
+              "send_kind": "send_ok",
+              "send_ts": 13868579187841,
+              "wait_total_ms": 74.851017,
+              "wait_begin_to_send_ms": 74.849184,
+              "send_to_resume_poll_ms": 0.000461,
+              "resume_poll_to_wait_end_ms": 0.001372,
+              "resume_poll_start_ns": 13868579188302,
+              "resume_poll_task": 53350,
+              "wait_begin_tid": 162932,
+              "wait_end_tid": 162933,
+              "missing": []
+            }
+          ],
+          "jobs_for_operation": {
+            "jobs": 56,
+            "complete_jobs": 56,
+            "incomplete_jobs": 0,
+            "intervals": {
+              "submit_to_start_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.008927,
+                  "p95": 0.084699,
+                  "p99": 0.165021,
+                  "max": 0.165021
+                }
+              },
+              "start_to_end_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.212991,
+                  "p95": 63.719523,
+                  "p99": 63.752565,
+                  "max": 63.752565
+                }
+              },
+              "end_to_complete_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.000882,
+                  "p95": 0.003657,
+                  "p99": 0.020098,
+                  "max": 0.020098
+                }
+              },
+              "runnable_to_resume_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.194556,
+                  "p95": 0.905364,
+                  "p99": 1.68393,
+                  "max": 1.68393
+                }
+              },
+              "resume_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.001793,
+                  "p95": 0.008316,
+                  "p99": 0.01063,
+                  "max": 0.01063
+                }
+              },
+              "total_submit_to_join_ready_ms": {
+                "observations": 56,
+                "ms": {
+                  "p50": 0.461258,
+                  "p95": 63.756542,
+                  "p99": 63.799914,
+                  "max": 63.799914
+                }
+              }
+            }
+          },
+          "job_steps": {
+            "make_dir_all": 2398025995,
+            "mkdir": 2883839448
+          }
+        }
+      ],
+      "limitations": [
+        "Blocking-job boundaries are observed wall time on one host, not CPU time",
+        "T5 completion is recorded after task.run() stores the output and wakes the joiner; it is an upper bound on when the result became available",
+        "Poll containment resolves the resume point by OS thread id; a record outside every Dial9 poll is reported as missing",
+        "Ring-buffer wrap drops the oldest records; dropped_records reports how many",
+        "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE"
+      ],
+      "dial9": {
+        "events": 532060,
+        "trace_sha256": {
+          "telemetry/rustfs-tokio/trace.0.jsonl": "30b985ffaac69ba1bd37880da31274b881490d06d94aec0405011c3d49b5f12b"
+        },
+        "workers": {
+          "1": 162933,
+          "0": 162932
+        }
+      }
+    }
+  ]
+}
