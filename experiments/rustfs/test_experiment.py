@@ -183,8 +183,8 @@ class FsProbeTests(unittest.TestCase):
             self._record(3, 250, tid=8, task_id=42),
         ]
         path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
-        # A dump keeps exactly min(total_seen, capacity) records; here every
-        # slot survives (3 <= 3) even though 997 older records were dropped.
+        # A dump keeps exactly min(total_seen, capacity) records; here all
+        # survive (3 <= 3) while 997 records beyond capacity were never stored.
         path.write_bytes(_probe_dump(records, total_seen=1000, capacity=3))
         header, parsed = read_probe(path)
         self.assertEqual(header["capacity"], 3)
@@ -256,7 +256,7 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(summary["missing"],
                          ["job_start", "job_end", "job_complete", "join_ready"])
         for field in ("submit_to_start_ms", "start_to_end_ms", "end_to_complete_ms",
-                      "runnable_to_resume_ms", "resume_to_join_ready_ms",
+                      "completion_to_poll_start_proxy_ms", "poll_start_to_join_ready_ms",
                       "total_submit_to_join_ready_ms"):
             self.assertIsNone(summary[field], field)
         self.assertEqual(summary["task_id"], 1)
@@ -279,8 +279,8 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(summary["submit_to_start_ms"], 2.0)
         self.assertEqual(summary["start_to_end_ms"], 10.0)
         self.assertEqual(summary["end_to_complete_ms"], 2.0)
-        self.assertEqual(summary["runnable_to_resume_ms"], 25.0)
-        self.assertEqual(summary["resume_to_join_ready_ms"], 5.0)
+        self.assertEqual(summary["completion_to_poll_start_proxy_ms"], 25.0)
+        self.assertEqual(summary["poll_start_to_join_ready_ms"], 5.0)
         self.assertEqual(summary["total_submit_to_join_ready_ms"], 44.0)
         self.assertEqual(summary["job_tid"], 20)
         self.assertEqual(summary["resume_poll_start_ns"], 40_000_000)
@@ -363,11 +363,12 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(result["intervals"]["submit_to_start_ms"]["observations"], 1)
         self.assertEqual(result["intervals"]["submit_to_start_ms"]["ms"]["p50"], 0.0001)
         self.assertEqual(result["intervals"]["start_to_end_ms"]["observations"], 1)
-        self.assertEqual(result["intervals"]["runnable_to_resume_ms"]["observations"], 0)
-        self.assertIsNone(result["intervals"]["runnable_to_resume_ms"]["ms"])
+        self.assertEqual(result["intervals"]["completion_to_poll_start_proxy_ms"]["observations"], 0)
+        self.assertIsNone(result["intervals"]["completion_to_poll_start_proxy_ms"]["ms"])
 
-    def test_ring_wrap_drops_oldest_records_and_reports_them(self):
-        # total_seen > capacity: only the newest `capacity` records survive.
+    def test_records_beyond_capacity_are_reported_as_dropped(self):
+        # Recording stops at capacity: the dump keeps exactly `capacity` records
+        # in claim order and total_seen counts everything never stored.
         records = [self._record(1, ts, task_id=ts) for ts in range(100, 104)]
         path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
         path.write_bytes(_probe_dump(records, total_seen=104, capacity=4))
@@ -479,8 +480,8 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(jobs["intervals"]["submit_to_start_ms"]["ms"]["p50"], 3.0)
         self.assertEqual(jobs["intervals"]["start_to_end_ms"]["ms"]["p50"], 20.0)
         self.assertEqual(jobs["intervals"]["end_to_complete_ms"]["ms"]["p50"], 1.0)
-        self.assertEqual(jobs["intervals"]["runnable_to_resume_ms"]["ms"]["p50"], 30.0)
-        self.assertEqual(jobs["intervals"]["resume_to_join_ready_ms"]["ms"]["p50"], 1.0)
+        self.assertEqual(jobs["intervals"]["completion_to_poll_start_proxy_ms"]["ms"]["p50"], 30.0)
+        self.assertEqual(jobs["intervals"]["poll_start_to_join_ready_ms"]["ms"]["p50"], 1.0)
         self.assertEqual(tier["job_steps"], {"mkdir": step})
 
         timeline = tier["operation_records"]

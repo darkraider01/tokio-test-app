@@ -159,7 +159,7 @@
               "max": 3.987637
             }
           },
-          "runnable_to_resume_ms": {
+          "completion_to_poll_start_proxy_ms": {
             "observations": 81619,
             "ms": {
               "p50": 0.089057,
@@ -168,7 +168,7 @@
               "max": 34.69816
             }
           },
-          "resume_to_join_ready_ms": {
+          "poll_start_to_join_ready_ms": {
             "observations": 81619,
             "ms": {
               "p50": 0.001152,
@@ -353,7 +353,7 @@
                   "max": 0.006211
                 }
               },
-              "runnable_to_resume_ms": {
+              "completion_to_poll_start_proxy_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.008777,
@@ -362,7 +362,7 @@
                   "max": 0.097604
                 }
               },
-              "resume_to_join_ready_ms": {
+              "poll_start_to_join_ready_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.001032,
@@ -537,7 +537,7 @@
                   "max": 0.007575
                 }
               },
-              "runnable_to_resume_ms": {
+              "completion_to_poll_start_proxy_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.178797,
@@ -546,7 +546,7 @@
                   "max": 2.393817
                 }
               },
-              "resume_to_join_ready_ms": {
+              "poll_start_to_join_ready_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.001863,
@@ -574,9 +574,10 @@
       ],
       "limitations": [
         "Blocking-job boundaries are observed wall time on one host, not CPU time",
-        "T5 completion is recorded after task.run() stores the output and wakes the joiner; it is an upper bound on when the result became available",
-        "Poll containment resolves the resume point by OS thread id; a record outside every Dial9 poll is reported as missing",
-        "Ring-buffer wrap drops the oldest records; dropped_records reports how many",
+        "Blocking-job start-to-end is wall time inside the closure: filesystem calls, CPU work, locks, and OS descheduling are not separated",
+        "T3' completion is recorded after task.run() stores the output and wakes the joiner; completion_to_poll_start_proxy_ms and the poll containing join_ready are diagnostic proxies, not directly measured scheduling latency",
+        "Poll containment resolves the poll by OS thread id; a record outside every Dial9 poll is reported as missing",
+        "Recording stops at ring capacity; total_seen beyond capacity is reported as dropped_records",
         "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE"
       ],
       "dial9": {
@@ -749,7 +750,7 @@
               "max": 2.070858
             }
           },
-          "runnable_to_resume_ms": {
+          "completion_to_poll_start_proxy_ms": {
             "observations": 83896,
             "ms": {
               "p50": 0.101301,
@@ -758,7 +759,7 @@
               "max": 20.151957
             }
           },
-          "resume_to_join_ready_ms": {
+          "poll_start_to_join_ready_ms": {
             "observations": 83896,
             "ms": {
               "p50": 0.001152,
@@ -943,7 +944,7 @@
                   "max": 0.004608
                 }
               },
-              "runnable_to_resume_ms": {
+              "completion_to_poll_start_proxy_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.009718,
@@ -952,7 +953,7 @@
                   "max": 0.087174
                 }
               },
-              "resume_to_join_ready_ms": {
+              "poll_start_to_join_ready_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.001493,
@@ -1127,7 +1128,7 @@
                   "max": 0.020098
                 }
               },
-              "runnable_to_resume_ms": {
+              "completion_to_poll_start_proxy_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.194556,
@@ -1136,7 +1137,7 @@
                   "max": 1.68393
                 }
               },
-              "resume_to_join_ready_ms": {
+              "poll_start_to_join_ready_ms": {
                 "observations": 56,
                 "ms": {
                   "p50": 0.001793,
@@ -1164,9 +1165,10 @@
       ],
       "limitations": [
         "Blocking-job boundaries are observed wall time on one host, not CPU time",
-        "T5 completion is recorded after task.run() stores the output and wakes the joiner; it is an upper bound on when the result became available",
-        "Poll containment resolves the resume point by OS thread id; a record outside every Dial9 poll is reported as missing",
-        "Ring-buffer wrap drops the oldest records; dropped_records reports how many",
+        "Blocking-job start-to-end is wall time inside the closure: filesystem calls, CPU work, locks, and OS descheduling are not separated",
+        "T3' completion is recorded after task.run() stores the output and wakes the joiner; completion_to_poll_start_proxy_ms and the poll containing join_ready are diagnostic proxies, not directly measured scheduling latency",
+        "Poll containment resolves the poll by OS thread id; a record outside every Dial9 poll is reported as missing",
+        "Recording stops at ring capacity; total_seen beyond capacity is reported as dropped_records",
         "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE"
       ],
       "dial9": {

@@ -213,7 +213,14 @@ def _millis(delta_ns):
 
 
 def job_intervals(job, poll_index):
-    """Observed intervals of one blocking job; None means not observed."""
+    """Observed intervals of one blocking job; None means not observed.
+
+    `completion_to_poll_start_proxy_ms` is a diagnostic proxy, not measured
+    scheduling latency: `job_complete` records after `task.run()` stored the
+    result and woke the joiner, so the joiner may resume before the marker,
+    and the Dial9 poll containing `join_ready` need not be the wake-triggered
+    resume (the task may have been polled for another reason).
+    """
     submit = job.get("submit")
     start = job.get("job_start")
     end = job.get("job_end")
@@ -227,8 +234,8 @@ def job_intervals(job, poll_index):
         "submit_to_start_ms": _millis(start["ts"] - submit["ts"]) if submit and start else None,
         "start_to_end_ms": _millis(end["ts"] - start["ts"]) if start and end else None,
         "end_to_complete_ms": _millis(complete["ts"] - end["ts"]) if end and complete else None,
-        "runnable_to_resume_ms": _millis(resume_start - complete["ts"]) if complete and resume_start else None,
-        "resume_to_join_ready_ms": _millis(join["ts"] - resume_start) if join and resume_start else None,
+        "completion_to_poll_start_proxy_ms": _millis(resume_start - complete["ts"]) if complete and resume_start else None,
+        "poll_start_to_join_ready_ms": _millis(join["ts"] - resume_start) if join and resume_start else None,
         "total_submit_to_join_ready_ms": _millis(join["ts"] - submit["ts"]) if submit and join else None,
     }
     step = submit["step"] if submit else (start["step"] if start else 0)
@@ -249,7 +256,7 @@ def summarize_jobs(jobs, poll_index=None):
     summaries = [job_intervals(job, poll_index) for job in jobs.values()]
     complete = [s for s in summaries if not s["missing"]]
     fields = ("submit_to_start_ms", "start_to_end_ms", "end_to_complete_ms",
-              "runnable_to_resume_ms", "resume_to_join_ready_ms",
+              "completion_to_poll_start_proxy_ms", "poll_start_to_join_ready_ms",
               "total_submit_to_join_ready_ms")
     stats = {}
     for field in fields:
@@ -357,9 +364,10 @@ def analyze_run(root):
         "tiers": [],
         "limitations": [
             "Blocking-job boundaries are observed wall time on one host, not CPU time",
-            "T5 completion is recorded after task.run() stores the output and wakes the joiner; it is an upper bound on when the result became available",
-            "Poll containment resolves the resume point by OS thread id; a record outside every Dial9 poll is reported as missing",
-            "Ring-buffer wrap drops the oldest records; dropped_records reports how many",
+            "Blocking-job start-to-end is wall time inside the closure: filesystem calls, CPU work, locks, and OS descheduling are not separated",
+            "T3' completion is recorded after task.run() stores the output and wakes the joiner; completion_to_poll_start_proxy_ms and the poll containing join_ready are diagnostic proxies, not directly measured scheduling latency",
+            "Poll containment resolves the poll by OS thread id; a record outside every Dial9 poll is reported as missing",
+            "Recording stops at ring capacity; total_seen beyond capacity is reported as dropped_records",
             "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE",
         ],
     }
