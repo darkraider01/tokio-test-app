@@ -174,7 +174,8 @@ def run_tier(client, bucket, payload, name, duration, concurrency=None, rate=Non
     attempts = [r for r in records if not r.get("client_shed")]
     successes = [r for r in attempts if r["status"] == 200]
     return {
-        "tier": name, "mode": "closed_loop" if rate is None else "open_loop_with_client_cap",
+        "tier": name, "bucket": bucket,
+        "mode": "closed_loop" if rate is None else "open_loop_with_client_cap",
         "concurrency": concurrency, "target_rps": rate, "max_active": max_active,
         "start_realtime_ns": start_realtime,
         "generation_end_realtime_ns": start_realtime + deadline - start,
