@@ -300,6 +300,35 @@ its `Cargo.toml`. Neither the control checkout nor the control binary
 (`.repro/rustfs/target/release/rustfs`, SHA-256
 `dc577ce78a0dab71cef0072896c02487cd496fb8e6e3e35e5cfb81850cf01c9e`) is touched.
 
+The probe is reproducible from this repository alone: the `.repro/` checkouts
+are working copies, and [patches/](patches) preserves every diagnostic edit —
+Tokio probe modules and hook sites, RustFS-side scopes, the `Cargo.toml` patch
+entry, and the resulting `Cargo.lock` change:
+
+| Patch | Applies to | SHA-256 |
+| :--- | :--- | :--- |
+| `tokio-1.53.2-fs-probe.patch` | registry `tokio-1.53.2` source | `9a6d5341c8dd297a91110e3beb08e872f562f8846c7ae88a29f9bb24f0aa697b` |
+| `rustfs-probe.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `673a787466ab7d8aaa0c556d1f43fb1e55ab1ef1b9930a77c12e80402b717534` |
+
+Both were verified to apply to pristine sources (fresh registry copy and fresh
+clone at the pinned revision) and reproduce the live checkouts byte-for-byte.
+To recreate the probe working copies (fresh directories; `git apply` works
+without a surrounding repository):
+
+```sh
+cp -a "$(echo ~/.cargo/registry/src/*/tokio-1.53.2)" .repro/tokio-blocking-probe
+git -C .repro/tokio-blocking-probe apply --check -p1 \
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe.patch
+git -C .repro/tokio-blocking-probe apply -p1 \
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe.patch
+git -C .repro/rustfs worktree add --detach ../rustfs-probe \
+  6b1554003ebf8f2037ffb7da9c9b906527e758da
+git -C .repro/rustfs-probe apply --check \
+  ../../experiments/rustfs/patches/rustfs-probe.patch
+git -C .repro/rustfs-probe apply \
+  ../../experiments/rustfs/patches/rustfs-probe.patch
+```
+
 Build the probe binary (separate target directory, no `--locked` because the
 patch entry rewrites `Cargo.lock`):
 
@@ -358,11 +387,17 @@ Probe design notes:
   the result became available), and `T5` join-ready (the awaiting task's poll
   observed `Ready`). `T4` runnability is inferred from the `SEND` record written
   immediately before the oneshot send; the resume point is the Dial9 poll whose
-  interval contains the `T5` record on the same OS thread id.
+  interval contains the `T5` record on the same OS thread id. `T3'` records
+  after the wake (the joiner can resume before the marker) and the containing
+  poll can predate it or be an unrelated poll, so the derived job interval is
+  named `completion_to_poll_start_proxy_ms` — a diagnostic proxy, not measured
+  scheduling latency.
 - The record layout is 40 bytes (`<BBHIIIQQQ`) behind a 64-byte header
   (`<8sIIQQQQIIQ`) carrying a `(monotonic, realtime)` flush pair, `total_seen`,
-  and the pid. The ring holds 2^19 records (~20 MiB); wrap drops the oldest and
-  `dropped_records` reports how many. Analysis never invents a value: a missing
+  and the pid. The ring holds 2^19 records (~20 MiB); recording stops at
+  capacity instead of wrapping (a wrap could race a descheduled writer's
+  store), and `total_seen` beyond capacity is reported as `dropped_records`.
+  Analysis never invents a value: a missing
   boundary is `null` with an explicit `missing` list.
 - Probe timestamps are raw `CLOCK_MONOTONIC` nanoseconds via `libc`, the same
   clock Dial9 uses, and thread ids come from `SYS_gettid` like Dial9's events;
@@ -385,7 +420,7 @@ Probe design notes:
   `flush_to_env()` so no writer can race the flush (this drop is probe-build
   only). `tokio::fs` is not replaced by custom `spawn_blocking` wrappers, and
   there are no locks or logging on the hot path: records are one relaxed atomic
-  fetch-add plus a fixed-size store.
+  fetch-add, a capacity check, and a fixed-size store.
 - The probe module compiles only when the `libc` feature is enabled alongside
   `rustfs_fs_probe`; Tokio's build-dependency units (which never enable `libc`)
   get the no-op stub, so build scripts record nothing.

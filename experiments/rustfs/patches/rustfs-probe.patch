@@ -1,0 +1,226 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index e3eda47..96445ff 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -12679,8 +12679,6 @@ dependencies = [
+ [[package]]
+ name = "tokio"
+ version = "1.53.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
+ dependencies = [
+  "bytes",
+  "libc",
+diff --git a/Cargo.toml b/Cargo.toml
+index dc105b5..6ddad64 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -420,3 +420,10 @@ inherits = "release"
+ inherits = "release"
+ debug = true
+ strip = "none"
++
++# Diagnostic-only: replace registry Tokio 1.53.2 with an identical local copy
++# carrying the `rustfs_fs_probe` blocking-pool instrumentation. Used solely by
++# the probe experiment (experiments/rustfs/README.md); the control checkout
++# does not patch Tokio.
++[patch.crates-io]
++tokio = { path = "../tokio-blocking-probe" }
+diff --git a/crates/ecstore/src/disk/fs.rs b/crates/ecstore/src/disk/fs.rs
+index 7dbbaf1..4a5212a 100644
+--- a/crates/ecstore/src/disk/fs.rs
++++ b/crates/ecstore/src/disk/fs.rs
+@@ -160,7 +160,11 @@ pub fn lstat_std(path: impl AsRef<Path>) -> io::Result<Metadata> {
+ }
+ 
+ pub async fn make_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
+-    fs::create_dir_all(path.as_ref()).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("make_dir_all", fs::create_dir_all(path.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::create_dir_all(path.as_ref());
++    future.await
+ }
+ 
+ fn is_dir_error(e: &io::Error) -> bool {
+@@ -211,11 +215,19 @@ pub fn remove_all_std(path: impl AsRef<Path>) -> io::Result<()> {
+ }
+ 
+ pub async fn mkdir(path: impl AsRef<Path>) -> io::Result<()> {
+-    fs::create_dir(path.as_ref()).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("mkdir", fs::create_dir(path.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::create_dir(path.as_ref());
++    future.await
+ }
+ 
+ pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+-    fs::rename(from, to).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("rename", fs::rename(from.as_ref(), to.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::rename(from, to);
++    future.await
+ }
+ 
+ #[cfg(any(not(windows), test))]
+diff --git a/crates/ecstore/src/disk/os.rs b/crates/ecstore/src/disk/os.rs
+index 14a56b5..805effc 100644
+--- a/crates/ecstore/src/disk/os.rs
++++ b/crates/ecstore/src/disk/os.rs
+@@ -2084,7 +2084,11 @@ pub(in crate::disk) async fn rename_with_namespace_owner(
+     namespace_owner: Option<Arc<dyn Send + Sync>>,
+ ) -> io::Result<()> {
+     if namespace_owner.is_none() {
+-        return tokio::fs::rename(src, dst).await;
++        #[cfg(rustfs_fs_probe)]
++        let future = tokio::fs_probe::scope_step("rename_no_owner", tokio::fs::rename(src, dst));
++        #[cfg(not(rustfs_fs_probe))]
++        let future = tokio::fs::rename(src, dst);
++        return future.await;
+     }
+     let src = src.to_path_buf();
+     let dst = dst.to_path_buf();
+diff --git a/crates/ecstore/src/set_disk/core/io_primitives.rs b/crates/ecstore/src/set_disk/core/io_primitives.rs
+index e21c854..f60ad87 100644
+--- a/crates/ecstore/src/set_disk/core/io_primitives.rs
++++ b/crates/ecstore/src/set_disk/core/io_primitives.rs
+@@ -3188,7 +3188,9 @@ impl SetDisks {
+         let (commit_tx, commit_rx) = tokio::sync::oneshot::channel();
+ 
+         let coordinator_failure_receipt = rollback_receipt.clone();
+-        let tail_drain = tokio::spawn({
++        // The spawned tail drains under the caller's OP scope so its fanout
++        // blocking jobs stay linked to this operation.
++        let tail_drain = tokio::spawn(tokio::fs_probe::propagate_op({
+             let fanout_src_bucket = src_bucket.clone();
+             let fanout_src_object = src_object.clone();
+             let fanout_dst_bucket = dst_bucket.clone();
+@@ -3210,7 +3212,7 @@ impl SetDisks {
+                     let file_info = file_info.clone();
+                     let successful_rename_completion_rank = successful_rename_completion_rank.clone();
+                     let namespace_commit_guard = namespace_commit_guard.clone();
+-                    tasks.spawn(async move {
++                    tasks.spawn(tokio::fs_probe::propagate_op(async move {
+                         let _namespace_commit_guard = namespace_commit_guard.clone();
+                         let mut dispatch_state = RenameDispatchState::NotDispatched;
+                         let result = std::panic::AssertUnwindSafe(async {
+@@ -3290,7 +3292,7 @@ impl SetDisks {
+                         .catch_unwind()
+                         .await;
+                         (i, dispatch_state, result)
+-                    });
++                    }));
+                 }
+ 
+                 let mut commit_tx = Some(commit_tx);
+@@ -3349,6 +3351,10 @@ impl SetDisks {
+                             cleanup_at_snapshot = commit.cleanup_disks.iter().map(Option::is_some).collect();
+                         }
+                         if let Some(commit_tx) = commit_tx.take() {
++                            #[cfg(rustfs_fs_probe)]
++                            let send_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                            #[cfg(rustfs_fs_probe)]
++                            tokio::fs_probe::record(tokio::fs_probe::KIND_SEND_OK, 0, send_op);
+                             let _ = commit_tx.send(snapshot_commit);
+                         }
+                         sent_commit = true;
+@@ -3386,6 +3392,10 @@ impl SetDisks {
+                     )
+                     .await;
+                     if let Some(commit_tx) = commit_tx.take() {
++                        #[cfg(rustfs_fs_probe)]
++                        let send_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                        #[cfg(rustfs_fs_probe)]
++                        tokio::fs_probe::record(tokio::fs_probe::KIND_SEND_ERR, 0, send_op);
+                         let _ = commit_tx.send(Err(ret_err));
+                     }
+                     return None;
+@@ -3471,16 +3481,24 @@ impl SetDisks {
+                     cleanup: tail_cleanup,
+                 })
+             }
+-        });
++        }));
+ 
+         let quorum_wait_started = rustfs_io_metrics::put_stage_timer();
++        #[cfg(rustfs_fs_probe)]
++        let wait_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_BEGIN, 0, wait_op);
+         let commit = match commit_rx.await {
+             Ok(commit) => commit,
+             Err(_) => {
++                #[cfg(rustfs_fs_probe)]
++                tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_END, 0, wait_op);
+                 record_indeterminate_rename(disks, (&dst_bucket, &dst_object), coordinator_failure_receipt).await;
+                 return Err(DiskError::Unexpected);
+             }
+         };
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_END, 0, wait_op);
+         rustfs_io_metrics::record_put_object_stage_duration_from(
+             rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_QUORUM_WAIT,
+             quorum_wait_started,
+diff --git a/crates/ecstore/src/set_disk/ops/object.rs b/crates/ecstore/src/set_disk/ops/object.rs
+index 0416310..040c422 100644
+--- a/crates/ecstore/src/set_disk/ops/object.rs
++++ b/crates/ecstore/src/set_disk/ops/object.rs
+@@ -3460,8 +3460,18 @@ impl SetDisks {
+         data: &mut PutObjReader,
+         opts: &ObjectOptions,
+     ) -> Result<(ObjectInfo, Option<OldCurrentSize>)> {
+-        self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None)
+-            .await
++        #[cfg(rustfs_fs_probe)]
++        let op = tokio::fs_probe::op_hash(bucket, object);
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_OP_BEGIN, 0, op);
++        #[cfg(rustfs_fs_probe)]
++        let future = tokio::fs_probe::OP.scope(op, self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None));
++        #[cfg(not(rustfs_fs_probe))]
++        let future = self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None);
++        let result = future.await;
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_OP_END, 0, op);
++        result
+     }
+ 
+     pub(crate) async fn put_object_with_old_current_size_for_data_movement(
+@@ -4998,9 +5008,13 @@ impl SetDisks {
+                 }
+                 let mut cancellation = PutObjectCommitCancellation::new();
+                 let child_token = cancellation.child_token();
+-                let result = tokio::spawn(async move { Box::pin(commit(Some(child_token))).await })
+-                    .await
+-                    .map_err(|err| Error::other(format!("put_object commit task failed: {err}")))?;
++                // Carry the caller's OP scope into the detached commit task so
++                // its rename wait, sends, and fanout jobs stay linked to this
++                // operation; Tokio task-locals are not inherited by spawns.
++                let result =
++                    tokio::spawn(tokio::fs_probe::propagate_op(async move { Box::pin(commit(Some(child_token))).await }))
++                        .await
++                        .map_err(|err| Error::other(format!("put_object commit task failed: {err}")))?;
+                 cancellation.disarm();
+                 result
+             } else {
+diff --git a/rustfs/src/startup_entrypoint.rs b/rustfs/src/startup_entrypoint.rs
+index e2402b2..3f399f4 100644
+--- a/rustfs/src/startup_entrypoint.rs
++++ b/rustfs/src/startup_entrypoint.rs
+@@ -51,6 +51,14 @@ pub fn run_process() {
+     #[allow(clippy::drop_non_drop)]
+     drop(dial9_guard);
+ 
++    #[cfg(rustfs_fs_probe)]
++    {
++        // Join the runtime and blocking threads first so no probe record can
++        // race the flush; `process::exit` on the error path skips drops.
++        drop(runtime);
++        tokio::fs_probe::flush_to_env();
++    }
++
+     if let Err(ref e) = result {
+         if e.to_string() != OBSERVABILITY_INIT_FATAL_ALREADY_REPORTED {
+             // Tracing may not be initialized when startup fails this early.
