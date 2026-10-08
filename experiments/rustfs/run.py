@@ -56,6 +56,9 @@ def main():
     parser.add_argument("--no-telemetry", action="store_true")
     parser.add_argument("--stage-metrics", action="store_true")
     parser.add_argument("--request-traces", action="store_true")
+    parser.add_argument("--fs-probe", action="store_true",
+                        help="collect blocking-pool probe records (requires the probe build; "
+                             "sets RUSTFS_FS_PROBE_OUT and verifies run-N/fs-probe.bin after shutdown")
     parser.add_argument("--strace", type=Path)
     parser.add_argument("--converter", type=Path, default=root / ".repro/dial9/target/debug/examples/trace_to_jsonl")
     args = parser.parse_args()
@@ -89,6 +92,7 @@ def main():
         "telemetry_enabled": not args.no_telemetry,
         "stage_metrics_enabled": args.stage_metrics,
         "request_traces_enabled": args.request_traces,
+        "fs_probe_enabled": args.fs_probe,
         "temporary_volume_parent": str(args.output.resolve()),
         "limitations": ["HTTP 200 is not a read-back integrity check",
                         "New connection and client signing costs are included in attempt latency",
@@ -137,6 +141,8 @@ def main():
                            RUSTFS_OBS_LOGGER_LEVEL="info,rustfs_ecstore=debug",
                            RUST_LOG="info,rustfs_ecstore=debug",
                            OTEL_BSP_SCHEDULE_DELAY="1000", OTEL_BSP_MAX_QUEUE_SIZE="16384")
+            if args.fs_probe:
+                env.update(RUSTFS_FS_PROBE_OUT=str((out / "fs-probe.bin").resolve()))
             tiers = []
             with (out / "rustfs.log").open("w") as log:
                 command = [str(args.binary)]
@@ -199,6 +205,8 @@ def main():
                 write_json(out / "stage-metrics.json", summaries)
             if args.request_traces and "Span #" not in (out / "rustfs.log").read_text():
                 raise RuntimeError(f"No request spans exported; see {out / 'rustfs.log'}")
+            if args.fs_probe and not (out / "fs-probe.bin").is_file():
+                raise RuntimeError(f"No probe dump written at shutdown; see {out / 'rustfs.log'}")
             if not args.no_telemetry:
                 traces = sorted((out / "telemetry").rglob("trace.*.bin"))
                 if not traces:
