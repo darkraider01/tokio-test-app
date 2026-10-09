@@ -303,7 +303,7 @@ its `Cargo.toml`. Neither the control checkout nor the control binary
 The probe is reproducible from this repository alone: the `.repro/` checkouts
 are working copies, and [patches/](patches) preserves every diagnostic edit —
 Tokio probe modules and hook sites, RustFS-side scopes, the `Cargo.toml` patch
-entry, and the resulting `Cargo.lock` change. Three generations exist: the
+entry, and the resulting `Cargo.lock` change. Four generations exist: the
 unsuffixed patches reproduce the first `-v2` capture working copies (binary
 `d2fd9f310ea91a50b6a00c4ff45ee80ea0827b56710a14b2f35bef415f22e882`, 2^19-record
 ring, four step tags); the `-v2` patches add the commit-path step tags, the
@@ -314,7 +314,17 @@ samples, quorum-send dependency fields, and the 2^20-record ring (binary
 success path (so each call-wrapper interval is delimited instead of running
 to closure end), pair them in the analyzer via `calls`, and extend the hash
 vectors to all 27 tags (binary
-`8fc0577be62b37ae80304c4c8760511f0248cec4870f534ff2647a9adcc65779`):
+`8fc0577be62b37ae80304c4c8760511f0248cec4870f534ff2647a9adcc65779`); the
+`-v4` patches fix two probe-write issues found in review — ring writes use
+raw-pointer arithmetic derived from `UnsafeCell::get()` instead of creating a
+whole-buffer `&mut`, and a single admission gate turns `flush_to_env` into a
+barrier over every probe writer (admission closes, admitted writers drain,
+then the ring is read and written as **format version 2**: the unchanged
+64-byte header plus explicit `stored`, `rejected_capacity`, and
+`rejected_closed` counters). The `-v4` generation has **not** produced a
+capture: no binary was rebuilt for it, so every existing capture keeps its
+own hash and generation; its deterministic writer/flush concurrency tests
+live in `fs-probe-ring-tests/` inside the Tokio `-v4` patch:
 
 | Patch | Applies to | SHA-256 |
 | :--- | :--- | :--- |
@@ -324,9 +334,11 @@ vectors to all 27 tags (binary
 | `rustfs-probe-v2.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `3a78be5322eed0c5f7f266af069ab059186020719909791defc9102ff1e35e9d` |
 | `tokio-1.53.2-fs-probe-v3.patch` | registry `tokio-1.53.2` source | `342e86f00e6de3b40fac1460061315e1922b9c9ac55c2943948385b2a9750769` |
 | `rustfs-probe-v3.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `c88196310af6b38649176948a5a3aa51e5d994405b79bbc7aeff9f27bdd353f3` |
+| `tokio-1.53.2-fs-probe-v4.patch` | registry `tokio-1.53.2` source | `7bd0547894b9fc9bc94d9b2ae18b7f5c6b65b3ea4b598f8acd1fd7388eb66b84` |
+| `rustfs-probe-v4.patch` | RustFS `6b1554003ebf8f2037ffb7da9c9b906527e758da` | `7845d7349205cb44f465c39dd853805db5c2dac0b6686aff98dd9e24b2e4de09` |
 
-All six were verified to apply to pristine sources (fresh registry copy and
-fresh clone at the pinned revision); each `-v2` and `-v3` patch was
+All eight were verified to apply to pristine sources (fresh registry copy and
+fresh clone at the pinned revision); each `-v2`, `-v3`, and `-v4` patch was
 additionally applied and its result compared byte-for-byte against the live
 working copies.
 To recreate the current probe working copies (fresh directories; `git apply`
@@ -335,19 +347,19 @@ works without a surrounding repository):
 ```sh
 cp -a "$(echo ~/.cargo/registry/src/*/tokio-1.53.2)" .repro/tokio-blocking-probe
 git -C .repro/tokio-blocking-probe apply --check -p1 \
-  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v3.patch
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v4.patch
 git -C .repro/tokio-blocking-probe apply -p1 \
-  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v3.patch
+  ../../experiments/rustfs/patches/tokio-1.53.2-fs-probe-v4.patch
 git -C .repro/rustfs worktree add --detach ../rustfs-probe \
   6b1554003ebf8f2037ffb7da9c9b906527e758da
 git -C .repro/rustfs-probe apply --check \
-  ../../experiments/rustfs/patches/rustfs-probe-v3.patch
+  ../../experiments/rustfs/patches/rustfs-probe-v4.patch
 git -C .repro/rustfs-probe apply \
-  ../../experiments/rustfs/patches/rustfs-probe-v3.patch
+  ../../experiments/rustfs/patches/rustfs-probe-v4.patch
 ```
 
-(Substitute the `-v2` patch names to recreate the working copies that produced
-the `fac3b2d1…` v3 captures.)
+(Substitute `-v3` to recreate the working copies that produced the
+`8fc0577…` captures, or `-v2` for the `fac3b2d1…` captures.)
 
 Build the probe binary (separate target directory, no `--locked` because the
 patch entry rewrites `Cargo.lock`):
@@ -463,7 +475,15 @@ Probe design notes:
   scheduling latency.
 - The record layout is 40 bytes (`<BBHIIIQQQ`) behind a 64-byte header
   (`<8sIIQQQQIIQ`) carrying a `(monotonic, realtime)` flush pair, `total_seen`,
-  and the pid. The ring holds 2^20 records (~40 MiB) in the `-v2` revision
+  and the pid. The `-v4` flush appends a 24-byte **format-version-2**
+  extension — `<QQQ>` of `stored`, `rejected_capacity`, `rejected_closed` —
+  after that header (records then start at offset 88); version-1 dumps (every
+  capture in this repository) end the header at 64 bytes, and the reader
+  reports `rejected_closed` as *missing* (`null`) for them rather than
+  silently reusing an old field for a new meaning. A version-2 dump whose
+  counters disagree (`stored > capacity`, `stored != min(total_seen,
+  capacity)`, or `rejected_capacity != total_seen - stored`) is rejected as
+  corrupt. The ring holds 2^20 records (~40 MiB) in the `-v2` revision
   (2^19 in the first generation); recording stops at
   capacity instead of wrapping (a wrap could race a descheduled writer's
   store), and `total_seen` beyond capacity is reported as `dropped_records`.

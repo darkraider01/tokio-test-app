@@ -20,6 +20,12 @@ from load import percentiles
 
 MAGIC = b"RFSPRB01"
 HEADER = struct.Struct("<8sIIQQQQIIQ")
+# Format version 2 appends this 24-byte extension between the version-1
+# header and the records (see fs_probe.rs flush_to_env): stored records,
+# capacity refusals, and pushes refused after recording closed. Version 1
+# dumps have no extension — the closed-rejection counter simply did not
+# exist and is reported as missing (None), never as zero.
+HEADER_V2_EXT = struct.Struct("<QQQ")
 RECORD = struct.Struct("<BBHIIIQQQ")
 
 KIND_SUBMIT = 1
@@ -107,6 +113,16 @@ def step_hash(tag):
 
 
 def read_probe(path):
+    """Read a probe dump (format version 1 or 2) into header + records.
+
+    Version 2 carries explicit counters (`stored_records`,
+    `rejected_capacity`, `rejected_closed`) after the unchanged 64-byte
+    version-1 header; version 1 dumps keep their original layout and
+    meanings (`stored`/`rejected_capacity` are derived from
+    `min/max(total_seen, capacity)` as always, `rejected_closed` did not
+    exist and stays `None`). Record count and counter consistency are
+    validated; a corrupt or truncated dump raises ValueError.
+    """
     raw = path.read_bytes()
     if len(raw) < HEADER.size:
         raise ValueError("probe dump smaller than its header")
@@ -114,14 +130,36 @@ def read_probe(path):
      flushed_realtime_ns, clock_id, reserved, pid) = HEADER.unpack_from(raw)
     if magic != MAGIC:
         raise ValueError("probe dump magic mismatch")
-    if version != 1 or record_size != RECORD.size:
-        raise ValueError(f"unsupported probe dump format version={version} record_size={record_size}")
-    body = raw[HEADER.size:]
+    if version not in (1, 2):
+        raise ValueError(
+            f"unsupported probe dump format version={version} record_size={record_size}")
+    if record_size != RECORD.size:
+        raise ValueError(
+            f"unsupported probe dump format version={version} record_size={record_size}")
+    if version == 1:
+        body = raw[HEADER.size:]
+        stored = min(total, capacity)
+        rejected_capacity = max(0, total - capacity)
+        rejected_closed = None  # absent in version 1: preserved as missing
+    else:
+        if len(raw) < HEADER.size + HEADER_V2_EXT.size:
+            raise ValueError("probe dump smaller than its version-2 header")
+        stored, rejected_capacity, rejected_closed = HEADER_V2_EXT.unpack_from(
+            raw, HEADER.size)
+        body = raw[HEADER.size + HEADER_V2_EXT.size:]
+        if stored > capacity:
+            raise ValueError(
+                f"probe dump stored {stored} exceeds capacity {capacity}")
+        if stored != min(total, capacity) or rejected_capacity != total - stored:
+            raise ValueError(
+                "probe dump counters inconsistent: "
+                f"stored {stored} rejected_capacity {rejected_capacity} "
+                f"total_seen {total} capacity {capacity}")
     if len(body) % record_size:
         raise ValueError("probe dump has a partial trailing record")
     count = len(body) // record_size
-    if count != min(total, capacity):
-        raise ValueError(f"probe dump record count {count} != min(total_seen {total}, capacity {capacity})")
+    if count != stored:
+        raise ValueError(f"probe dump record count {count} != stored {stored} (min(total_seen {total}, capacity {capacity}))")
     records = []
     for offset in range(0, len(body), record_size):
         kind, _reserved, _pad, step, tid, reserved2, task_id, ts, a = RECORD.unpack_from(body, offset)
@@ -129,7 +167,9 @@ def read_probe(path):
                         "step": step, "tid": tid, "id": task_id, "ts": ts, "a": a,
                         "reserved2": reserved2})
     header = {"version": version, "record_size": record_size, "capacity": capacity,
-              "total_seen": total, "dropped_records": max(0, total - capacity),
+              "total_seen": total, "dropped_records": rejected_capacity,
+              "stored_records": stored, "rejected_capacity": rejected_capacity,
+              "rejected_closed": rejected_closed,
               "flushed_monotonic_ns": flushed_monotonic_ns,
               "flushed_realtime_ns": flushed_realtime_ns,
               "clock_id": clock_id, "reserved": reserved, "pid": pid,

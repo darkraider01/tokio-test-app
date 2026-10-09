@@ -5,26 +5,44 @@ from pathlib import Path
 from unittest.mock import patch
 
 from analyze import analyze
-from fs_probe import (HEADER, KIND_JOB_END, KIND_JOB_START, KIND_JOIN_READY,
-                      KIND_SEND_OK, KIND_SUB, KIND_SUBMIT, RECORD, analyze_run,
-                      build_poll_index, classify_pool_tids,
-                      containing_poll, group_jobs, job_calls, job_intervals,
-                      job_stages, op_hash, operation_job_rows, pair_polls,
-                      read_probe, reconstruct_wait, step_hash, summarize_jobs)
+from fs_probe import (HEADER, HEADER_V2_EXT, KIND_JOB_END, KIND_JOB_START,
+                      KIND_JOIN_READY, KIND_OP_BEGIN, KIND_OP_END,
+                      KIND_SEND_OK, KIND_SUB, KIND_SUBMIT, KIND_WAIT_BEGIN,
+                      KIND_WAIT_END, RECORD, analyze_run, build_poll_index,
+                      classify_pool_tids, containing_poll, group_jobs,
+                      job_calls, job_intervals, job_stages, op_hash,
+                      operation_job_rows, pair_polls, read_probe,
+                      reconstruct_wait, step_hash, summarize_jobs)
 from load import run_tier
 from stage_metrics import read_histograms, summarize_tier
 from syscalls import read_syscalls
 from request_spans import read_spans
 
 
-def _probe_dump(records, *, total_seen=None, capacity=64, magic=b"RFSPRB01", version=1,
-                flushed_monotonic_ns=1000, flushed_realtime_ns=2000):
-    """Build a probe dump exactly like the Rust flush writes one."""
+def _probe_dump(records, *, total_seen=None, capacity=64, magic=b"RFSPRB01", version=2,
+                flushed_monotonic_ns=1000, flushed_realtime_ns=2000,
+                stored=None, rejected_capacity=None, rejected_closed=0):
+    """Build a probe dump exactly like the Rust flush writes one.
+
+    Version 2 (the current flush): the unchanged 64-byte header plus the
+    `stored, rejected_capacity, rejected_closed` extension before the
+    records.  Version 1 (older captures / compatibility tests): header
+    only, counters derived by the reader as before.  Pass explicit
+    `stored` / `rejected_capacity` only to build corrupt dumps for
+    validation tests.
+    """
     body = b"".join(RECORD.pack(r["kind"], 0, 0, r["step"], r["tid"], 0,
                                 r["id"], r["ts"], r["a"]) for r in records)
-    header = HEADER.pack(magic, version, RECORD.size, capacity,
-                         len(records) if total_seen is None else total_seen,
+    total = len(records) if total_seen is None else total_seen
+    header = HEADER.pack(magic, version, RECORD.size, capacity, total,
                          flushed_monotonic_ns, flushed_realtime_ns, 1, 0, 4242)
+    if version == 2:
+        if stored is None:
+            stored = min(total, capacity)
+        if rejected_capacity is None:
+            rejected_capacity = total - stored
+        header += HEADER_V2_EXT.pack(stored, rejected_capacity,
+                                     rejected_closed)
     return header + body
 
 
@@ -232,6 +250,54 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(parsed[0]["id"], 42)
         self.assertEqual(parsed[0]["ts"], 100)
         self.assertEqual(parsed[0]["a"], 99)
+
+    def test_version2_dump_round_trips_explicit_counters(self):
+        records = [
+            self._record(1, 100, tid=7, task_id=42, step=5, a=99),
+            self._record(2, 150, tid=8, task_id=42),
+            self._record(3, 250, tid=8, task_id=42),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, total_seen=1000, capacity=3,
+                                     rejected_closed=7))
+        header, parsed = read_probe(path)
+        self.assertEqual(header["version"], 2)
+        self.assertEqual(header["records"], 3)
+        self.assertEqual(header["stored_records"], 3)
+        self.assertEqual(header["rejected_capacity"], 997)
+        self.assertEqual(header["dropped_records"], 997)
+        self.assertEqual(header["rejected_closed"], 7)
+        self.assertEqual(header["total_seen"], 1000)
+        self.assertEqual(len(parsed), 3)
+
+    def test_version1_dump_stays_readable_with_missing_closed_counter(self):
+        # Backward compatibility: captures produced before the format-2
+        # extension keep their layout and meanings; the closed-rejection
+        # counter did not exist and stays missing (None), never zero.
+        records = [self._record(1, 100, tid=7), self._record(2, 200, tid=7)]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=1))
+        header, parsed = read_probe(path)
+        self.assertEqual(header["version"], 1)
+        self.assertEqual(header["records"], 2)
+        self.assertEqual(header["stored_records"], 2)
+        self.assertEqual(header["rejected_capacity"], 0)
+        self.assertIsNone(header["rejected_closed"])
+        self.assertEqual([r["ts"] for r in parsed], [100, 200])
+
+    def test_version2_dump_with_inconsistent_counters_is_rejected(self):
+        records = [self._record(1, 100)]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        # stored > capacity cannot happen through the flush; reject it.
+        path.write_bytes(_probe_dump(records, total_seen=10, capacity=4,
+                                     stored=5))
+        with self.assertRaises(ValueError):
+            read_probe(path)
+        # stored != min(total_seen, capacity) is likewise corruption.
+        path.write_bytes(_probe_dump(records, total_seen=9, capacity=64,
+                                     stored=2))
+        with self.assertRaises(ValueError):
+            read_probe(path)
 
     def test_probe_dump_with_bad_magic_is_rejected(self):
         path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
