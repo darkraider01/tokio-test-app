@@ -1892,15 +1892,20 @@ def compare_summaries(traced, reference):
 #                           wait (folio_wait_writeback recorded with the
 #                           wrapper's own tid) at/before entry into its
 #                           own blocked segment — waiter and waited folio
-#                           are named by the event;
-#   supported_causal        isolation rule: at most one event of that
+#                           are named by the event; establishes that the
+#                           task encountered that wait path; whether it
+#                           explains the full blocked segment duration
+#                           remains inferred;
+#   isolated_temporal_candidate
+#                           isolation rule: at most one event of that
 #                           completion class inside the segment, within
-#                           the temporal threshold of the wake edge —
-#                           under busy-device density any edge is within
-#                           the threshold of *some* completion, so only
-#                           the isolated candidate is reported, alongside
-#                           the observed waker comm (whose irq-context
-#                           ambiguity is documented).
+#                           the temporal threshold of the wake edge.
+#                           Selected by temporal proximity and sparsity;
+#                           no dependency match to the blocked task was
+#                           established, and a single candidate does not
+#                           exclude untraced causes; waker comm is CPU
+#                           context at wake, not necessarily the logical
+#                           producer or releasing subsystem.
 #
 KERNEL_WAIT_WRAPPERS_PER_RUN = 3
 KERNEL_WAIT_WAKE_EDGE_US = 1000.0
@@ -1983,10 +1988,10 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
     *some* completion, so raw proximity carries no information.  Two
     rules keep the classification honest:
 
-    * the isolation rule — a completion class only supports a
-      ``supported_causal`` entry when at most one event of that class
-      occurred inside the segment (the candidate at the edge is then the
-      only one of its kind); dense segments are reported through
+    * the isolation rule — a completion class only supports an
+      ``isolated_temporal_candidate`` entry when at most one event of that
+      class occurred inside the segment (the candidate at the edge is then
+      the only one of its kind); dense segments are reported through
       ``proximity_summary`` instead;
     * waker attribution — the ``comm`` recorded at a wake edge is the
       task *current on that CPU* when the wake fired, which for
@@ -2033,14 +2038,20 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
                     "(folio_wait_writeback with this tid) inside its own "
                     "blocked segment, allowing folio_pre_segment_us for "
                     "the tracepoint that fires just before the "
-                    "switch-out (waiter and folio named)",
-                "supported_causal":
+                    "switch-out (waiter and folio named). Establishes that "
+                    "the task entered that wait path; proximity to the "
+                    "switch-out does not prove that this wait accounts for "
+                    "the full following blocked segment duration, which "
+                    "remains inferred",
+                "isolated_temporal_candidate":
                     "isolation rule: at most one event of that completion "
                     "class inside the segment, within "
-                    "wake_edge_threshold_us before the wake edge (the "
-                    "candidate is then the only event of a class capable "
-                    "of releasing such a wait) — supported by proximity "
-                    "plus waker attribution, never proof of release",
+                    "wake_edge_threshold_us before the wake edge. "
+                    "Selected by temporal proximity and sparsity; no "
+                    "dependency match to the blocked task was established. "
+                    "A single candidate among captured events does not "
+                    "exclude untraced causes, and waker_comm is CPU execution "
+                    "context at wake time, not proof of release",
             },
             "wake_edge_threshold_us": KERNEL_WAIT_WAKE_EDGE_US,
             "folio_pre_segment_us": FOLIO_PRE_US / 1000.0,
@@ -2161,12 +2172,16 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
                                                       fe["fields"]),
                             "basis": (
                                 f"tid {tid} itself recorded this writeback "
-                                "wait at/before the switch-out into its own "
-                                "blocked:D segment; the event names the "
-                                "waited folio (bdi/ino/index)"),
+                                "wait path at/before the switch-out into its own "
+                                "blocked:D segment (naming bdi/ino/index). "
+                                "This establishes that the task encountered the "
+                                "folio wait path; proximity to the switch-out does "
+                                "not prove that this wait path accounts for the "
+                                "entire duration of the following blocked segment, "
+                                "which remains inferred."),
                         })
 
-                    # supported_causal: isolation rule per class.
+                    # isolated_temporal_candidate: isolation rule per class.
                     rq_n = count_in("block_rq_complete", s, en)
                     near_rq = nearest_isolated("block_rq_complete", s, en)
                     if near_rq is not None:
@@ -2184,7 +2199,7 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
                         if ts is None:
                             continue
                         evidence.append({
-                            "level": "supported_causal",
+                            "level": "isolated_temporal_candidate",
                             "event": cls,
                             "offset_ms": round((ts - w0) / 1e6, 6),
                             "wake_edge_offset_ms": round((en - w0) / 1e6, 6),
@@ -2196,12 +2211,15 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
                                 if e["event"] == cls and e["ts"] == ts)),
                             "basis": (
                                 "isolation rule: this is the only event "
-                                "of its class inside the segment and it "
-                                "occurred within the predeclared wake-edge "
-                                "threshold of the wake — the single "
-                                "captured candidate of a class capable of "
-                                "releasing the wait; supported by waker "
-                                "attribution where present, not proof"),
+                                "of its class inside the segment and occurred "
+                                "within wake_edge_threshold_us of the wake. "
+                                "Selected by temporal proximity and sparsity; "
+                                "no dependency match to the blocked task was "
+                                "established. A single candidate among captured "
+                                "events does not exclude untraced causes, and "
+                                "waker_comm is execution context on the CPU, not "
+                                "necessarily the logical producer or releasing "
+                                "subsystem."),
                         })
                 if nearest_dists:
                     proximity["nearest_completion_us"] = {
@@ -2212,7 +2230,7 @@ def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
                 proximity["note"] = (
                     "dense edges (>= 2 completions during the segment) "
                     "cannot single out a cause by proximity and are "
-                    "reported here instead of as supported_causal")
+                    "reported here instead of as isolated_temporal_candidate")
 
                 evidence.sort(key=lambda x: x["offset_ms"])
                 top_segments.sort(key=lambda x: -x["dur_ms"])

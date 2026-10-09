@@ -1528,17 +1528,20 @@ class FsTraceTests(unittest.TestCase):
             "block_rq_issue": 1, "btrfs_transaction_commit": 1,
         })
         levels = {e["level"] for e in scan["evidence"]}
-        self.assertEqual(levels, {"demonstrable_dependency", "supported_causal"})
+        self.assertEqual(levels, {"demonstrable_dependency", "isolated_temporal_candidate"})
         dep = next(e for e in scan["evidence"]
                    if e["level"] == "demonstrable_dependency")
         self.assertEqual(dep["event"], "folio_wait_writeback")
         self.assertEqual(dep["identity"]["bdi"], "nvme0n1p3")
         self.assertEqual(dep["identity"]["ino"], "12345")
+        self.assertIn("remains inferred", dep["basis"])
         caus = next(e for e in scan["evidence"]
-                    if e["level"] == "supported_causal")
+                    if e["level"] == "isolated_temporal_candidate")
         self.assertEqual(caus["event"], "block_rq_complete")
         self.assertEqual(caus["distance_us"], 100.0)
         self.assertEqual(caus["segment_dur_ms"], 19.5)
+        self.assertIn("temporal proximity and sparsity", caus["basis"])
+        self.assertIn("no dependency match", caus["basis"])
         # The wake edge carries the observed waker comm (fixture prefix).
         self.assertEqual(caus["waker_comm"], "kworker")
         # Phase structure: one blocked segment, isolated completion.
@@ -1599,8 +1602,8 @@ class FsTraceTests(unittest.TestCase):
         # Isolation rule: with >= 2 completions inside a blocked segment,
         # wake-edge proximity cannot single out a cause — reported as
         # dense temporal overlap (proximity_summary), never as
-        # supported_causal.  A segment with exactly one completion IS
-        # classified, with its observed waker comm.
+        # isolated_temporal_candidate.  A segment with exactly one completion IS
+        # classified as an isolated temporal candidate, with its observed waker comm.
         from fs_trace import kernel_wait_section
         MS = 10**6
         b0 = 1_000 * 10**9
@@ -1647,13 +1650,128 @@ class FsTraceTests(unittest.TestCase):
         # Isolated segment: classified with waker attribution.
         self.assertEqual(len(isolated["evidence"]), 1)
         caus = isolated["evidence"][0]
-        self.assertEqual(caus["level"], "supported_causal")
+        self.assertEqual(caus["level"], "isolated_temporal_candidate")
         self.assertEqual(caus["distance_us"], 1.0)
         self.assertEqual(caus["waker_comm"], "kworker/u48:7")
+        self.assertIn("temporal proximity and sparsity", caus["basis"])
+        self.assertIn("no dependency match", caus["basis"])
         self.assertEqual(
             isolated["proximity_summary"]["isolated_completion_edges"], 1)
         self.assertEqual(isolated["shared_device_events"]["devices"],
                          ["259,0"])
+
+    def test_isolated_temporal_candidate_identity_retained_not_promoted(self):
+        # A lone completion near a wake edge remains an isolated temporal
+        # candidate with inspectable identity fields, never promoted to a
+        # dependency or causal attribution solely from proximity.
+        from fs_trace import kernel_wait_section
+        MS = 10**6
+        b0 = 3_000 * 10**9
+        diag = [
+            {"ts": b0 + 4990 * 1000,
+             "event": "btrfs_finish_ordered_extent", "tid": 111, "cpu": 1,
+             "comm": "kworker/u48:0",
+             "fields": "ino=4517992 start=0 len=65536 uptodate=1"},
+        ]
+        wrappers = [
+            {"w0_ns": b0, "w1_ns": b0 + 10 * MS, "tid": 800,
+             "tag": "sub_dir_sync", "dur_ms": 10.0,
+             "identity": {"job_task_id": 99}},
+        ]
+        timeline = {
+            800: [("out", b0 + 1 * MS, "D"), ("waking", b0 + 5 * MS, None)],
+        }
+        wakes = {800: [(b0 + 5 * MS, "kworker/u48:0")]}
+        section = kernel_wait_section(
+            diag, wakes, [{"run": "run-1", "long_wrappers": wrappers}],
+            timeline, {}, {"events": []}, True)
+        w = section["wrappers"][0]
+        self.assertEqual(len(w["evidence"]), 1)
+        cand = w["evidence"][0]
+        self.assertEqual(cand["level"], "isolated_temporal_candidate")
+        self.assertEqual(cand["event"], "btrfs_finish_ordered_extent")
+        self.assertEqual(cand["distance_us"], 10.0)
+        self.assertEqual(cand["waker_comm"], "kworker/u48:0")
+        self.assertEqual(cand["identity"]["ino"], "4517992")
+        self.assertIn("temporal proximity and sparsity", cand["basis"])
+        self.assertIn("no dependency match", cand["basis"])
+        self.assertIn("does not exclude untraced causes", cand["basis"])
+
+    def test_demonstrable_dependency_requires_same_thread_wait(self):
+        # demonstrable_dependency requires the wrapper thread's OWN tid.
+        # A folio wait by another thread is not classified as demonstrable_dependency.
+        from fs_trace import kernel_wait_section
+        MS = 10**6
+        b0 = 4_000 * 10**9
+        diag_foreign = [
+            {"ts": b0 + 1900 * 1000,
+             "event": "folio_wait_writeback", "tid": 999, "cpu": 0,  # foreign tid
+             "comm": "other", "fields": "bdi nvme0n1p3: ino=54321 index=1"},
+        ]
+        diag_own = [
+            {"ts": b0 + 1900 * 1000,
+             "event": "folio_wait_writeback", "tid": 850, "cpu": 0,  # own tid
+             "comm": "rustfs-fsync", "fields": "bdi nvme0n1p3: ino=54321 index=1"},
+        ]
+        wrappers = [
+            {"w0_ns": b0, "w1_ns": b0 + 10 * MS, "tid": 850,
+             "tag": "sub_scan", "dur_ms": 10.0,
+             "identity": {"job_task_id": 101}},
+        ]
+        timeline = {
+            850: [("out", b0 + 2 * MS, "D"), ("waking", b0 + 5 * MS, None)],
+        }
+        wakes = {850: [(b0 + 5 * MS, "kworker")]}
+
+        # Case 1: foreign thread folio wait -> no demonstrable_dependency
+        sec_foreign = kernel_wait_section(
+            diag_foreign, wakes, [{"run": "run-1", "long_wrappers": wrappers}],
+            timeline, {}, {"events": []}, True)
+        self.assertEqual(sec_foreign["wrappers"][0]["evidence"], [])
+
+        # Case 2: own thread folio wait -> demonstrable_dependency
+        sec_own = kernel_wait_section(
+            diag_own, wakes, [{"run": "run-1", "long_wrappers": wrappers}],
+            timeline, {}, {"events": []}, True)
+        ev = sec_own["wrappers"][0]["evidence"]
+        self.assertEqual(len(ev), 1)
+        self.assertEqual(ev[0]["level"], "demonstrable_dependency")
+        self.assertEqual(ev[0]["identity"]["ino"], "54321")
+        self.assertIn("remains inferred", ev[0]["basis"])
+
+    def test_blocked_percentage_population_scopes(self):
+        # Assert arithmetic and population boundaries for reported percentages,
+        # disproving any unqualified '>95% blocked' generalization across all wrappers.
+        # Population 1: Flagship full wrapper duration vs blocked:D
+        flagship_dur_ms = 275.842
+        flagship_blocked_ms = 166.637
+        flagship_running_ms = 108.159
+        flagship_pct = (flagship_blocked_ms / flagship_dur_ms) * 100.0
+        self.assertAlmostEqual(flagship_pct, 60.41, places=1)
+        self.assertAlmostEqual((flagship_running_ms / flagship_dur_ms) * 100.0, 39.21, places=1)
+
+        # Population 2: Flagship Phase A alone (+0.182 to +153.275 ms)
+        phase_a_dur_ms = 153.275 - 0.182
+        phase_a_blocked_ms = 69.709 + 83.365
+        phase_a_pct = (phase_a_blocked_ms / phase_a_dur_ms) * 100.0
+        self.assertGreater(phase_a_pct, 99.9)
+
+        # Population 3: Low-CPU wrapper (e.g. wrapper 1: 244.514 ms, 244.064 ms blocked)
+        low_cpu_dur_ms = 244.514
+        low_cpu_blocked_ms = 244.064
+        self.assertGreater((low_cpu_blocked_ms / low_cpu_dur_ms) * 100.0, 99.5)
+
+        # Population 4: Non-overlapping wrapper thread-time union across runs
+        total_union_ms = 29804.81
+        blocked_union_ms = 27534.88
+        union_pct = (blocked_union_ms / total_union_ms) * 100.0
+        self.assertAlmostEqual(union_pct, 92.38, places=1)
+
+        # Population 5: Overlapping per-tag sub_dir_sync duration sum
+        sub_dir_sync_dur_sum = 7982.13
+        sub_dir_sync_blocked_sum = 7158.76
+        tag_pct = (sub_dir_sync_blocked_sum / sub_dir_sync_dur_sum) * 100.0
+        self.assertAlmostEqual(tag_pct, 89.69, places=1)
 
     def test_parse_trace_collects_diagnostic_events(self):
         sample = "\n".join([

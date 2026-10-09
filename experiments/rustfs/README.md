@@ -982,11 +982,13 @@ After a pilot window showed the device completes thousands of requests per
 second (6–9k/s under c8), two rules keep the correlation honest — both are
 encoded in `fs_trace.kernel_wait_section` and asserted by tests:
 
-* **Isolation rule** (`supported_causal`): a completion class only supports
-  a causal entry when at most one event of that class occurred *inside* the
-  blocked segment, within 1 ms of the wake edge. Under busy-device density
-  any edge is within the threshold of *some* completion, so raw proximity
-  would be vacuous — dense edges are reported as `proximity_summary`
+* **Isolation rule** (`isolated_temporal_candidate`): a completion class only provides
+  an entry when at most one event of that class occurred *inside* the
+  blocked segment, within 1 ms of the wake edge. This selects a candidate
+  solely by temporal proximity and sparsity; it does not establish that the
+  event released the wait, match a dependency to the blocked task, or exclude
+  untraced causes. Under busy-device density any edge is within the threshold
+  of *some* completion, so dense edges are reported as `proximity_summary`
   counts instead.
 * **Waker ambiguity**: `waker_comm` is the task *current on that CPU* when
   the wake fired; for irq-context wakes it is an unrelated task (observed:
@@ -998,8 +1000,10 @@ Levels reported per wrapper: `temporal_overlap` (counts only),
 `shared_device_temporal` (device busy, not wait attribution),
 `demonstrable_dependency` (the wrapper thread's own
 `folio_wait_writeback` at/before its own switch-out — waiter and folio
-named), `supported_causal` (isolation rule). None of them establishes
-response-criticality, device latency from fsync duration, or a single
+named; establishes that the task entered that wait path, while whether it explains
+the full blocked segment duration remains inferred), `isolated_temporal_candidate`
+(isolation rule: candidate selected by temporal proximity and sparsity). None of them
+establishes response-criticality, device latency from fsync duration, or a single
 cause for the wait; those are listed under `limitations` in the results
 JSON.
 
@@ -1022,8 +1026,9 @@ including per-wrapper phase summaries, waker distributions, and
   `btrfs_finish_ordered_extent ino=4517992` at +153.116 ms (159 µs before
   the edge; itself preceded 24 µs earlier by
   `folio_wait_writeback bdi=btrfs-1 ino=4517992` from another thread),
-  with `waker_comm=kworker/u48:0` — the strongest supported chain in the
-  capture. The 69.709 ms segment's wake-edge proximity is classified
+  with `waker_comm=kworker/u48:0` — an isolated temporal candidate sequence
+  compatible with writeback completion, but without an established producer/consumer
+  dependency link to the blocked task. The 69.709 ms segment's wake-edge proximity is classified
   **dense/temporal only** (440 completions during it), and its
   `waker_comm=spotify` is an irq-attribution artifact.
 * Across the six representative wrappers: 810 wake edges — 527 isolated
@@ -1040,9 +1045,11 @@ including per-wrapper phase summaries, waker distributions, and
   isolated candidate, at the *second* giant edge), not a transaction
   commit (the only in-window commit is at exit), not space reservation
   (`reserve_ticket` absent), not same-task folio waits (none with that
-  tid). Unresolved; the honest next candidate is `balance_dirty_pages`
-  (rationale in the event-set section) or one stack sample of the blocked
-  thread — both need a new, separately approved budget.
+  tid). Unresolved; candidate hypotheses for a separately approved budget
+  include `balance_dirty_pages` (dirty throttling during metadata generation)
+  or bounded stack sampling of blocked threads (`/proc/<tid>/stack`), though
+  neither a single event nor a stack sample alone establishes the full causal
+  mechanism.
 
 ## Preserved preliminary evidence
 
