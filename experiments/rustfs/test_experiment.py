@@ -1,4 +1,8 @@
+import hashlib
 import json
+import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +19,12 @@ from fs_probe import (HEADER, HEADER_V2_EXT, KIND_JOB_END, KIND_JOB_START,
                       reconstruct_wait, step_hash, summarize_jobs)
 from load import run_tier
 from stage_metrics import read_histograms, summarize_tier
+from fs_trace import (analyze as fs_trace_analyze, decompose_wrapper,
+                      derive_syscall_mapping, group_clusters, merge_intervals,
+                      parse_settings_file, parse_stats_file, parse_trace,
+                      per_tag_totals, state_segments, syscall_windows_tid,
+                      to_ns, union_regions, union_state_totals, union_summary,
+                      validate_clock, zone_of)
 from syscalls import read_syscalls
 from request_spans import read_spans
 
@@ -749,6 +759,1606 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(timeline[-1]["offset_ms"], 62.0)
         # The whole diagnostic must be JSON-serializable (it is the report).
         json.dumps(result)
+
+
+class FsTraceTests(unittest.TestCase):
+    """ftrace parsing, scheduler-state semantics, wrapper decomposition."""
+
+    TRACE_SAMPLE = """# tracer: nop
+#
+# entries-in-buffer/entries-written: 9/9   #P:12
+           bash-100 [000] d..2. 1000.000001: sched_switch: prev_comm=bash prev_pid=100 prev_prio=120 prev_state=S ==> next_comm=rustfs-fsync next_pid=200 next_prio=120
+ notify-rs inoti-101 [001] d..2. 1000.000002: sched_switch: prev_comm=notify-rs inoti prev_pid=101 prev_prio=120 prev_state=R ==> next_comm=other next_pid=300 next_prio=120
+   rustfs-fsync-200 [002] d..2. 1000.000010: sys_fsync(fd: 0x5)
+   rustfs-fsync-200 [002] d..2. 1000.000020: sched_switch: prev_comm=rustfs-fsync prev_pid=200 prev_prio=120 prev_state=D ==> next_comm=swapper/2 next_pid=0 next_prio=120
+   kworker/u8-50 [003] d..2. 1000.000030: sched_waking: comm=rustfs-fsync pid=200 prio=120 target_cpu=002
+   swapper/2-0 [004] d..2. 1000.000040: sched_wakeup: comm=rustfs-fsync pid=200 prio=120 target_cpu=002
+   rustfs-fsync-200 [002] d..2. 1000.000050: sys_fsync -> 0x0
+   rustfs-fsync-200 [002] d..2. 1000.000060: sched_switch: prev_comm=rustfs-fsync prev_pid=200 prev_prio=120 prev_state=R+ ==> next_comm=other next_pid=300 next_prio=120
+   other-300 [005] d..2. 1000.000070: sched_switch: prev_comm=other prev_pid=300 prev_prio=120 prev_state=S ==> next_comm=rustfs-fsync next_pid=200 next_prio=120
+ garbage-line
+"""
+
+    @staticmethod
+    def _trace_file(directory, text):
+        path = Path(directory) / "trace.raw"
+        path.write_text(text)
+        return path
+
+    def test_to_ns_pads_microsecond_fraction(self):
+        # ftrace writes 6 fractional digits on this host: 1000.000001 s is
+        # 1000 s + 1 us, not 1000 s + 1 ns.
+        self.assertEqual(to_ns("1000", "000001"), 1000 * 10**9 + 1000)
+        self.assertEqual(to_ns("1000", "000001000"), 1000 * 10**9 + 1000)
+
+    def test_parse_trace_attributes_events_from_content_not_prefix(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(
+            self._trace_file(tmp, self.TRACE_SAMPLE))
+        # The line-prefix task is prev (sched_switch) or waker (waking):
+        # both sides must be attributed from the event content, and the
+        # two wake events keep their distinct kinds (waking = wakeup
+        # processing start, wakeup = made runnable).
+        self.assertEqual(
+            timelines[200],
+            [("in", 1000 * 10**9 + 1000, None),
+             ("out", 1000 * 10**9 + 20000, "D"),
+             ("waking", 1000 * 10**9 + 30000, None),
+             ("wakeup", 1000 * 10**9 + 40000, None),
+             ("out", 1000 * 10**9 + 60000, "R+"),
+             ("in", 1000 * 10**9 + 70000, None)])
+        self.assertEqual(timelines[100], [("out", 1000 * 10**9 + 1000, "S")])
+        # Foreign comm with spaces still parses; next_pid=300 gets the "in".
+        self.assertEqual(timelines[300][0],
+                         ("in", 1000 * 10**9 + 2000, None))
+        self.assertEqual(
+            syscalls[200],
+            [(1000 * 10**9 + 10000, "fsync", "enter"),
+             (1000 * 10**9 + 50000, "fsync", "exit")])
+        self.assertEqual(stats["bad_lines"], 1)
+        self.assertEqual(stats["frac_digits"], [6])
+        self.assertEqual(stats["header_entries"], (9, 9))
+        self.assertEqual(stats["first_ts"], 1000 * 10**9 + 1000)
+        self.assertEqual(stats["last_ts"], 1000 * 10**9 + 70000)
+        self.assertEqual(stats["rustfs_comms"], ["rustfs-fsync"])
+        self.assertEqual(stats["event_counts"]["sched_switch"], 5)
+        self.assertEqual(stats["event_counts"]["sys_fsync_enter"], 1)
+
+    def test_state_segments_preempt_r_plus_is_runnable(self):
+        # prev_state=R+ (preempted while TASK_RUNNING) must read as
+        # runnable-but-not-scheduled, never as a blocked state.
+        rows = state_segments([("in", 100, None), ("out", 200, "R+"),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("running", 100, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_block_ends_at_wakeup(self):
+        rows = state_segments([("out", 100, "D"), ("wakeup", 200, None),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_waking_to_wakeup_is_its_own_category(self):
+        # sched_waking starts wakeup processing; sched_wakeup makes the
+        # task runnable.  The interval between them is neither runnable
+        # nor blocked/D time.
+        rows = state_segments([("out", 100, "D"), ("waking", 150, None),
+                               ("wakeup", 200, None), ("in", 300, None)],
+                              0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("wakeup_transition", 150, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_wakeup_without_observed_waking(self):
+        # The made-runnable boundary is sched_wakeup even when the
+        # initiation event was lost: the block ends there, no unknown
+        # span is invented (the lost start cannot be located).
+        rows = state_segments([("out", 100, "D"), ("wakeup", 200, None),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_waking_without_wakeup_is_incomplete(self):
+        # sched_waking seen but no sched_wakeup before the switch-in:
+        # the made-runnable instant is missing -> unknown, not runnable.
+        rows = state_segments([("out", 100, "D"), ("waking", 150, None),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("unknown_wake_incomplete", 150, 300),
+                                ("running", 300, 400)])
+        # Same at the window edge: the transition never completed.
+        rows = state_segments([("out", 100, "D"), ("waking", 150, None)],
+                              0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("unknown_wake_incomplete", 150, 400)])
+
+    def test_state_segments_duplicate_and_spurious_wake_events(self):
+        # Duplicate waking/wakeup pairs collapse to one transition; wake
+        # events for an already scheduled or already runnable task are
+        # spurious and must not move the state.
+        rows = state_segments([("out", 100, "D"), ("waking", 150, None),
+                               ("waking", 160, None), ("wakeup", 200, None),
+                               ("wakeup", 210, None), ("in", 300, None)],
+                              0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("wakeup_transition", 150, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+        # Waking while still running (spurious preemption kick): ignored.
+        rows = state_segments([("in", 100, None), ("waking", 150, None),
+                               ("out", 200, "R+"), ("in", 300, None)],
+                              0, 400)
+        self.assertEqual(rows, [("running", 100, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+        # Wakeup while already runnable (duplicate): ignored.
+        rows = state_segments([("out", 100, "D"), ("wakeup", 150, None),
+                               ("wakeup", 160, None), ("in", 200, None)],
+                              0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("runnable", 150, 200),
+                                ("running", 200, 400)])
+
+    def test_state_segments_switch_out_during_transition_is_unknown(self):
+        # A switch-out requires the task to have run: reaching one from a
+        # wakeup transition means an entire in+wakeup sequence is missing.
+        rows = state_segments([("out", 100, "D"), ("waking", 150, None),
+                               ("out", 200, "R+"), ("in", 300, None)],
+                              0, 400)
+        self.assertEqual(rows, [("blocked:D", 100, 150),
+                                ("unknown_lost_in", 150, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_runnable_wake_from_window_start(self):
+        # Window opens mid-block (no switch-out observed): the observed
+        # waking/wakeup pair still pins the runnable start exactly.
+        rows = state_segments([("waking", 150, None), ("wakeup", 200, None),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("wakeup_transition", 150, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_plain_r_switch_out_is_runnable(self):
+        # prev_state=R (runnable switch-out without preemption) is also
+        # runnable-but-not-scheduled, like R+.
+        rows = state_segments([("in", 100, None), ("out", 200, "R"),
+                               ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("running", 100, 200),
+                                ("runnable", 200, 300),
+                                ("running", 300, 400)])
+
+    def test_state_segments_reports_unknown_edges(self):
+        # A switch-in with no observed wake must not be reported as blocked.
+        rows = state_segments([("out", 100, "D"), ("in", 300, None)], 0, 400)
+        self.assertEqual(rows, [("unknown_no_wake", 100, 300),
+                                ("running", 300, 400)])
+        # A switch-out with no observed switch-in marks the prior chunk.
+        rows = state_segments([("out", 100, "D"), ("out", 200, "D"),
+                               ("in", 250, None)], 0, 300)
+        self.assertEqual(rows, [("unknown_lost_in", 100, 200),
+                                ("unknown_no_wake", 200, 250),
+                                ("running", 250, 300)])
+        # Window edge before the first event clips the running segment.
+        rows = state_segments([("in", 100, None), ("out", 200, "R+"),
+                               ("in", 300, None)], 150, 400)
+        self.assertEqual(rows[0], ("running", 150, 200))
+
+    def test_decompose_wrapper_tiles_window_exactly(self):
+        timeline = [("in", 10, None), ("out", 50, "D"),
+                    ("wakeup", 70, None), ("in", 90, None)]
+        events = [(20, "fsync", "enter"), (80, "fsync", "exit")]
+        rows, windows, unknown, recon = decompose_wrapper(timeline, events,
+                                                          0, 100)
+        self.assertEqual(recon, 0)
+        self.assertEqual(unknown, 10)  # leading span before the first event
+        self.assertEqual(windows, [(20, 80, "fsync", False)])
+        self.assertEqual(rows, [
+            ("pre-entry", "unknown", 0, 10),
+            ("pre-entry", "running", 10, 20),
+            ("syscall", "running", 20, 50),
+            ("syscall", "blocked:D", 50, 70),
+            ("syscall", "runnable", 70, 80),
+            ("post-exit", "runnable", 80, 90),
+            ("post-exit", "running", 90, 100),
+        ])
+
+    def test_zone_without_syscall_windows(self):
+        self.assertEqual(zone_of(0, 10, [], 0, 100), "no-traced-syscall")
+
+    def test_syscall_windows_open_window_and_pairing(self):
+        events = [(10, "fsync", "enter"), (50, "fsync", "exit"),
+                  (90, "fdatasync", "enter")]
+        windows = syscall_windows_tid(events, 0, 100)
+        self.assertEqual(windows, [(10, 50, "fsync", False),
+                                   (90, None, "fdatasync", True)])
+        # Events outside the wrapper (+/- 2 us slack) are not borrowed; the
+        # test window sits farther than the slack from every event.
+        self.assertEqual(syscall_windows_tid(events, 3000, 4000), [])
+
+    def test_derive_syscall_mapping_votes_from_capture(self):
+        rows = [
+            ("sub_dir_sync", 1, 0, 10, [(5, 8, "fsync", False)]),
+            ("sub_dir_sync", 2, 0, 10, []),           # empty: no vote
+            ("sub_fsync_files", 3, 0, 10, [(5, 8, "fdatasync", False)]),
+            ("sub_fdatasync", 4, 0, 10, [(5, 8, "fdatasync", False)]),
+            ("sub_rename", 5, 0, 10, []),              # not a sync candidate
+        ]
+        mapping, votes = derive_syscall_mapping(rows)
+        self.assertEqual(mapping, {"sub_dir_sync": "fsync",
+                                   "sub_fsync_files": "fdatasync",
+                                   "sub_fdatasync": "fdatasync"})
+        self.assertEqual(votes["sub_dir_sync"]["empty_windows"], 1)
+        self.assertNotIn("sub_rename", votes)
+
+    @staticmethod
+    def _long(tag, tid, dur_ns, enter_ns, exit_ns, w0_ns, run="run-1"):
+        return {"run": run, "tag": tag, "tid": tid, "dur_ms": dur_ns / 1e6,
+                "enter_ns": enter_ns, "exit_ns": exit_ns,
+                "w0_ns": w0_ns, "w1_ns": w0_ns + dur_ns}
+
+    def test_group_clusters_split_by_enter_gap_and_exit_groups(self):
+        # Two members entering within 50 ms of the first exit form one
+        # cluster; a wrapper entering a second later forms a new cluster
+        # (single-member clusters are dropped).  Exits more than 5 ms apart
+        # split into release groups.
+        wrappers = [
+            self._long("sub_dir_sync", 1, 100_000_000, 1_000, 2_000_000, 990),
+            self._long("sub_dir_sync", 2, 20_000_000, 40_000_000,
+                       60_000_000, 39_999_000),
+            self._long("sub_scan", 3, 5_000_000, 1_500_000_000,
+                       1_505_000_000, 1_499_999_000),
+        ]
+        clusters = group_clusters(wrappers)
+        self.assertEqual(len(clusters), 1)
+        c = clusters[0]
+        self.assertEqual(c["n_members"], 2)
+        self.assertAlmostEqual(c["enter_spread_ms"], 39.999, places=3)
+        self.assertAlmostEqual(c["exit_spread_ms"], 58.0, places=3)
+        self.assertEqual(c["exit_groups"],
+                         [{"n": 1, "spread_ms": 0.0},
+                          {"n": 1, "spread_ms": 0.0}])
+
+    def test_group_clusters_tight_exit_release(self):
+        wrappers = [
+            self._long("sub_dir_sync", 1, 100_000_000, 1_000, 101_000, 990),
+            self._long("sub_dir_sync", 2, 102_000_000, 2_000, 103_000, 1_990),
+        ]
+        c = group_clusters(wrappers)[0]
+        self.assertEqual(c["n_members"], 2)
+        self.assertAlmostEqual(c["enter_spread_ms"], 0.001, places=6)
+        self.assertAlmostEqual(c["exit_spread_ms"], 0.002, places=6)
+        self.assertEqual(c["exit_groups"], [{"n": 2, "spread_ms": 0.002}])
+
+    def test_parse_stats_and_settings_files(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        stats = tmp / "trace.stats"
+        stats.write_text(
+            " SMP: FTrace Dump triggered at wall time\n"
+            "== /sys/kernel/tracing/per_cpu/cpu0/trace:\n"
+            "entries: 10\noverrun: 0\ncommit overrun: 0\nbytes: 600\n"
+            "oldest event ts: 100.000000\nnow ts: 200.000000\n"
+            "dropped events: 0\nread events: 0\n"
+            "== /sys/kernel/tracing/per_cpu/cpu1/trace:\n"
+            "entries: 5\noverrun: 2\ncommit overrun: 0\nbytes: 300\n"
+            "oldest event ts: 101.000000\nnow ts: 201.000000\n"
+            "dropped events: 1\nread events: 0\n")
+        parsed = parse_stats_file(stats)
+        self.assertEqual(parsed["cpus"], 2)
+        self.assertEqual(parsed["entries_total"], 15)
+        self.assertEqual(parsed["overrun_total"], 2)
+        self.assertEqual(parsed["dropped_total"], 1)
+        self.assertEqual(parsed["bytes_total"], 900)
+
+        settings = tmp / "trace.settings"
+        settings.write_text(
+            "trace_clock=mono\nbuffer_size_kb=16387\noverwrite=0\n"
+            "sched/sched_switch enable=1 filter=prev_comm ~ \"rustfs*\" || "
+            "next_comm ~ \"rustfs*\"\n"
+            "syscalls/sys_enter_fsync enable=1 filter=none\n")
+        parsed = parse_settings_file(settings)
+        self.assertEqual(parsed["trace_clock"], "mono")
+        self.assertEqual(parsed["overwrite"], "0")
+        self.assertEqual(len(parsed["events"]), 2)
+
+    # --- non-overlapping accounting (nested/overlapping wrappers) ---
+
+    def test_union_nested_child_inside_parent_counts_shared_time_once(self):
+        # A 10 ms child inside a 30 ms parent is one 30 ms region, not 40 ms.
+        ms = 1_000_000
+        wrappers = [self._long("sub_scan", 1, 30 * ms, None, None, 0),
+                    self._long("sub_fdatasync", 1, 10 * ms, None, None,
+                               10 * ms)]
+        regions = union_regions(wrappers)
+        self.assertEqual(regions, {("run-1", 1): [(0, 30 * ms)]})
+        summary = union_summary({}, regions)
+        self.assertEqual(summary["thread_time_ms"], 30.0)
+        self.assertEqual(summary["regions"], 1)
+        # Per-tag totals keep both observations and are marked overlapping.
+        tags = per_tag_totals(wrappers)
+        self.assertTrue(tags["sub_scan"]["overlapping_across_tags"])
+        self.assertEqual(tags["sub_scan"]["duration_sum_ms"], 30.0)
+        self.assertEqual(tags["sub_fdatasync"]["duration_sum_ms"], 10.0)
+        self.assertEqual(
+            sum(t["duration_sum_ms"] for t in tags.values()), 40.0)
+
+    def test_union_partial_overlap_merges_shared_time(self):
+        # [0,20] and [15,40] share [15,20]: union is 40 ms, not 45 ms.
+        ms = 1_000_000
+        wrappers = [self._long("sub_dir_sync", 1, 20 * ms, None, None, 0),
+                    self._long("sub_scan", 1, 25 * ms, None, None, 15 * ms)]
+        regions = union_regions(wrappers)
+        self.assertEqual(regions, {("run-1", 1): [(0, 40 * ms)]})
+        self.assertEqual(union_summary({}, regions)["thread_time_ms"], 40.0)
+
+    def test_union_disjoint_intervals_on_one_tid_stay_separate(self):
+        ms = 1_000_000
+        wrappers = [self._long("sub_dir_sync", 1, 10 * ms, None, None, 0),
+                    self._long("sub_dir_sync", 1, 10 * ms, None, None,
+                               20 * ms)]
+        regions = union_regions(wrappers)
+        self.assertEqual(regions, {("run-1", 1): [(0, 10 * ms),
+                                                  (20 * ms, 30 * ms)]})
+        summary = union_summary({}, regions)
+        self.assertEqual(summary["thread_time_ms"], 20.0)
+        self.assertEqual(summary["regions"], 2)
+
+    def test_union_never_merges_identical_windows_across_threads(self):
+        # Simultaneous waits on two threads are separate thread-time.
+        ms = 1_000_000
+        wrappers = [self._long("sub_dir_sync", 1, 100 * ms, None, None, 0),
+                    self._long("sub_dir_sync", 2, 100 * ms, None, None, 0)]
+        regions = union_regions(wrappers)
+        self.assertEqual(regions, {("run-1", 1): [(0, 100 * ms)],
+                                   ("run-1", 2): [(0, 100 * ms)]})
+        self.assertEqual(union_summary({}, regions)["thread_time_ms"], 200.0)
+
+    def test_union_never_merges_across_repetitions(self):
+        # The same TID with the same window in two reps stays two regions.
+        wrappers = [self._long("sub_dir_sync", 5, 100, None, None, 0,
+                               run="run-1"),
+                    self._long("sub_dir_sync", 5, 100, None, None, 50,
+                               run="run-2")]
+        regions = union_regions(wrappers)
+        self.assertEqual(regions, {("run-1", 5): [(0, 100)],
+                                   ("run-2", 5): [(50, 150)]})
+        # Overlapping timestamp ranges in different reps are never fused.
+        self.assertEqual(union_summary({}, regions)["regions"], 2)
+
+    def test_union_state_totals_report_unknown_portions(self):
+        regions = {("run-1", 7): [(0, 100)]}
+        # No timeline at all: the whole union region is unknown, not zero.
+        self.assertEqual(union_state_totals({}, regions), {"unknown": 100})
+        # A timeline starting mid-region: the leading hole stays unknown
+        # and the observed states are derived from the timeline itself.
+        timeline = [("out", 40, "D"), ("wakeup", 60, None), ("in", 70, None)]
+        totals = union_state_totals({7: timeline}, regions)
+        self.assertEqual(totals, {"unknown": 40, "blocked:D": 20,
+                                  "runnable": 10, "running": 30})
+        self.assertEqual(sum(totals.values()), 100)
+
+    def test_union_mixed_unknown_and_known_states_across_regions(self):
+        wrappers = [self._long("sub_dir_sync", 7, 50, None, None, 0),
+                    self._long("sub_dir_sync", 8, 50, None, None, 0)]
+        regions = union_regions(wrappers)
+        timeline = {7: [("in", 10, None), ("out", 40, "D")]}  # tid 8 unseen
+        totals = union_state_totals(timeline, regions)
+        self.assertEqual(totals, {"unknown": 60, "running": 30,
+                                  "blocked:D": 10})
+        self.assertEqual(sum(totals.values()), 100)
+
+    # --- clock validation ---
+
+    REAL_CLOCK_LINE = ("local global counter uptime perf [mono] mono_raw "
+                       "boot tai x86-tsc")
+
+    @staticmethod
+    def _alignment(total=27700, matched=27700, min_offset=-0.301,
+                   per_run=None):
+        return {
+            "paired_sync_calls": total,
+            "matched_with_syscall_enter": matched,
+            "match_rate": (matched / total if total else None),
+            "enter_offset_us": {"min": min_offset if matched else None,
+                                "p50": 0.58, "max": 1588.559},
+            "per_run": per_run if per_run is not None else {
+                "run-1": {"paired_sync_calls": total // 2,
+                          "matched_with_syscall_enter": matched // 2,
+                          "match_rate": (matched / total if total else None),
+                          "enter_offset_us": {"min": min_offset,
+                                              "max": 100.0}},
+                "run-2": {"paired_sync_calls": total - total // 2,
+                          "matched_with_syscall_enter": matched - matched // 2,
+                          "match_rate": (matched / total if total else None),
+                          "enter_offset_us": {"min": min_offset,
+                                              "max": 100.0}},
+            },
+        }
+
+    def test_clock_valid_mono_and_clock_monotonic_validated(self):
+        validation = validate_clock(self.REAL_CLOCK_LINE, {1}, [6],
+                                    self._alignment())
+        self.assertEqual(validation["trace_clock_selected"], "mono")
+        self.assertEqual(validation["probe_clock_ids"], [1])
+        self.assertEqual(validation["probe_clock"], "CLOCK_MONOTONIC")
+        self.assertEqual(validation["timestamp_resolution_us"], 1.0)
+        self.assertEqual(validation["compatibility"]["status"], "validated")
+        self.assertEqual(validation["alignment"]["status"], "validated")
+        self.assertEqual(validation["direct_subtraction"]["status"],
+                         "validated")
+        self.assertEqual(validation["alignment"]["tolerance_us"], 1.0)
+        self.assertIn("quantization", validation["alignment"]["tolerance_basis"])
+
+    def test_clock_different_selected_trace_clock_fails(self):
+        validation = validate_clock(
+            "local [global] counter uptime perf mono", {1}, [6],
+            self._alignment())
+        self.assertEqual(validation["trace_clock_selected"], "global")
+        self.assertEqual(validation["compatibility"]["status"], "failed")
+        self.assertEqual(validation["direct_subtraction"]["status"], "failed")
+        # The alignment evidence may be fine on its own; the domains differ.
+        self.assertEqual(validation["alignment"]["status"], "validated")
+
+    def test_clock_different_probe_clock_id_fails(self):
+        # The probe build stamps its clock into the dump header; a capture
+        # whose header says another clock must not validate.
+        validation = validate_clock(self.REAL_CLOCK_LINE, {7}, [6],
+                                    self._alignment())
+        self.assertEqual(validation["compatibility"]["status"], "failed")
+        self.assertIsNone(validation["probe_clock"])
+        self.assertEqual(validation["direct_subtraction"]["status"], "failed")
+
+    def test_clock_missing_or_malformed_metadata_is_insufficient(self):
+        evidence = self._alignment()
+        cases = [
+            # (trace_clock line, probe ids, digits,
+            #  (compatibility, alignment, direct_subtraction))
+            (None, {1}, [6],
+             ("insufficient_evidence", "validated", "insufficient_evidence")),
+            ("local global counter uptime", {1}, [6],
+             ("insufficient_evidence", "validated", "insufficient_evidence")),
+            ("[mono] mono_raw", None, [6],
+             ("insufficient_evidence", "validated", "insufficient_evidence")),
+            # Timestamp precision unknown: the tolerance cannot be justified
+            # even though the clock metadata itself is fine.
+            (self.REAL_CLOCK_LINE, {1}, [],
+             ("validated", "insufficient_evidence", "insufficient_evidence")),
+        ]
+        for line, ids, digits, expected in cases:
+            validation = validate_clock(line, ids, digits, evidence)
+            statuses = (validation["compatibility"]["status"],
+                        validation["alignment"]["status"],
+                        validation["direct_subtraction"]["status"])
+            self.assertEqual(statuses, expected, f"{line!r}/{digits}: {statuses}")
+            self.assertNotEqual(validation["direct_subtraction"]["status"],
+                                "validated")
+            self.assertTrue(validation["direct_subtraction"]["reason"])
+
+    def test_clock_no_matched_syscall_entries_is_not_success(self):
+        # Expected wrappers but zero matches: insufficient evidence.
+        validation = validate_clock(self.REAL_CLOCK_LINE, {1}, [6],
+                                    self._alignment(total=100, matched=0,
+                                                    per_run={}))
+        self.assertEqual(validation["alignment"]["status"],
+                         "insufficient_evidence")
+        self.assertEqual(validation["direct_subtraction"]["status"],
+                         "insufficient_evidence")
+        # No samples at all: also insufficient, never validated.
+        validation = validate_clock(self.REAL_CLOCK_LINE, {1}, [6],
+                                    self._alignment(total=0, matched=0,
+                                                    per_run={}))
+        self.assertEqual(validation["alignment"]["status"],
+                         "insufficient_evidence")
+        # Enough samples but a failing match rate: failed.
+        validation = validate_clock(
+            self.REAL_CLOCK_LINE, {1}, [6],
+            self._alignment(total=1000, matched=900,
+                            per_run={"run-1": {"paired_sync_calls": 500,
+                                               "matched_with_syscall_enter": 450,
+                                               "match_rate": 0.9,
+                                               "enter_offset_us": {"min": -0.2,
+                                                                   "max": 10}}}))
+        self.assertEqual(validation["alignment"]["status"], "failed")
+        self.assertEqual(validation["direct_subtraction"]["status"], "failed")
+
+    def test_clock_alignment_outside_documented_tolerance_fails(self):
+        # An enter 5 us before its start marker is beyond the 1 us
+        # quantization tolerance: alignment (and only alignment) fails.
+        validation = validate_clock(self.REAL_CLOCK_LINE, {1}, [6],
+                                    self._alignment(min_offset=-5.0))
+        self.assertEqual(validation["compatibility"]["status"], "validated")
+        self.assertEqual(validation["alignment"]["status"], "failed")
+        self.assertIn("beyond the 1 us timestamp tolerance",
+                      validation["alignment"]["reason"])
+        self.assertEqual(validation["direct_subtraction"]["status"], "failed")
+
+    def test_clock_current_capture_validates_from_actual_metadata(self):
+        # The real capture must pass from its own settings file, dump
+        # headers, and measured offsets — no test-specific bypass.
+        root = Path(__file__).resolve().parents[2]
+        run_dir = root / ".repro" / "rustfs-fstrace-main"
+        results_path = (Path(__file__).resolve().parent / "results" /
+                        "fs-trace-diagnostic.json")
+        if not run_dir.is_dir() or not results_path.is_file():
+            self.skipTest("raw capture or saved results not present")
+        settings = parse_settings_file(run_dir / "trace.settings")
+        clock_ids = set()
+        for dump in sorted(run_dir.glob("run-*/fs-probe.bin")):
+            header, _records = read_probe(dump)
+            clock_ids.add(header["clock_id"])
+        saved = json.loads(results_path.read_text())
+        saved_alignment = saved["quality"]["alignment"]
+        evidence = {key: saved_alignment[key] for key in
+                    ("paired_sync_calls", "matched_with_syscall_enter",
+                     "match_rate", "enter_offset_us")
+                    if key in saved_alignment}
+        if "per_run" in saved_alignment:
+            evidence["per_run"] = saved_alignment["per_run"]
+        validation = validate_clock(
+            settings.get("trace_clock"), clock_ids,
+            saved["quality"]["clock"]["timestamp_fraction_digits"], evidence)
+        for question in ("compatibility", "alignment", "direct_subtraction"):
+            self.assertEqual(validation[question]["status"], "validated",
+                             f"{question}: {validation[question]['reason']}")
+
+    # --- request/job identity through fs_trace ---
+
+    @staticmethod
+    def _record(kind, ts, *, tid=10, task_id=0, step=0, a=0):
+        return {"kind": kind, "name": "", "step": step, "tid": tid,
+                "id": task_id, "ts": ts, "a": a}
+
+    T0 = 1_000 * 10**9
+    MS = 1_000_000
+
+    @classmethod
+    def _build_fs_trace_fixture(cls, run_dir, probe_dump_version=2):
+        """A complete minimal capture dir: probe dumps carrying job and
+        operation identity (nested wrappers, a commit wait with a send, a
+        job without operation context) plus a trace whose sched/syscall
+        events align with every sync wrapper."""
+        T, MS, rec = cls.T0, cls.MS, cls._record
+        op1, op2 = 0x1111222233334444, 0x5555666677778888
+        records = []
+        # Operation 1 / job 41 on executor tid 700: nested wrapper chain
+        # (sub_scan > sub_fsync_files > sub_fdatasync), commit wait with a
+        # send carrying a quorum snapshot.
+        records.append(rec(KIND_OP_BEGIN, T - 5 * MS, tid=30, a=op1))
+        records.append(rec(KIND_SUBMIT, T - 1 * MS, tid=30, task_id=41,
+                           step=step_hash("src_dir_sync"), a=op1))
+        records.append(rec(KIND_JOB_START, T, tid=700, task_id=41))
+        for tag, at in (("sub_scan", 5), ("sub_fsync_files", 10),
+                        ("sub_fdatasync", 15), ("sub_fdatasync_end", 75),
+                        ("sub_fsync_files_end", 80), ("sub_scan_end", 85)):
+            records.append(rec(KIND_SUB, T + at * MS, tid=700, task_id=41,
+                               step=step_hash(tag)))
+        records.append(rec(KIND_JOB_END, T + 90 * MS, tid=700, task_id=41))
+        records.append(rec(KIND_WAIT_BEGIN, T + 20 * MS, tid=30, a=op1))
+        records.append(rec(KIND_SEND_OK, T + 50 * MS, tid=30, a=op1,
+                           step=4, task_id=3))  # results_seen / write_quorum
+        records.append(rec(KIND_WAIT_END, T + 190 * MS, tid=30, a=op1))
+        # Operation 2 / job 42 on the SAME executor tid: two long
+        # sub_dir_sync wrappers plus 30 short ones (repeated tag, distinct
+        # occurrences).
+        records.append(rec(KIND_SUBMIT, T + 94 * MS, tid=31, task_id=42,
+                           step=step_hash("dst_dir_fsync"), a=op2))
+        records.append(rec(KIND_JOB_START, T + 95 * MS, tid=700, task_id=42))
+        pairs = [(100, 160), (165, 230)] + [(240 + 4 * i, 241 + 4 * i)
+                                            for i in range(30)]
+        for begin, end in pairs:
+            records.append(rec(KIND_SUB, T + begin * MS, tid=700, task_id=42,
+                               step=step_hash("sub_dir_sync")))
+            records.append(rec(KIND_SUB, T + end * MS, tid=700, task_id=42,
+                               step=step_hash("sub_dir_sync_end")))
+        records.append(rec(KIND_JOB_END, T + 400 * MS, tid=700, task_id=42))
+        # Job 43 on tid 701 with NO operation context (OP_NONE).
+        records.append(rec(KIND_SUBMIT, T + 295 * MS, tid=32, task_id=43,
+                           step=step_hash("rename")))
+        records.append(rec(KIND_JOB_START, T + 305 * MS, tid=701, task_id=43))
+        records.append(rec(KIND_SUB, T + 310 * MS, tid=701, task_id=43,
+                           step=step_hash("sub_rename")))
+        records.append(rec(KIND_SUB, T + 370 * MS, tid=701, task_id=43,
+                           step=step_hash("sub_rename_end")))
+        records.append(rec(KIND_JOB_END, T + 380 * MS, tid=701, task_id=43))
+        records.append(rec(KIND_OP_END, T + 410 * MS, tid=30, a=op1))
+        (run_dir / "run-1").mkdir(parents=True)
+        (run_dir / "run-1" / "fs-probe.bin").write_bytes(
+            _probe_dump(records, capacity=1024, version=probe_dump_version))
+
+        events = []
+        def sw(ns, prev, ptid, state, nxt, ntid):
+            events.append((ns, prev, ptid,
+                           f"sched_switch: prev_comm={prev} prev_pid={ptid} "
+                           f"prev_prio=120 prev_state={state} ==> "
+                           f"next_comm={nxt} next_pid={ntid} next_prio=120"))
+        sw(T - 10 * MS, "other", 99, "S", "rustfs-fsync", 700)
+        events.append((T + 16 * MS, "rustfs-fsync", 700,
+                       "sys_fdatasync(fd: 0x7)"))
+        sw(T + 30 * MS, "rustfs-fsync", 700, "D", "swapper/0", 0)
+        # sched_waking starts wakeup processing while the task is still
+        # sleeping; sched_wakeup makes it runnable; only then the
+        # switch-in.  (Timestamps in ns: 49.5 / 49.75 / 50 ms.)
+        events.append((T + 50 * MS - 500_000, "kworker", 50,
+                       "sched_waking: comm=rustfs-fsync pid=700 prio=120 "
+                       "target_cpu=000"))
+        events.append((T + 50 * MS - 250_000, "swapper/0", 0,
+                       "sched_wakeup: comm=rustfs-fsync pid=700 prio=120 "
+                       "target_cpu=000"))
+        sw(T + 50 * MS, "swapper/0", 0, "S", "rustfs-fsync", 700)
+        events.append((T + 74 * MS, "rustfs-fsync", 700,
+                       "sys_fdatasync -> 0x0"))
+        sw(T + 96 * MS, "rustfs-fsync", 700, "R+", "other", 99)
+        sw(T + 98 * MS, "other", 99, "S", "rustfs-fsync", 700)
+        events.append((T + 101 * MS, "rustfs-fsync", 700,
+                       "sys_fsync(fd: 0x3)"))
+        sw(T + 110 * MS, "rustfs-fsync", 700, "D", "swapper/0", 0)
+        events.append((T + 130 * MS - 500_000, "kworker", 50,
+                       "sched_waking: comm=rustfs-fsync pid=700 prio=120 "
+                       "target_cpu=000"))
+        events.append((T + 130 * MS - 250_000, "swapper/0", 0,
+                       "sched_wakeup: comm=rustfs-fsync pid=700 prio=120 "
+                       "target_cpu=000"))
+        sw(T + 130 * MS, "swapper/0", 0, "S", "rustfs-fsync", 700)
+        events.append((T + 159 * MS, "rustfs-fsync", 700, "sys_fsync -> 0x0"))
+        events.append((T + 166 * MS, "rustfs-fsync", 700,
+                       "sys_fsync(fd: 0x3)"))
+        events.append((T + 229 * MS, "rustfs-fsync", 700, "sys_fsync -> 0x0"))
+        for begin, _end in pairs[2:]:  # short wrappers still need their enters
+            events.append((T + begin * MS + 100_000, "rustfs-fsync", 700,
+                           "sys_fsync(fd: 0x3)"))
+            events.append((T + begin * MS + 500_000, "rustfs-fsync", 700,
+                           "sys_fsync -> 0x0"))
+        sw(T + 306 * MS, "other", 98, "S", "rustfs-worker", 701)
+        sw(T + 330 * MS, "rustfs-worker", 701, "D", "swapper/1", 1)
+        events.append((T + 365 * MS, "kworker", 51,
+                       "sched_waking: comm=rustfs-worker pid=701 prio=120 "
+                       "target_cpu=001"))
+        events.append((T + 365 * MS + 500_000, "swapper/1", 1,
+                       "sched_wakeup: comm=rustfs-worker pid=701 prio=120 "
+                       "target_cpu=001"))
+        sw(T + 366 * MS, "swapper/1", 1, "S", "rustfs-worker", 701)
+        sw(T + 450 * MS, "other", 97, "S", "swapper/0", 0)
+        events.sort(key=lambda event: event[0])  # stable within a timestamp
+        lines = ["# tracer: nop",
+                 f"# entries-in-buffer/entries-written: "
+                 f"{len(events)}/{len(events)}   #P:8"]
+        for ns, comm, tid, rest in events:
+            sec, rem = divmod(ns, 10**9)
+            lines.append(f"    {comm}-{tid} [000] d..2. "
+                         f"{sec}.{rem // 1000:06d}: {rest}")
+        (run_dir / "trace.raw").write_text("\n".join(lines) + "\n")
+        (run_dir / "trace.settings").write_text(
+            "trace_clock=local global counter uptime perf [mono] mono_raw "
+            "boot tai x86-tsc\n"
+            "buffer_size_kb=16387\noverwrite=0\n"
+            'sched/sched_switch enable=1 filter=prev_comm ~ "rustfs*" || '
+            'next_comm ~ "rustfs*"\n'
+            "syscalls/sys_enter_fsync enable=1 filter=none\n")
+        (run_dir / "trace.stats").write_text(
+            "== /sys/kernel/tracing/per_cpu/cpu0/trace:\n"
+            f"entries: {len(events)}\noverrun: 0\ncommit overrun: 0\n"
+            "bytes: 4096\noldest event ts: 1000.000000\n"
+            "now ts: 1000.450000\ndropped events: 0\nread events: 0\n")
+        (run_dir / "trace.error_log").write_text("")
+        (run_dir / "manifest.json").write_text(
+            json.dumps({"repetitions": 1}))
+
+    def _analyze_fixture(self, timelines=10):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self._build_fs_trace_fixture(tmp)
+        return fs_trace_analyze(tmp, timelines=timelines), tmp
+
+    def test_fixture_identity_preserves_job_and_operation(self):
+        result, _ = self._analyze_fixture(timelines=0)
+        wrappers = result["runs"][0]["long_wrappers"]
+        by_tag = {}
+        for w in wrappers:
+            by_tag.setdefault(w["tag"], []).append(w)
+        # Two jobs on the SAME executor TID keep distinct identities.
+        scan = by_tag["sub_scan"][0]
+        dirs = sorted(by_tag["sub_dir_sync"], key=lambda w: w["dur_ms"])
+        self.assertEqual(scan["identity"]["executor_tid"], 700)
+        self.assertEqual(dirs[0]["identity"]["executor_tid"], 700)
+        self.assertEqual(scan["identity"]["job_task_id"], 41)
+        self.assertEqual(dirs[0]["identity"]["job_task_id"], 42)
+        # Two operations retain their own job associations.
+        self.assertEqual(scan["identity"]["op_hash"], 0x1111222233334444)
+        self.assertEqual(dirs[0]["identity"]["op_hash"], 0x5555666677778888)
+        self.assertEqual(scan["identity"]["step_tag"], "src_dir_sync")
+        self.assertEqual(dirs[0]["identity"]["step_tag"], "dst_dir_fsync")
+        self.assertEqual(scan["identity"]["submit_tid"], 30)
+        self.assertEqual(dirs[0]["identity"]["submit_tid"], 31)
+        # Repeated wrapper tags within one job stay distinguishable.
+        self.assertEqual([d["identity"]["occurrence"] for d in dirs], [0, 1])
+        self.assertTrue(all(d["identity"]["occurrences_for_tag"] == 32
+                            for d in dirs))
+        # Missing operation context stays explicit, never inferred from tid.
+        rename = by_tag["sub_rename"][0]
+        self.assertIsNone(rename["identity"]["op_hash"])
+        self.assertEqual(rename["identity"]["job_task_id"], 43)
+        self.assertEqual(rename["operation_link"]["association"], "missing")
+        self.assertIsNone(rename["operation_link"]["overlaps_commit_wait"])
+
+    def test_fixture_operation_link_commit_wait_and_quorum(self):
+        result, _ = self._analyze_fixture(timelines=0)
+        scan = next(w for w in result["runs"][0]["long_wrappers"]
+                    if w["tag"] == "sub_scan")
+        link = scan["operation_link"]
+        self.assertEqual(link["association"], "job_submit_record")
+        self.assertEqual(link["op_hash"], 0x1111222233334444)
+        self.assertTrue(link["overlaps_commit_wait"])
+        self.assertAlmostEqual(link["commit_wait"]["begin_offset_ms"], 15.0)
+        self.assertAlmostEqual(link["commit_wait"]["end_offset_ms"], 185.0)
+        self.assertEqual(link["send"]["kind"], "send_ok")
+        self.assertAlmostEqual(link["send"]["offset_ms"], 45.0)
+        self.assertEqual(link["send"]["results_seen"], 4)
+        self.assertEqual(link["send"]["write_quorum"], 3)
+        # Association and overlap are not a response-critical claim.
+        self.assertEqual(link["required_before_response"], "not_established")
+        # Operation 2 has no wait records: overlap stays unknown, not False.
+        dirs = next(w for w in result["runs"][0]["long_wrappers"]
+                    if w["tag"] == "sub_dir_sync")
+        self.assertEqual(dirs["operation_link"]["op_hash"], 0x5555666677778888)
+        self.assertIsNone(dirs["operation_link"]["overlaps_commit_wait"])
+        self.assertIsNone(dirs["operation_link"]["commit_wait"])
+
+    def test_fixture_overlap_annotation_and_accounting(self):
+        result, _ = self._analyze_fixture(timelines=0)
+        accounting = result["accounting"]
+        # The count is a count of marker-delimited observations.
+        self.assertEqual(accounting["wrapper_observations"]["run-1"], 6)
+        self.assertEqual(accounting["wrapper_observations"]["total"], 6)
+        self.assertIn("not independent",
+                      accounting["wrapper_observations"]["note"])
+        self.assertIn("double-counted",
+                      accounting["definitions"]["per_tag_totals"])
+        # Nested observations are counted and reported per run/tag pair.
+        self.assertEqual(accounting["nesting_and_overlap"]["nested"], {
+            "run-1:sub_scan>sub_fsync_files": 1,
+            "run-1:sub_scan>sub_fdatasync": 1,
+            "run-1:sub_fsync_files>sub_fdatasync": 1,
+        })
+        self.assertEqual(accounting["nesting_and_overlap"]["partial_overlaps"],
+                         {})
+        # Per-tag sums overlap (395 ms over 6 observations)...
+        tags = accounting["per_tag"]
+        self.assertTrue(all(t["overlapping_across_tags"] for t in tags.values()))
+        self.assertEqual(tags["sub_dir_sync"]["observations"], 2)
+        self.assertEqual(tags["sub_dir_sync"]["duration_sum_ms"], 125.0)
+        self.assertEqual(sum(t["duration_sum_ms"] for t in tags.values()),
+                         395.0)
+        # ...the non-overlapping union does not (265 ms thread-time).
+        non_over = accounting["non_overlapping"]
+        wrapper_union = non_over["by_run"]["run-1"]["wrapper_regions"]
+        self.assertEqual(wrapper_union["thread_time_ms"], 265.0)
+        self.assertEqual(wrapper_union["tids"], 2)
+        self.assertEqual(wrapper_union["regions"], 4)
+        # State totals come from the timeline over the union regions and
+        # tile them exactly (an accounting consistency check).
+        self.assertEqual(sum(wrapper_union["states_ms"].values()), 265.0)
+        self.assertGreater(wrapper_union["states_ms"]["blocked:D"], 0)
+        syscall_union = non_over["by_run"]["run-1"]["syscall_regions"]
+        self.assertEqual(syscall_union["thread_time_ms"], 179.0)
+        self.assertEqual(sum(syscall_union["states_ms"].values()), 179.0)
+        # Per-wrapper decompositions are preserved alongside.
+        scan = next(w for w in result["runs"][0]["long_wrappers"]
+                    if w["tag"] == "sub_scan")
+        self.assertEqual(scan["overlap"]["same_tid_contains"][0]["tag"],
+                         "sub_fsync_files")
+        self.assertEqual(len(scan["overlap"]["same_tid_contains"]), 2)
+        self.assertEqual(scan["dur_ms"], 80.0)
+        self.assertEqual(result["cross_clock_analysis"]["status"], "reported")
+
+    def test_fixture_timelines_do_not_overwrite_same_tag_same_tid(self):
+        result, run_dir = self._analyze_fixture(timelines=10)
+        written = result["timelines"]
+        self.assertEqual(len(written), 6)
+        self.assertEqual(len(set(written)), 6)
+        on_disk = sorted(str(p.relative_to(run_dir))
+                         for p in (run_dir / "timelines").glob("*.txt"))
+        self.assertEqual(on_disk, sorted(written))
+        # The two long sub_dir_sync wrappers share tag and TID but must get
+        # separate files, distinguished by job and occurrence.
+        dir_files = [f for f in written if "-sub_dir_sync-" in f]
+        self.assertEqual(len(dir_files), 2)
+        self.assertTrue(any("job42-occ0" in f for f in dir_files), dir_files)
+        self.assertTrue(any("job42-occ1" in f for f in dir_files), dir_files)
+        sample = next((run_dir / f).read_text() for f in dir_files
+                      if "job42-occ0" in f)
+        self.assertIn("identity: run=run-1 job_task_id=42", sample)
+        self.assertIn("commit-wait:", sample)
+        self.assertIn("overlap (same tid):", sample)
+
+    def test_fixture_clock_validated_from_fixture_metadata(self):
+        result, _ = self._analyze_fixture(timelines=0)
+        clock = result["quality"]["clock"]
+        self.assertEqual(clock["trace_clock_selected"], "mono")
+        self.assertEqual(clock["probe_clock"], "CLOCK_MONOTONIC")
+        self.assertEqual(clock["compatibility"]["status"], "validated")
+        self.assertEqual(clock["direct_subtraction"]["status"], "validated")
+        alignment = result["quality"]["alignment"]
+        self.assertEqual(alignment["status"], "validated")
+        self.assertEqual(alignment["paired_sync_calls"], 34)
+        self.assertEqual(alignment["match_rate"], 1.0)
+        self.assertEqual(alignment["tolerance_us"], 1.0)
+        self.assertNotIn("direct_subtraction_validated", clock)
+
+
+    def test_parse_trace_orders_equal_timestamps_causally(self):
+        # ftrace prints 6 fraction digits (1 us) here, so a whole
+        # sleep -> wake -> run cycle can share one timestamp.  The
+        # parser orders equal-time events by scheduler admissibility
+        # over the recorded line order: here the recorded order is
+        # already causal (out, waking, wakeup, in) and is kept —
+        # and must not be re-sorted.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 6/6   #P:8",
+            "   bash-100 [000] d..2. 1000.000020: sched_switch: "
+            "prev_comm=bash prev_pid=100 prev_prio=120 prev_state=D ==> "
+            "next_comm=swapper/0 next_pid=0 next_prio=120",
+            " rustfs-fsync-700 [000] d..2. 1000.000020: sched_switch: "
+            "prev_comm=rustfs-fsync prev_pid=700 prev_prio=120 "
+            "prev_state=D ==> next_comm=swapper/0 next_pid=0 next_prio=120",
+            "  kworker/u8-50 [001] d..2. 1000.000025: sched_waking: "
+            "comm=rustfs-fsync pid=700 prio=120 target_cpu=000",
+            "  kworker/u8-50 [001] d..2. 1000.000025: sched_wakeup: "
+            "comm=rustfs-fsync pid=700 prio=120 target_cpu=000",
+            " swapper/0-0 [002] d..2. 1000.000025: sched_switch: "
+            "prev_comm=swapper/0 prev_pid=0 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs-fsync next_pid=700 next_prio=120",
+            " rustfs-fsync-700 [000] d..2. 1000.000200: sched_switch: "
+            "prev_comm=rustfs-fsync prev_pid=700 prev_prio=120 "
+            "prev_state=S ==> next_comm=swapper/0 next_pid=0 next_prio=120",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        self.assertEqual(timelines[700],
+                         [("out", t + 20_000, "D"),
+                          ("waking", t + 25_000, None),
+                          ("wakeup", t + 25_000, None),
+                          ("in", t + 25_000, None),
+                          ("out", t + 200_000, "S")])
+        self.assertEqual(stats["bad_lines"], 0)
+        # One tie each for pid 700 (wakes + switch-in at 25 us) and pid 0
+        # (the two switch-ins at 20 us); neither needed a reorder, none
+        # was ambiguous, and none lacked an admissible order.
+        self.assertEqual(stats["equal_ts_ties"], 2)
+        self.assertEqual(stats["equal_ts_causal_repairs"], 0)
+        self.assertEqual(stats["equal_ts_ambiguous"], 0)
+        self.assertEqual(stats["equal_ts_unresolved"], 0)
+        # Zero-length segments (transition and runnable inside one
+        # timestamp) must not leak into the state accounting.
+        rows = state_segments(timelines[700], t, t + 300_000)
+        self.assertEqual(rows, [("blocked:D", t + 20_000, t + 25_000),
+                                ("running", t + 25_000, t + 200_000),
+                                ("blocked:S", t + 200_000, t + 300_000)])
+
+    def test_parse_trace_keeps_in_then_out_tie_in_recorded_order(self):
+        # A task can switch in and back out inside one printed
+        # microsecond.  Both switch lines are recorded on the same CPU,
+        # so their order is observable.  Forcing a causal rank that
+        # always puts the switch-out first would rewrite this tie to
+        # out -> in, end the tie group in state "running", and report
+        # the whole interval after the tie as running time.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 5/5   #P:8",
+            " rustfs-700 [000] d..2. 1000.000010: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=D ==> "
+            "next_comm=swapper/0 next_pid=0 next_prio=120",
+            "  kworker/u8-50 [001] d..3. 1000.000020: sched_waking: "
+            "comm=rustfs pid=700 prio=120 target_cpu=002",
+            "  kworker/u8-50 [001] d..3. 1000.000020: sched_wakeup: "
+            "comm=rustfs pid=700 prio=120 target_cpu=002",
+            " swapper/2-0 [002] d..2. 1000.000025: sched_switch: "
+            "prev_comm=swapper/2 prev_pid=0 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            " rustfs-700 [002] d..2. 1000.000025: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=D ==> "
+            "next_comm=kworker/u8-9 next_pid=99 next_prio=120",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        # Recorded order (in, out) is kept: it is the observable one.
+        self.assertEqual(timelines[700],
+                         [("out", t + 10_000, "D"),
+                          ("waking", t + 20_000, None),
+                          ("wakeup", t + 20_000, None),
+                          ("in", t + 25_000, None),
+                          ("out", t + 25_000, "D")])
+        self.assertEqual(stats["equal_ts_ties"], 2)  # wakes@20, in/out@25
+        self.assertEqual(stats["equal_ts_causal_repairs"], 0)
+        self.assertEqual(stats["equal_ts_ambiguous"], 0)
+        self.assertEqual(stats["equal_ts_unresolved"], 0)
+        rows = state_segments(timelines[700], t, t + 100_000)
+        # The tie ends in the post-switch-out state: [25 us, window end)
+        # is blocked time, never invented running time, and the runnable
+        # window between the wake and the switch-in is preserved.
+        self.assertEqual(rows, [("blocked:D", t + 10_000, t + 20_000),
+                                ("runnable", t + 20_000, t + 25_000),
+                                ("blocked:D", t + 25_000, t + 100_000)])
+
+    def test_parse_trace_repairs_cross_cpu_in_before_wake(self):
+        # Across CPUs the trace file only shows ring-buffer merge order:
+        # a switch-in can be printed before the wake it needs at the
+        # same microsecond.  That recorded order is causally impossible
+        # (a blocked task cannot run first) and must be repaired —
+        # feeding it to the state machine as-is would relabel the whole
+        # blocked span as unknown_no_wake.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 4/4   #P:8",
+            " rustfs-700 [000] d..2. 1000.000010: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=D ==> "
+            "next_comm=swapper/0 next_pid=0 next_prio=120",
+            " swapper/0-0 [000] d..2. 1000.000020: sched_switch: "
+            "prev_comm=swapper/0 prev_pid=0 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            "  kworker/u8-50 [001] d..3. 1000.000020: sched_waking: "
+            "comm=rustfs pid=700 prio=120 target_cpu=000",
+            "  kworker/u8-50 [001] d..3. 1000.000020: sched_wakeup: "
+            "comm=rustfs pid=700 prio=120 target_cpu=000",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        # Recorded (in, waking, wakeup) -> causally repaired to
+        # (waking, wakeup, in); the two wake events share a CPU, so the
+        # choice among them is observable and not marked ambiguous.
+        self.assertEqual(timelines[700],
+                         [("out", t + 10_000, "D"),
+                          ("waking", t + 20_000, None),
+                          ("wakeup", t + 20_000, None),
+                          ("in", t + 20_000, None)])
+        self.assertEqual(stats["equal_ts_ties"], 1)
+        self.assertEqual(stats["equal_ts_causal_repairs"], 1)
+        self.assertEqual(stats["equal_ts_ambiguous"], 0)
+        self.assertEqual(stats["equal_ts_unresolved"], 0)
+        rows = state_segments(timelines[700], t, t + 100_000)
+        # Blocked time survives the tie; no unknown_* appears.
+        self.assertEqual(rows, [("blocked:D", t + 10_000, t + 20_000),
+                                ("running", t + 20_000, t + 100_000)])
+
+    def test_parse_trace_marks_cross_cpu_ties_ambiguous(self):
+        # A wake event and a switch-out of the same task at one
+        # timestamp come from different CPUs: both physical orders are
+        # possible within the microsecond (futile wake while running vs.
+        # immediate wake after blocking), so the recorded line order is
+        # NOT an observation.  The causal default (switch-out before
+        # wake initiation) picks, and the tie is marked ambiguous.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 4/4   #P:8",
+            "   foo-1 [000] d..2. 1000.000010: sched_switch: "
+            "prev_comm=foo prev_pid=1 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            "  kworker/u8-50 [001] d..3. 1000.000020: sched_waking: "
+            "comm=rustfs pid=700 prio=120 target_cpu=000",
+            " rustfs-700 [000] d..2. 1000.000020: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=S ==> "
+            "next_comm=swapper/0 next_pid=0 next_prio=120",
+            "  kworker/u8-50 [001] d..3. 1000.000030: sched_wakeup: "
+            "comm=rustfs pid=700 prio=120 target_cpu=000",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        # Recorded (waking, out) -> causal default gives (out, waking):
+        # the cross-CPU choice was not observable and is counted as such.
+        self.assertEqual(timelines[700],
+                         [("in", t + 10_000, None),
+                          ("out", t + 20_000, "S"),
+                          ("waking", t + 20_000, None),
+                          ("wakeup", t + 30_000, None)])
+        self.assertEqual(stats["equal_ts_ties"], 1)
+        self.assertEqual(stats["equal_ts_causal_repairs"], 1)
+        self.assertEqual(stats["equal_ts_ambiguous"], 1)
+        self.assertEqual(stats["equal_ts_unresolved"], 0)
+        rows = state_segments(timelines[700], t, t + 100_000)
+        self.assertEqual(rows,
+                         [("running", t + 10_000, t + 20_000),
+                          ("wakeup_transition", t + 20_000, t + 30_000),
+                          ("runnable", t + 30_000, t + 100_000)])
+
+    def test_parse_trace_keeps_recorded_order_when_unresolvable(self):
+        # Two switch-outs for one pid inside one microsecond: from the
+        # second one onward nothing is admissible (a task cannot switch
+        # out while it is not running).  The recorded order is kept and
+        # flagged instead of being reordered into a fabricated story.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 3/3   #P:8",
+            "   foo-1 [000] d..2. 1000.000010: sched_switch: "
+            "prev_comm=foo prev_pid=1 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            " rustfs-700 [000] d..2. 1000.000020: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=S ==> "
+            "next_comm=swapper/0 next_pid=0 next_prio=120",
+            " rustfs-700 [001] d..2. 1000.000020: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=D ==> "
+            "next_comm=foo next_pid=5 next_prio=120",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        self.assertEqual(timelines[700],
+                         [("in", t + 10_000, None),
+                          ("out", t + 20_000, "S"),
+                          ("out", t + 20_000, "D")])
+        self.assertEqual(stats["equal_ts_ties"], 1)
+        self.assertEqual(stats["equal_ts_causal_repairs"], 0)
+        self.assertEqual(stats["equal_ts_ambiguous"], 0)
+        self.assertEqual(stats["equal_ts_unresolved"], 1)
+        rows = state_segments(timelines[700], t, t + 100_000)
+        self.assertEqual(rows, [("running", t + 10_000, t + 20_000),
+                                ("blocked:D", t + 20_000, t + 100_000)])
+
+    def test_parse_trace_mixed_cpu_tie_preserves_each_cpu_sequence(self):
+        # Mixed-CPU tie: CPU 0 recorded in -> out(D) inside one
+        # microsecond; CPU 1 a waking.  Each per-CPU buffer is read in
+        # order, so CPU 0's in -> out sequence is observable and a hard
+        # constraint.  Picking the admissible switch-out over CPU 0's
+        # earlier recorded switch-in (because the simulated state
+        # entering the tie is "running") would reverse that sequence
+        # and end the tie in "running", reporting the whole following
+        # interval as running time.  When causality and the recorded
+        # sequences conflict, the uncertainty must be reported instead
+        # of reordering observable events.
+        sample = "\n".join([
+            "# tracer: nop",
+            "#",
+            "# entries-in-buffer/entries-written: 4/4   #P:8",
+            "   foo-1 [000] d..2. 1000.000010: sched_switch: "
+            "prev_comm=foo prev_pid=1 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            "  kworker/u8-50 [001] d..3. 1000.000025: sched_waking: "
+            "comm=rustfs pid=700 prio=120 target_cpu=000",
+            " swapper/9-0 [000] d..2. 1000.000025: sched_switch: "
+            "prev_comm=swapper/9 prev_pid=9 prev_prio=120 prev_state=S ==> "
+            "next_comm=rustfs next_pid=700 next_prio=120",
+            " rustfs-700 [000] d..2. 1000.000025: sched_switch: "
+            "prev_comm=rustfs prev_pid=700 prev_prio=120 prev_state=D ==> "
+            "next_comm=foo next_pid=5 next_prio=120",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        t = 1000 * 10**9
+        # CPU 0's recorded in -> out(D) survives untouched: only CPU 1's
+        # lone waking is placed by causality, the rest keeps recorded
+        # order.
+        self.assertEqual(timelines[700],
+                         [("in", t + 10_000, None),
+                          ("waking", t + 25_000, None),
+                          ("in", t + 25_000, None),
+                          ("out", t + 25_000, "D")])
+        self.assertEqual(stats["equal_ts_ties"], 1)
+        self.assertEqual(stats["equal_ts_causal_repairs"], 0)
+        self.assertEqual(stats["equal_ts_ambiguous"], 0)
+        # The conflict (switch-in not admissible while "running", with
+        # the switch-out behind it on the same CPU) is reported...
+        self.assertEqual(stats["equal_ts_unresolved"], 1)
+        rows = state_segments(timelines[700], t, t + 100_000)
+        # ...and [25 us, window end) is the recorded post-out blocked
+        # state — never invented running time.
+        self.assertEqual(rows, [("running", t + 10_000, t + 25_000),
+                                ("blocked:D", t + 25_000, t + 100_000)])
+
+    def test_provenance_lists_every_consumed_input_with_hashes(self):
+        result, tmp = self._analyze_fixture(timelines=0)
+        prov = result["provenance"]
+        self.assertEqual(result["schema"], "fs-trace-diagnostic/v3")
+        roles = [e["role"] for e in prov["inputs"]]
+        self.assertEqual(roles, ["ftrace raw capture", "trace settings",
+                                 "trace stats", "trace error log",
+                                 "capture manifest", "probe dump"])
+        for entry in prov["inputs"]:
+            self.assertTrue(entry["present"], entry)
+            path = Path(entry["path"])
+            self.assertTrue(path.is_file())
+            # Recorded hash is the file's actual hash, computed by reading
+            # it during this analysis.
+            self.assertEqual(entry["sha256"],
+                             hashlib.sha256(path.read_bytes()).hexdigest())
+        params = prov["parameters"]
+        self.assertEqual(params["long_wrapper_threshold_ms"], 50.0)
+        self.assertEqual(params["timelines_per_run"], 0)
+        self.assertEqual(params["selection_counts"]["long_wrappers_total"],
+                         result["accounting"]["wrapper_observations"]["total"])
+        self.assertEqual(
+            params["selection_counts"]["paired_calls_by_run"],
+            {r["run"]: r["paired_calls"] for r in result["runs"]})
+        self.assertIn("compatible_trace_clocks",
+                      params["clock_validation_thresholds"])
+        # The trace block keeps the same hash as the inputs entry.
+        trace_entry = prov["inputs"][0]
+        self.assertEqual(prov["trace"]["sha256"], trace_entry["sha256"])
+
+    def test_changing_an_input_changes_its_recorded_hash(self):
+        result, tmp = self._analyze_fixture(timelines=0)
+        settings = tmp / "trace.settings"
+        dump = tmp / "run-1" / "fs-probe.bin"
+
+        def hashes(res):
+            return {e["path"]: e["sha256"] for e in res["provenance"]["inputs"]}
+
+        before = hashes(result)
+        # Settings: change one recorded value (still parseable).
+        settings.write_text(settings.read_text().replace(
+            "buffer_size_kb=16387", "buffer_size_kb=8192"))
+        # Probe dump: flip a bit in a byte the reader ignores (a record's
+        # reserved field), so the dump stays valid but its bytes change.
+        raw = bytearray(dump.read_bytes())
+        raw[HEADER.size + HEADER_V2_EXT.size + 1] ^= 0x01
+        dump.write_bytes(bytes(raw))
+        after = hashes(fs_trace_analyze(tmp, timelines=0))
+        self.assertNotEqual(before[str(settings)], after[str(settings)])
+        self.assertNotEqual(before[str(dump)], after[str(dump)])
+        self.assertEqual(after[str(dump)],
+                         hashlib.sha256(dump.read_bytes()).hexdigest())
+        # An input that did not change keeps its hash across regeneration.
+        self.assertEqual(before[str(tmp / "trace.raw")],
+                         after[str(tmp / "trace.raw")])
+
+    def test_provenance_distinguishes_declared_from_verified_binary_sha(self):
+        result, tmp = self._analyze_fixture(timelines=0)
+        binary = result["provenance"]["binary"]
+        # Fixture manifest declares no binary: declared-only, nothing hashed.
+        self.assertIsNone(binary["declared_path"])
+        self.assertIsNone(binary["file_sha256"])
+        self.assertIn("no binary path", binary["verification"])
+        # With a declared path the analysis hashes that file itself and
+        # keeps the independently computed digest separate from the
+        # manifest's claim.
+        blob = tmp / "fake-rustfs-binary"
+        blob.write_bytes(b"not-a-real-binary")
+        declared = hashlib.sha256(b"other-bytes").hexdigest()
+        (tmp / "manifest.json").write_text(json.dumps(
+            {"repetitions": 1, "binary": str(blob),
+             "binary_sha256": declared}))
+        result2 = fs_trace_analyze(tmp, timelines=0)
+        binary = result2["provenance"]["binary"]
+        self.assertEqual(binary["declared_sha256"], declared)
+        self.assertEqual(binary["file_sha256"],
+                         hashlib.sha256(b"not-a-real-binary").hexdigest())
+        self.assertFalse(binary["matches_declared"])
+        self.assertIn("independently hashed", binary["verification"])
+        # The manifest block stays the declared view of the capture.
+        self.assertEqual(result2["provenance"]["manifest"]["binary_sha256"],
+                         declared)
+
+    def test_version2_dump_reports_closed_rejections(self):
+        result, _ = self._analyze_fixture(timelines=0)
+        self.assertEqual(result["runs"][0]["probe_rejected_closed"], 0)
+        self.assertEqual(
+            result["quality"]["loss"]["probe_rejected_after_close"],
+            {"run-1": 0})
+        self.assertFalse(any("format version 1" in note
+                             for note in result["limitations"]))
+
+    def test_version1_dumps_append_probe_generation_limitation(self):
+        # Older captures (format version 1) must still analyze, keep the
+        # missing counter missing, and carry the evidence-preservation
+        # note about the probe generation that produced them.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self._build_fs_trace_fixture(tmp, probe_dump_version=1)
+        result = fs_trace_analyze(tmp, timelines=0)
+        _, records = read_probe(tmp / "run-1" / "fs-probe.bin")
+        self.assertEqual(result["runs"][0]["probe_records"], len(records))
+        self.assertIsNone(result["runs"][0]["probe_rejected_closed"])
+        self.assertIsNone(
+            result["quality"]["loss"]["probe_rejected_after_close"]["run-1"])
+        notes = [note for note in result["limitations"]
+                 if "format version 1" in note]
+        self.assertEqual(len(notes), 1, result["limitations"])
+        self.assertIn("do not prove memory safety", notes[0])
+        self.assertIn("remains unresolved", notes[0])
+
+
+class FtraceScriptTests(unittest.TestCase):
+    """Fake-tracefs tests for ftrace.sh's instance-isolation contract.
+
+    The fixture is a temp directory laid out like tracefs.  These tests
+    prove the script's own control flow — ownership markers, fail-closed
+    arming, stop-before-read collection, explicit cleanup, and that the
+    default tracer is never written — against that fake tree.  They do
+    NOT prove kernel tracefs behaviour; instance support on a real host
+    remains to be validated (README separates the two).
+    """
+
+    SCRIPT = Path(__file__).resolve().parent / "ftrace.sh"
+    INSTANCE = "rustfs-fstrace"
+    DEFAULT_FILES = ("tracing_on", "trace_clock", "buffer_size_kb",
+                     "events/enable", "options/overwrite", "current_tracer",
+                     "error_log", "trace")
+    EVENT_DIRS = ("sched/sched_switch", "sched/sched_waking",
+                  "sched/sched_wakeup", "syscalls/sys_enter_fsync",
+                  "syscalls/sys_exit_fsync", "syscalls/sys_enter_fdatasync",
+                  "syscalls/sys_exit_fdatasync")
+    EMPTY_TRACE = ("# tracer: nop\n#\n"
+                   "# entries-in-buffer/entries-written: 0/0   #P:8\n")
+    TWO_ENTRY_TRACE = (
+        "# tracer: nop\n#\n"
+        "# entries-in-buffer/entries-written: 2/2   #P:8\n"
+        "  default-a [000] d..2. 100.000001: sched_switch: prev_comm=default-a"
+        " prev_pid=1 prev_prio=120 prev_state=S ==> next_comm=default-b"
+        " next_pid=2 next_prio=120\n"
+        "  default-b [001] d..2. 100.000002: sched_switch: prev_comm=default-b"
+        " prev_pid=2 prev_prio=120 prev_state=S ==> next_comm=default-a"
+        " next_pid=1 next_prio=120\n")
+
+    def _write(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    def _make_tracefs(self, tmp, *, instance=True, owned=True,
+                      instance_trace=None, instance_tracing_on="0\n"):
+        """Build a fake tracefs tree plus its ownership state dir.
+
+        The top-level (default) tracer files carry sentinel values that
+        must survive every command unchanged.  The instance tree stands
+        in for what the kernel populates when `mkdir instances/<name>`
+        succeeds.
+        """
+        root = Path(tmp) / "tracefs"
+        state = Path(tmp) / "state"
+        self._write(root / "tracing_on", "1\n")
+        self._write(root / "trace_clock", "global\n")
+        self._write(root / "buffer_size_kb", "64\n")
+        self._write(root / "events/enable", "1\n")
+        self._write(root / "options/overwrite", "1\n")
+        self._write(root / "current_tracer", "nop\n")
+        self._write(root / "error_log", "default-log\n")
+        self._write(root / "trace", self.TWO_ENTRY_TRACE)
+        self._write(root / "per_cpu/cpu0/stats",
+                    "== default:\nentries: 2\noverrun: 0\nbytes: 4096\n")
+        (root / "instances").mkdir(parents=True, exist_ok=True)
+        if instance:
+            inst = root / "instances" / self.INSTANCE
+            self._write(inst / "tracing_on", instance_tracing_on)
+            self._write(inst / "trace_clock", "global\n")
+            self._write(inst / "buffer_size_kb", "64\n")
+            self._write(inst / "events/enable", "0\n")
+            self._write(inst / "options/overwrite", "1\n")
+            self._write(inst / "current_tracer", "nop\n")
+            self._write(inst / "error_log", "")
+            self._write(inst / "trace",
+                        self.EMPTY_TRACE if instance_trace is None
+                        else instance_trace)
+            for e in self.EVENT_DIRS:
+                self._write(inst / f"events/{e}/enable", "0\n")
+                self._write(inst / f"events/{e}/filter", "\n")
+            self._write(inst / "per_cpu/cpu0/stats",
+                        "== instance:\nentries: 0\noverrun: 0\nbytes: 4096\n")
+            if owned:
+                self._write(state / f"instance.{self.INSTANCE}",
+                            f"instance={self.INSTANCE}\n"
+                            f"tracefs_root={root}\n"
+                            "created_at=2026-01-01T00:00:00+00:00\n"
+                            "created_by=tester\n"
+                            "created_by_pid=1\n")
+        return root, state
+
+    def _run(self, *args, root, state, xtrace=False):
+        env = dict(os.environ)
+        env["TRACEFS"] = str(root)
+        env["FTRACE_STATE_DIR"] = str(state)
+        cmd = ["bash"] + (["-x"] if xtrace else []) + [str(self.SCRIPT)]
+        return subprocess.run(cmd + list(args), capture_output=True,
+                              text=True, env=env)
+
+    def _default_snapshot(self, root):
+        return {name: (root / name).read_text() for name in self.DEFAULT_FILES}
+
+    def test_arm_configures_only_the_owned_instance(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        before = self._default_snapshot(root)
+        proc = self._run("arm", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("fixture mode", proc.stderr)  # non-root, fake tree
+        inst = root / "instances" / self.INSTANCE
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "1")
+        self.assertEqual((inst / "trace_clock").read_text().strip(), "mono")
+        self.assertEqual((inst / "options/overwrite").read_text().strip(), "0")
+        self.assertEqual((inst / "buffer_size_kb").read_text().strip(), "16384")
+        self.assertEqual(
+            (inst / "events/sched/sched_switch/filter").read_text().strip(),
+            'prev_comm ~ "rustfs*" || next_comm ~ "rustfs*"')
+        for e in ("sched/sched_switch", "sched/sched_waking",
+                  "sched/sched_wakeup", "syscalls/sys_enter_fsync",
+                  "syscalls/sys_exit_fdatasync"):
+            self.assertEqual((inst / f"events/{e}/enable").read_text().strip(),
+                             "1", e)
+        # The default tracer is untouched: every sentinel survives.
+        self.assertEqual(self._default_snapshot(root), before)
+        # Ownership marker recorded, and status names the instance.
+        marker = state / f"instance.{self.INSTANCE}"
+        self.assertTrue(marker.is_file())
+        self.assertIn(f"tracefs_root={root}", marker.read_text())
+        self.assertIn(f"instance={self.INSTANCE}", proc.stdout)
+
+    def test_arm_partial_failure_leaves_instance_disabled(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        # Remove the whole event directory: the enable write can then only
+        # fail (in a real tracefs a rejected write fails the same way).
+        shutil.rmtree(root / "instances" / self.INSTANCE /
+                      "events/sched/sched_waking")
+        before = self._default_snapshot(root)
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        # Fail-closed: the partially-configured instance is not recording.
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "0")
+        # And the default tracer still was not written.
+        self.assertEqual(self._default_snapshot(root), before)
+
+    def test_arm_refuses_instance_without_ownership_marker(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp, owned=False)
+        inst = root / "instances" / self.INSTANCE
+        self._write(inst / "tracing_on", "1\n")  # "someone else's" tracer
+        before = self._default_snapshot(root)
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ownership marker", proc.stderr)
+        # Refused before any write: not taken over, not disabled, no marker.
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "1")
+        self.assertFalse((state / f"instance.{self.INSTANCE}").exists())
+        self.assertEqual(self._default_snapshot(root), before)
+
+    def test_arm_without_instance_support_fails_without_fallback(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp, instance=False)
+        before = self._default_snapshot(root)
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("refusing to fall back to the default tracer",
+                      proc.stderr)
+        # The default tracer's buffer and controls were never written.
+        self.assertEqual(self._default_snapshot(root), before)
+
+    def test_arm_refuses_rearm_with_uncollected_data(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        # Simulate a recording that was never collected.
+        self._write(inst / "trace", self.TWO_ENTRY_TRACE)
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("uncollected data", proc.stderr)
+        # --force is the explicit way to discard it.
+        proc = self._run("arm", "--force", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # The uncollected buffer was discarded as explicitly ordered.
+        self.assertEqual((inst / "trace").read_text().strip(), "")
+
+    def test_collect_stops_recording_before_reading_snapshot(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        # Simulate recorded events (the ring is non-empty now).
+        self._write(inst / "trace", self.TWO_ENTRY_TRACE)
+        before = self._default_snapshot(root)
+        out = tmp / "capture"
+        proc = self._run("collect", str(out), "trace",
+                         root=root, state=state, xtrace=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # xtrace order: the `echo 0` that freezes the ring precedes the
+        # `cat` that reads it.
+        lines = [l for l in proc.stderr.splitlines() if l.startswith("+ ")]
+        stop = lines.index("+ echo 0")
+        read = next(i for i, l in enumerate(lines) if l.startswith("+ cat"))
+        self.assertLess(stop, read, proc.stderr)
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "0")
+        # Snapshot content equals what was in the ring before collection.
+        self.assertEqual((out / "trace.raw").read_text(),
+                         self.TWO_ENTRY_TRACE)
+        settings = (out / "trace.settings").read_text()
+        self.assertIn(f"instance={self.INSTANCE}", settings)
+        self.assertIn(f"instance_dir={inst}", settings)
+        self.assertIn(f"tracefs={root}", settings)
+        self.assertIn("tracing_on=0", settings)
+        self.assertTrue((out / "trace.stats").is_file())
+        # Ring cleared only after everything was captured...
+        self.assertEqual((inst / "trace").read_text().strip(), "")
+        # ...and the default tracer still untouched.
+        self.assertEqual(self._default_snapshot(root), before)
+
+    def test_collect_refuses_to_overwrite_an_existing_capture(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        out = tmp / "capture"
+        out.mkdir()
+        (out / "trace.raw").write_text("previous capture\n")
+        proc = self._run("collect", str(out), "trace", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("refusing to overwrite", proc.stderr)
+        self.assertEqual((out / "trace.raw").read_text(),
+                         "previous capture\n")
+
+    def test_off_is_repeatable_and_only_touches_the_instance(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        before = self._default_snapshot(root)
+        for _ in range(2):  # safe and repeatable
+            proc = self._run("off", root=root, state=state)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+        inst = root / "instances" / self.INSTANCE
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "0")
+        self.assertEqual((inst / "events/enable").read_text().strip(), "0")
+        self.assertEqual(self._default_snapshot(root), before)
+        # status reports ownership and instance identity.
+        proc = self._run("status", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn(f"instance={self.INSTANCE}", proc.stdout)
+        self.assertIn("owned=yes", proc.stdout)
+
+    def test_status_on_absent_or_unowned_instance(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp, instance=False)
+        proc = self._run("status", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("not present", proc.stdout)
+        # off with no instance is a no-op, not an error.
+        proc = self._run("off", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # Present but unowned: refuse to read it.
+        root2, state2 = self._make_tracefs(tmp / "b", owned=False)
+        proc = self._run("status", root=root2, state=state2)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("ownership marker", proc.stderr)
+
+    def test_destroy_is_explicit_and_guards_experiment_data(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        # Unowned instance: never removed.
+        root, state = self._make_tracefs(tmp / "a", owned=False)
+        proc = self._run("destroy", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue((root / "instances" / self.INSTANCE).is_dir())
+        # Owned instance holding data: refused without --force...
+        root, state = self._make_tracefs(tmp / "b")
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        self._write(inst / "trace", self.TWO_ENTRY_TRACE)
+        proc = self._run("destroy", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("uncollected data", proc.stderr)
+        self.assertTrue(inst.is_dir())
+        # ...explicit with --force, then repeatable.
+        proc = self._run("destroy", "--force", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertFalse(inst.exists())
+        self.assertFalse((state / f"instance.{self.INSTANCE}").exists())
+        proc = self._run("destroy", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("nothing to remove", proc.stdout)
+
+    def test_every_command_refuses_marker_from_another_tracefs_root(self):
+        # Ownership validation is centralized: a marker recorded for a
+        # different tracefs root grants nothing — no command may
+        # disable, read, re-arm, or remove the instance through it.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        marker = state / f"instance.{self.INSTANCE}"
+        marker.write_text(marker.read_text().replace(
+            f"tracefs_root={root}", "tracefs_root=/other/tracefs"))
+        before = self._default_snapshot(root)
+        # off must not disable an instance owned under another root.
+        proc = self._run("off", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("different tracefs root", proc.stderr)
+        self.assertEqual((inst / "tracing_on").read_text().strip(), "1")
+        # collect writes no capture.
+        out = tmp / "capture"
+        proc = self._run("collect", str(out), "trace", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("different tracefs root", proc.stderr)
+        self.assertFalse((out / "trace.raw").exists())
+        # destroy does not remove the instance...
+        proc = self._run("destroy", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("different tracefs root", proc.stderr)
+        self.assertTrue(inst.is_dir())
+        # ...status does not claim ownership, re-arm does not reconfigure.
+        proc = self._run("status", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("different tracefs root", proc.stderr)
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("different tracefs root", proc.stderr)
+        # The mismatched marker is not ours to delete either.
+        self.assertTrue(marker.is_file())
+        self.assertEqual(self._default_snapshot(root), before)
+
+    def test_foreign_root_marker_survives_and_local_stale_marker_is_cleaned(self):
+        # clear_stale_marker may only remove markers recorded for THIS
+        # tracefs root: a same-named instance elsewhere keeps its state.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp, instance=False)
+        state.mkdir(parents=True, exist_ok=True)
+        foreign = state / f"instance.{self.INSTANCE}"
+        foreign.write_text(f"instance={self.INSTANCE}\n"
+                           "tracefs_root=/other/tracefs\n")
+        proc = self._run("off", root=root, state=state)  # absent here
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(foreign.is_file())  # not our root: untouched
+        # A stale marker FOR this root (instance gone) is still cleaned.
+        foreign.write_text(f"instance={self.INSTANCE}\n"
+                           f"tracefs_root={root}\n")
+        proc = self._run("off", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertFalse(foreign.exists())
+
+    def test_unknown_buffer_status_blocks_arm_and_destroy_without_force(self):
+        # "Could not read" must never mean "no data": an unreadable or
+        # unfamiliar trace file blocks the ring clear and the removal
+        # unless --force is explicit.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        # Unfamiliar content: non-whitespace, but no recognized header.
+        self._write(inst / "trace", "not a trace header at all\nmore data\n")
+        proc = self._run("arm", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot establish", proc.stderr)
+        # The refused arm did not clear the unestablished buffer.
+        self.assertIn("not a trace header", (inst / "trace").read_text())
+        proc = self._run("destroy", root=root, state=state)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot establish", proc.stderr)
+        self.assertTrue(inst.is_dir())
+        # --force is the explicit override for both.
+        proc = self._run("arm", "--force", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual((inst / "trace").read_text().strip(), "")
+        # An unreadable trace file is also "unknown", not "empty".
+        if os.geteuid() != 0:  # chmod cannot out-read root
+            os.chmod(inst / "trace", 0o000)
+            try:
+                proc = self._run("arm", root=root, state=state)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn("cannot establish", proc.stderr)
+            finally:
+                os.chmod(inst / "trace", 0o644)
+
+    def test_cleared_buffer_reads_as_empty_and_rearms_without_force(self):
+        # The collect -> arm cycle must work: a ring cleared by this
+        # script reads back as empty (real tracefs: a 0/0 header;
+        # fixture: a bare newline), never as "unknown".
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        root, state = self._make_tracefs(tmp)
+        self.assertEqual(self._run("arm", root=root, state=state).returncode, 0)
+        inst = root / "instances" / self.INSTANCE
+        self._write(inst / "trace", self.TWO_ENTRY_TRACE)
+        out = tmp / "capture"
+        self.assertEqual(
+            self._run("collect", str(out), "trace", root=root,
+                      state=state).returncode, 0)
+        self.assertEqual((out / "trace.raw").read_text(),
+                         self.TWO_ENTRY_TRACE)
+        # Re-arm of the cleared ring needs no --force.
+        proc = self._run("arm", root=root, state=state)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
 if __name__ == "__main__":

@@ -545,13 +545,299 @@ Probe design notes:
   `propagate_op` wrappers at those three spawn sites (identity functions when
   the cfg is off), `SEND`/`WAIT` records around
   `commit_rx.await`, and `run_process` dropping the runtime before
-  `flush_to_env()` so no writer can race the flush (this drop is probe-build
-  only). `tokio::fs` is not replaced by custom `spawn_blocking` wrappers, and
-  there are no locks or logging on the hot path: records are one relaxed atomic
-  fetch-add, a capacity check, and a fixed-size store.
+  `flush_to_env()` (this drop is probe-build only). Race-freedom of the flush
+  is **generation-dependent**, stated exactly:
+  * `-v3` (every capture analyzed here) relied on that runtime drop/join
+    order alone — writers were assumed joined before the dump — and wrote
+    slots through a temporary whole-buffer `&mut`. No corruption was observed
+    in those captures (record counts, header/counter consistency, cross-field
+    spot checks all agree), but clean counts do not prove memory safety.
+  * `-v4` makes the flush self-contained: `flush_to_env` first closes record
+    admission (one atomic gate bit), then waits — with acquire/release
+    ordering — until every already-admitted writer has released its slot,
+    and only then reads the ring; a record attempt after close is refused and
+    counted (`rejected_closed`), never raced. Slots are written through raw
+    pointers derived directly from `UnsafeCell::get()` (no whole-buffer
+    `&mut` aliasing), each slot claimed exactly once before its store. The
+    drop-order fast path remains but is no longer load-bearing. These are
+    the invariants exercised by the deterministic concurrency tests in
+    `fs-probe-ring-tests/`; they have not yet been run in a live capture.
+  `tokio::fs` is not replaced by custom `spawn_blocking` wrappers, and there
+  are no locks or logging on the hot path: `-v4` writes behind one
+  compare-and-exchange admission, a capacity check, and one fixed-size store
+  (release-ordered guard drop); `-v3` used one relaxed atomic fetch-add, a
+  capacity check, and one fixed-size store.
 - The probe module compiles only when the `libc` feature is enabled alongside
   `rustfs_fs_probe`; Tokio's build-dependency units (which never enable `libc`)
   get the no-op stub, so build scripts record nothing.
+
+## Kernel trace of the directory-sync wrappers
+
+The probe alone bounds a call-wrapper interval but cannot say what the thread
+did inside it: user-space code, on-CPU kernel execution, uninterruptible
+sleep, and runnable-but-descheduled time all look the same off-CPU. This
+diagnostic correlates the probe's `CLOCK_MONOTONIC` markers with the kernel's
+own scheduler and syscall events for the same threads.
+
+Method (smallest usable one on this host): raw ftrace through tracefs — no
+tracing tool is installed, and `perf_event_paranoid=2` rules out perf/BPF
+instrumentation. [ftrace.sh](ftrace.sh) arms a bounded capture: per-CPU
+buffer 16387 KB, `overwrite=off` (an overflow stops capture visibly in the
+stats instead of silently recycling), `trace_clock=mono` (CLOCK_MONOTONIC —
+the probe's clock; whether the two timestamp streams may be subtracted is
+then *validated* from metadata and matched enters by the analyzer, not
+assumed), `sched_switch`/`sched_waking`/`sched_wakeup` filtered to the
+rustfs comms,
+and `sys_enter/exit_fsync` + `sys_enter/exit_fdatasync` unfiltered (analysis
+restricts them to probe tids). Comm filters use the kernel filter's glob
+`~ "rustfs*"` form: the regex-looking `rustfs.*` stores without error but
+matches zero events on this host (verified), while `rustfs*` matches all
+three comms (`rustfs`, `rustfs-worker`, `rustfs-fsync`; each ≤ 15 chars, so
+`TASK_COMM_LEN` truncation cannot create a false match). tracefs control is
+root-only on this host; the workload itself runs as the normal user.
+
+Isolation: every command now operates only on a dedicated named tracefs
+instance — `$TRACEFS/instances/rustfs-fstrace`
+(`TRACE_INSTANCE`, `FTRACE_STATE_DIR` overridable) — whose ownership is
+recorded in a marker file outside tracefs. The default tracer is never
+cleared, configured, or disabled; a missing instance or missing ownership
+marker fails loudly instead of falling back to it, a partially failed `arm`
+leaves the owned instance with `tracing_on=0`, `collect` freezes the ring
+before reading it and refuses to overwrite an existing capture file, `off`
+is idempotent, and removing the instance is an explicit `destroy`
+(refused while the ring holds uncollected data unless `--force`). The
+collected `trace.settings` carries `instance=`/`instance_dir=` so every
+future analysis can see which instance produced a capture.
+
+Budget stated before running: one smoke repetition for tool validation, at
+most two traced repetitions plus one probe-only repetition, and an honest
+stop if no long wrapper appears. The first smoke iteration failed validation
+(the sched filters were broken); the corrected smoke is the second
+iteration — a tooling fix, disclosed rather than hidden. The traced run
+reuses the v4 workload arguments and the v4 binary (`8fc0577b…`, no
+rebuild; `--rates` with no values keeps the c1/c8 tiers only, as v4 did).
+Five server runs total for this phase: 2 smoke, 2 traced, 1 probe-only.
+
+Commands executed from the repository root (these produced the captures
+analyzed below; `ftrace.sh` has since gained the instance isolation described
+above, so the recorded capture is a **pre-isolation** one — `trace.settings`
+says `tracefs=/sys/kernel/tracing` with no `instance=` line):
+
+```sh
+sudo experiments/rustfs/ftrace.sh arm
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fstrace-main \
+  --binary .repro/rustfs-probe/target/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 2 --duration 3 --concurrency 1 8 --rates
+sudo experiments/rustfs/ftrace.sh collect .repro/rustfs-fstrace-main trace
+sudo experiments/rustfs/ftrace.sh off
+# probe-only perturbation reference, tracer off:
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fstrace-probeonly \
+  --binary .repro/rustfs-probe/target/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 1 --duration 3 --concurrency 1 8 --rates
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_trace.py \
+  .repro/rustfs-fstrace-main \
+  --probe-reference .repro/rustfs-fstrace-probeonly \
+  --output experiments/rustfs/results/fs-trace-diagnostic.json \
+  --timelines 3
+```
+
+Fixture-tested vs. host-validated, stated separately:
+
+* **Fixture-tested** (run by `test_experiment.py` against a fake tracefs
+  tree, no root, run by anyone): `ftrace.sh`'s control flow — instance
+  creation and ownership refusal, fail-closed partial `arm`, stop-before-read
+  `collect`, refusal to overwrite captures, idempotent `off`, guarded
+  `destroy`, and that the default tracer's files are never written. Fake-FS
+  tests prove the script's logic only; they cannot prove kernel tracefs
+  behaviour.
+* **Host-validated on this host** (previous capture, pre-isolation script):
+  filter semantics, `trace_clock=mono`, stop-on-full loss accounting, and the
+  analyzer's clock/alignment validation against a real capture.
+* **Still to be host-validated** (needs one root smoke run, no new experiment
+  budget beyond it): instance creation under `$TRACEFS/instances/`,
+  per-instance `trace_clock`/`options/overwrite`/`error_log` support, and a
+  smoke `collect` proving `instance=` metadata lands in `trace.settings`. The
+  current script fails loudly rather than falling back to the default tracer
+  if any of that is unsupported.
+
+Optional instance cleanup (never required; the owned instance persists
+between captures and `arm` reuses it):
+
+```sh
+sudo experiments/rustfs/ftrace.sh destroy          # refused if data uncollected
+sudo experiments/rustfs/ftrace.sh destroy --force  # discards the owned ring
+```
+
+Semantics were pinned before instrumenting, each verified on this host
+(kernel `6.19.10-300.fc44.x86_64`) rather than assumed:
+
+- ftrace fractions print with 6 digits (µs) here; parsing right-pads to ns.
+- The line-prefix `comm-tid` is the *previous* task for `sched_switch` and
+  the *waker* for `sched_waking`/`sched_wakeup`; per-thread timelines are
+  attributed from event content (`prev_pid`/`next_pid`/`pid=`), never from
+  the prefix (foreign comms may contain spaces and are parsed from the
+  right).
+- `prev_state=R+` is the preempted-while-TASK_RUNNING spelling in this
+  kernel's `events/sched/sched_switch/format` print fmt: runnable but not
+  scheduled — never counted as blocked. `R` alone is a runnable switch-out
+  without preemption; `S`, `D`, … are voluntary blocks of that state.
+- `sched_waking` and `sched_wakeup` are **distinct events with distinct
+  meaning** (verified against this kernel's
+  `kernel/sched/core.c`: `try_to_wake_up` emits `trace_sched_waking` while
+  wakeup processing is still in progress, and only `ttwu_do_wakeup` — after
+  setting the task `TASK_RUNNING` — emits `trace_sched_wakeup`). The
+  analyzer therefore models four scheduler states plus two unknowns:
+  `blocked:*` ends at `sched_waking` (the wait is over the moment wakeup
+  processing starts), the `sched_waking` → `sched_wakeup` interval is its
+  own `wakeup_transition` category (neither blocked/D nor runnable — the
+  task is not yet runnable when `sched_waking` fires), `runnable` starts at
+  `sched_wakeup`, and `running` starts at the switch-in. A `sched_waking`
+  never followed by a `sched_wakeup` (before the next event or the window
+  edge) is `unknown_wake_incomplete`, a wake without an observed
+  `sched_wakeup` still ends the block at the wakeup boundary when one is
+  seen, `sched_wakeup_new` (first activation of a thread) is not captured
+  and surfaces as `unknown_no_wake` on that first switch-in, and duplicate
+  or spurious wake events for an already scheduled/runnable task are
+  ignored. Equal-microsecond timestamps (1 µs trace precision) are
+  ordered per thread by scheduler admissibility over the *recorded* line
+  order, with each CPU's recorded sequence as a hard constraint: only
+  the earliest unplaced event of each CPU may be placed next (one
+  per-CPU buffer is read in order), so a recorded in → out pair inside
+  one microsecond is never reversed — forcing `out` before `in` would
+  invent running time for the whole interval after the tie. Recorded
+  orders that are causally impossible (a cross-CPU switch-in printed
+  before the wake it needs) are repaired; cross-CPU choices between
+  different event kinds — where the file only shows ring-buffer merge
+  order — fall back to the causal default (`out` < `waking` <
+  `wakeup` < `in`) and are counted as genuinely ambiguous instead of
+  presented as observed order; and when causality conflicts with the
+  recorded sequences (no CPU's next event is admissible), the recorded
+  order is kept and the uncertainty is counted rather than reordering
+  observable events. All four counters are in `quality.trace_parse`
+  (`equal_ts_ties`, `equal_ts_causal_repairs`, `equal_ts_ambiguous`,
+  `equal_ts_unresolved`), so zero-length segments still cannot leak
+  into the totals.
+- Which syscall each sync tag wraps is derived from the capture by votes
+  across all paired windows, not hard-coded: `sub_dir_sync` → `fsync`,
+  `sub_fdatasync` and `sub_fsync_files` → `fdatasync` (the last despite its
+  name — observed in every window of both captures).
+
+Validation (everything is in the results JSON, with statuses and reasons —
+never a bare success flag). Clock questions are answered from evidence:
+compatibility is `validated` because the *selected* trace clock (the `[x]`
+marker in `trace.settings`) is `mono` and every probe dump header reports
+`clock_id=1` (both CLOCK_MONOTONIC, as written by `fs_probe.rs`); alignment
+is `validated` from this capture: 27 700/27 700 paired sync wrappers contain
+their own syscall-enter, worst per-run match rate 1.0, earliest enter
+−0.301 µs within the 1 µs timestamp-quantization tolerance (offsets min
+−0.3 µs, p50 +0.6 µs, max 1.6 ms — pre-entry user time inside the window,
+not clock skew), against stated thresholds (≥30 samples, ≥0.95 match rate).
+A missing/mismatched clock or failing offsets would instead read `failed` or
+`insufficient_evidence` and withhold the cross-clock conclusions (zone×state
+decompositions, clusters, union state totals) while retaining the raw
+observations — no offset is invented and nothing is silently realigned. The
+matching window alone proves nothing: it is a search slack, not clock
+compatibility. The rest of the capture quality: the trace window covers
+every probe marker; all probe tids appear in the sched stream (96/96 and
+84/84); zero loss (1 534 228/1 534 228 entries, 0 overrun, 0 dropped, empty
+`error_log`, 0 probe drops — a capture-quality finding, not proof of causal
+attribution); every decomposition tiles its wrapper exactly (max
+reconciliation 0.000 ms — an accounting consistency check, not independent
+proof of the state classifications); unknown state spans total 0.000 ms in
+the reported wrappers, and if present they are reported as `unknown*`,
+never as zero.
+
+Provenance (schema `fs-trace-diagnostic/v3`): `provenance.inputs` lists
+every input this analysis consumed — `trace.raw`, `trace.settings`,
+`trace.stats`, `trace.error_log`, the capture manifest, each
+`run-*/fs-probe.bin`, and the probe-reference manifest and dumps — with
+path, size, and the SHA-256 **computed by reading that file during the
+run** (absent optional inputs stay `present: false` / `sha256: null`,
+never invented); `provenance.parameters` records the long-wrapper
+threshold, timeline count, and selection counts actually used;
+`provenance.binary` keeps the manifest's *declared* `binary_sha256` apart
+from the digest this analysis computed by hashing the file at the declared
+path (and says `declared-only` when the file is not present, instead of
+claiming a verification that did not happen).
+
+Evidence-preservation limitation: the probe dumps analyzed here are
+**format version 1**, produced by the `-v3` probe generation before the
+writer-admission flush barrier and the raw-pointer ring-write fix existed.
+No corruption was observed in them (record counts, counter consistency),
+but clean counts do not prove memory safety; the corrected `-v4` generation
+has passing deterministic tests but has never run a capture. The kernel
+traces themselves still support syscall localization, subject to the
+scheduler-state accounting corrected above — the underlying
+filesystem/kernel wait cause inside those D-state intervals remains
+unresolved either way.
+
+Accounting: 118 marker-delimited wrapper observations ≥ 50 ms (73 run-1,
+45 run-2) — a count of observations, **not** of independent syscalls or
+waits. The captures nest: 12 run-1 `sub_fdatasync` observations sit inside
+`sub_fsync_files` (both inside `sub_scan`), 4 do so in run-2, all within
+one job on one tid; there are no partial overlaps. Summed durations
+double-count that shared time. Per-tag totals (explicitly overlapping
+across tags): `sub_dir_sync` 36 obs / 4 189.7 ms, `sub_rename` 18 /
+1 774.9 ms, `sub_scan` 16 / 1 485.6 ms, `sub_fsync_files` 16 / 1 448.1 ms,
+`sub_fdatasync` 16 / 1 447.9 ms, `sub_prep_write` 12 / 983.0 ms,
+`sub_prep_open` 4 / 339.7 ms. Non-overlapping union per repetition and TID
+(never merged across threads or repetitions; thread-time = per-thread wall
+time inside the regions — neither client latency nor elapsed experiment
+time): run-1 4 865.8 ms over 49 tids, run-2 3 907.1 ms over 36 tids =
+8 772.9 ms, split 8 246.6 ms `blocked:D`, 495.9 ms `running` (scheduled
+residency, not exact CPU execution — interrupts may run while the task is
+current), 24.7 ms runnable, and 5.7 ms in the `sched_waking` →
+`sched_wakeup` transition (neither blocked nor yet runnable — the state
+machine above). The union of the traced syscall windows inside
+those wrappers is 6 655.9 ms (6 136.7 ms `blocked:D`, 492.0 ms `running`,
+21.9 ms runnable, 5.3 ms `sched_waking` → `sched_wakeup` transition); the
+remaining ≈ 2.1 s of wrapper time is untraced kernel
+operations (`sub_scan`, `sub_rename`, `sub_prep_*`). Per-wrapper
+decompositions remain individual: 112/118 wrappers are >60% `blocked:D`,
+7/118 are on-CPU-heavy (>30% `running` inside the syscall), one wrapper is
+in both groups. The longest wrappers are one fsync almost end to end
+(e.g. `sub_dir_sync` tid 2210377: 207.438 ms wrapper, 207.434 ms fsync,
+enter 0.0005 ms after the start marker; job 49150, operation hash
+2028158358628619772 step `ancestor_fsync`; its commit wait began 23.1 ms
+before the wrapper and the `send_ok` closed it 207.8 ms after the start
+with results_seen=3 / write_quorum=3 / disk_count=4). Cluster releases are
+synchronized in sub-groups: run-1 exits in groups of 0.284 ms and 3.028 ms
+spread; run-2 in groups of 0.101–4.765 ms with entries as tight as 0.000 ms.
+Which filesystem event (if any) those releases associate with is **not**
+established — no block/journal events were captured, and that deepening
+needs a new stated budget. Association is not causation here or anywhere in
+this section.
+
+Identity: every wrapper row carries its repetition, blocking-job id,
+operation hash, step tag, tag + occurrence + boundaries, and executor tid
+(missing identities stay missing — never inferred from the tid). The
+representative request-linked timelines additionally show commit-wait
+begin/end, the send with its quorum snapshot, wrapper boundaries, syscall
+entry/exit, scheduler-state intervals, and same-TID nesting. A job
+*associated* with an operation or *overlapping* its commit wait is not
+thereby response-critical (the JSON says `required_before_response:
+not_established`), a 3-of-4 quorum count does not identify which disk
+acknowledged, and `op_hash` is an FNV-1a hash that does not resolve to a
+client object name here. D-state inside fsync/fdatasync locates blocked
+time within the syscall; it does not identify journal, writeback, lock, or
+device causes.
+
+Perturbation reference: paired-call p50s are close between traced and
+probe-only reps (`sub_dir_sync` 1.363 ms traced vs 1.297 ms probe-only,
+Δ +0.066 ms), but the runs are short, the counts differ (2 reps vs 1), and
+long-wrapper counts differ (36 vs 0) — a comparison, not a claim of
+negligible tracing overhead.
+
+Raw captures stay untracked: `.repro/rustfs-fstrace-*/` (including the
+226 MB `trace.raw`, SHA-256 `e013ef440f6b9e20d4686bfd9ddf168942c63205683e0eef93d2baaf2726db4f`,
+and the representative text timelines under `<capture>/timelines/`, named
+per repetition, tag, tid, job, occurrence, and start timestamp so repeated
+tags on one tid never overwrite each other); the compact results file is
+`results/fs-trace-diagnostic.json`.
 
 ## Preserved preliminary evidence
 
