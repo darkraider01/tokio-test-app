@@ -1316,7 +1316,7 @@ class FsTraceTests(unittest.TestCase):
     MS = 1_000_000
 
     @classmethod
-    def _build_fs_trace_fixture(cls, run_dir, probe_dump_version=2):
+    def _build_fs_trace_fixture(cls, run_dir, probe_dump_version=2, diag=False):
         """A complete minimal capture dir: probe dumps carrying job and
         operation identity (nested wrappers, a commit wait with a send, a
         job without operation context) plus a trace whose sched/syscall
@@ -1422,6 +1422,32 @@ class FsTraceTests(unittest.TestCase):
                        "target_cpu=001"))
         sw(T + 366 * MS, "swapper/1", 1, "S", "rustfs-worker", 701)
         sw(T + 450 * MS, "other", 97, "S", "swapper/0", 0)
+        if diag:
+            # Diagnostic fs/block/writeback events (the predeclared set),
+            # placed to exercise every kernel_wait evidence class:
+            # a same-task writeback wait inside the first blocked:D
+            # segment, a completion 100 us before that segment's wake
+            # edge, a block issue and a transaction commit later inside
+            # the same long wrapper window, and one event outside every
+            # long wrapper (negative attribution preserved).
+            events.append((T + 35 * MS, "rustfs-fsync", 700,
+                           "folio_wait_writeback: bdi nvme0n1p3: "
+                           "ino=12345 index=7"))
+            events.append((T + 49_400_000, "kworker", 50,
+                           "block_rq_complete: 259,0 RM () 6175136 + 32 "
+                           "be,0,4 [0]"))
+            events.append((T + 60 * MS, "kworker/6:1H", 135,
+                           "block_rq_issue: 259,0 RM 16384 () 6175136 + 32 "
+                           "be,0,4 [kworker/6:1H]"))
+            events.append((T + 78 * MS, "kworker", 51,
+                           "btrfs_transaction_commit: "
+                           "6320451e-6e11-4cbb-83ce-db232864bb96: "
+                           "root=5(FS_TREE) gen=4242"))
+            events.append((T + 290 * MS, "kworker", 52,
+                           "btrfs_finish_ordered_extent: "
+                           "6320451e-6e11-4cbb-83ce-db232864bb96: "
+                           "root=5(FS_TREE) ino=999 start=0 len=4096 "
+                           "uptodate=1"))
         events.sort(key=lambda event: event[0])  # stable within a timestamp
         lines = ["# tracer: nop",
                  f"# entries-in-buffer/entries-written: "
@@ -1431,13 +1457,22 @@ class FsTraceTests(unittest.TestCase):
             lines.append(f"    {comm}-{tid} [000] d..2. "
                          f"{sec}.{rem // 1000:06d}: {rest}")
         (run_dir / "trace.raw").write_text("\n".join(lines) + "\n")
-        (run_dir / "trace.settings").write_text(
+        settings_lines = [
             "trace_clock=local global counter uptime perf [mono] mono_raw "
-            "boot tai x86-tsc\n"
-            "buffer_size_kb=16387\noverwrite=0\n"
+            "boot tai x86-tsc\n",
+            "buffer_size_kb=16387\noverwrite=0\n",
             'sched/sched_switch enable=1 filter=prev_comm ~ "rustfs*" || '
-            'next_comm ~ "rustfs*"\n'
-            "syscalls/sys_enter_fsync enable=1 filter=none\n")
+            'next_comm ~ "rustfs*"\n',
+            "syscalls/sys_enter_fsync enable=1 filter=none\n",
+        ]
+        if diag:
+            settings_lines += [
+                "block/block_bio_queue enable=1 filter=dev == 271581184\n",
+                "block/block_rq_issue enable=1 filter=dev == 271581184\n",
+                "block/block_rq_complete enable=1 filter=dev == 271581184\n",
+                "btrfs/btrfs_transaction_commit enable=1 filter=none\n",
+            ]
+        (run_dir / "trace.settings").write_text("".join(settings_lines))
         (run_dir / "trace.stats").write_text(
             "== /sys/kernel/tracing/per_cpu/cpu0/trace:\n"
             f"entries: {len(events)}\noverrun: 0\ncommit overrun: 0\n"
@@ -1451,6 +1486,226 @@ class FsTraceTests(unittest.TestCase):
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self._build_fs_trace_fixture(tmp)
         return fs_trace_analyze(tmp, timelines=timelines), tmp
+
+    def _analyze_diag_fixture(self, timelines=10):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self._build_fs_trace_fixture(tmp, diag=True)
+        return fs_trace_analyze(tmp, timelines=timelines), tmp
+
+    def test_fixture_without_diagnostic_events_has_no_kernel_wait(self):
+        # A capture without the diagnostic event set must reproduce the
+        # pre-extension output shape exactly: no kernel_wait section and
+        # the original "no block/journal events captured" limitation.
+        result, _ = self._analyze_fixture(timelines=0)
+        self.assertNotIn("kernel_wait", result)
+        self.assertTrue(any("no block/journal events captured" in s
+                            for s in result["limitations"]))
+
+    def test_kernel_wait_evidence_classes_from_diagnostic_events(self):
+        result, tmp = self._analyze_diag_fixture(timelines=1)
+        kw = result["kernel_wait"]
+        self.assertEqual(kw["status"], "analyzed")
+        self.assertEqual(kw["event_totals"], {
+            "folio_wait_writeback": 1, "block_rq_complete": 1,
+            "block_rq_issue": 1, "btrfs_transaction_commit": 1,
+            "btrfs_finish_ordered_extent": 1,
+        })
+        # The btrfs commit outside every long wrapper stays unattributed
+        # rather than being pulled into some wrapper's evidence.
+        self.assertEqual(kw["outside_long_wrappers"], 1)
+        self.assertEqual(len(kw["wrappers"]), 3)
+        # Block filters were collected from trace.settings, not assumed.
+        self.assertEqual(
+            kw["capture_filter"]["block_event_filter_lines"],
+            ["block/block_bio_queue enable=1 filter=dev == 271581184",
+             "block/block_rq_issue enable=1 filter=dev == 271581184",
+             "block/block_rq_complete enable=1 filter=dev == 271581184"])
+        by_tag = {w["tag"]: w for w in kw["wrappers"]}
+        scan = by_tag["sub_scan"]
+        self.assertEqual(scan["events_in_window"], 4)
+        self.assertEqual(scan["event_counts"], {
+            "folio_wait_writeback": 1, "block_rq_complete": 1,
+            "block_rq_issue": 1, "btrfs_transaction_commit": 1,
+        })
+        levels = {e["level"] for e in scan["evidence"]}
+        self.assertEqual(levels, {"demonstrable_dependency", "supported_causal"})
+        dep = next(e for e in scan["evidence"]
+                   if e["level"] == "demonstrable_dependency")
+        self.assertEqual(dep["event"], "folio_wait_writeback")
+        self.assertEqual(dep["identity"]["bdi"], "nvme0n1p3")
+        self.assertEqual(dep["identity"]["ino"], "12345")
+        caus = next(e for e in scan["evidence"]
+                    if e["level"] == "supported_causal")
+        self.assertEqual(caus["event"], "block_rq_complete")
+        self.assertEqual(caus["distance_us"], 100.0)
+        self.assertEqual(caus["segment_dur_ms"], 19.5)
+        # The wake edge carries the observed waker comm (fixture prefix).
+        self.assertEqual(caus["waker_comm"], "kworker")
+        # Phase structure: one blocked segment, isolated completion.
+        phase = scan["phase_summary"]
+        self.assertEqual(phase["blocked_segments"], 1)
+        self.assertEqual(phase["blocked_total_ms"], 19.5)
+        top = phase["top_segments"][0]
+        self.assertEqual(top["start_offset_ms"], 25.0)
+        self.assertEqual(top["rq_completions_during"], 1)
+        self.assertEqual(top["waker_comm"], "kworker")
+        self.assertEqual(phase["wakes_by_comm"], {"kworker": 1})
+        prox = scan["proximity_summary"]
+        self.assertEqual(prox["wake_edges"], 1)
+        self.assertEqual(prox["dense_completion_edges"], 0)
+        self.assertEqual(prox["isolated_completion_edges"], 1)
+        self.assertEqual(prox["nearest_completion_us"]["p50"], 100.0)
+        # The transaction commit inside the window is reported as a fact.
+        self.assertEqual(
+            [(f["event"], f["offset_ms"]) for f in scan["fs_events_in_window"]],
+            [("btrfs_transaction_commit", 73.0)])
+        # The block issue/completion pair identifies the shared device.
+        self.assertEqual(scan["shared_device_events"]["devices"], ["259,0"])
+        self.assertEqual(scan["shared_device_events"]["level"],
+                         "shared_device_temporal")
+        # A long wrapper with no diagnostic events keeps the negative.
+        negatives = [w for w in kw["wrappers"]
+                     if w["no_diagnostic_events_in_window"]]
+        self.assertEqual(len(negatives), 1)
+        self.assertEqual(negatives[0]["tag"], "sub_dir_sync")
+        self.assertEqual(negatives[0]["event_counts"], {})
+        # The stale limitation is swapped for the correlation caveats.
+        joined = " ".join(result["limitations"])
+        self.assertNotIn("no block/journal events captured", joined)
+        self.assertIn("evidence classes separate temporal overlap", joined)
+        # The rendered representative timeline includes the events.
+        texts = sorted((tmp / "timelines").glob("*.txt"))
+        self.assertEqual(len(texts), 1)
+        body = texts[0].read_text()
+        self.assertIn("fs/block/writeback events in window: 4", body)
+        self.assertIn("folio_wait_writeback", body)
+        self.assertIn("*", body.split("folio_wait_writeback")[0].splitlines()[-1])
+
+    def test_kernel_wait_withheld_when_clock_crossing_unvalidated(self):
+        # Diagnostic events are trace-side only; without validated
+        # cross-clock subtraction the per-wrapper correlation is withheld
+        # (totals stay, wrappers stay empty).
+        from fs_trace import kernel_wait_section
+        section = kernel_wait_section(
+            [{"ts": 5, "event": "block_rq_issue", "tid": 1, "cpu": 0,
+              "comm": "k", "fields": "259,0 R 1 + 1"}],
+            {}, [{"long_wrappers": []}], {}, {}, {"events": []}, False)
+        self.assertEqual(section["status"],
+                         "withheld_cross_clock_not_validated")
+        self.assertEqual(section["wrappers"], [])
+        self.assertEqual(section["event_totals"], {"block_rq_issue": 1})
+
+    def test_kernel_wait_dense_segment_proximity_is_not_causal(self):
+        # Isolation rule: with >= 2 completions inside a blocked segment,
+        # wake-edge proximity cannot single out a cause — reported as
+        # dense temporal overlap (proximity_summary), never as
+        # supported_causal.  A segment with exactly one completion IS
+        # classified, with its observed waker comm.
+        from fs_trace import kernel_wait_section
+        MS = 10**6
+        b0 = 1_000 * 10**9
+        b1 = 2_000 * 10**9
+
+        def rec(base, off_us, sector):
+            return {"ts": base + off_us * 1000,
+                    "event": "block_rq_complete", "tid": 999, "cpu": 0,
+                    "comm": "irq/123",
+                    "fields": f"259,0 W {sector} + 32 be,0,4 [0]"}
+
+        diag = [
+            rec(b0, 4400, 6175136), rec(b0, 4600, 6176672),
+            rec(b0, 4999, 6177696),          # dense segment: 3 completions
+            rec(b1, 4999, 6178720),          # isolated segment: 1 completion
+        ]
+        wrappers = [
+            {"w0_ns": b0, "w1_ns": b0 + 10 * MS, "tid": 700,
+             "tag": "sub_scan", "dur_ms": 10.0,
+             "identity": {"job_task_id": 41}},
+            {"w0_ns": b1, "w1_ns": b1 + 10 * MS, "tid": 701,
+             "tag": "sub_dir_sync", "dur_ms": 10.0,
+             "identity": {"job_task_id": 42}},
+        ]
+        timeline = {
+            700: [("out", b0 + 2 * MS, "D"), ("waking", b0 + 5 * MS, None)],
+            701: [("out", b1 + 2 * MS, "D"), ("waking", b1 + 5 * MS, None)],
+        }
+        wakes = {700: [(b0 + 5 * MS, "kworker/u48:0")],
+                 701: [(b1 + 5 * MS, "kworker/u48:7")]}
+        section = kernel_wait_section(
+            diag, wakes, [{"run": "run-1", "long_wrappers": wrappers}],
+            timeline, {}, {"events": []}, True)
+        dense, isolated = section["wrappers"]
+        # Dense segment: proximity is temporal only, no causal entry.
+        self.assertEqual(dense["evidence"], [])
+        prox = dense["proximity_summary"]
+        self.assertEqual(prox["dense_completion_edges"], 1)
+        self.assertEqual(prox["isolated_completion_edges"], 0)
+        self.assertEqual(prox["nearest_completion_us"]["max"], 1.0)
+        top = dense["phase_summary"]["top_segments"][0]
+        self.assertEqual(top["rq_completions_during"], 3)
+        self.assertEqual(top["waker_comm"], "kworker/u48:0")
+        # Isolated segment: classified with waker attribution.
+        self.assertEqual(len(isolated["evidence"]), 1)
+        caus = isolated["evidence"][0]
+        self.assertEqual(caus["level"], "supported_causal")
+        self.assertEqual(caus["distance_us"], 1.0)
+        self.assertEqual(caus["waker_comm"], "kworker/u48:7")
+        self.assertEqual(
+            isolated["proximity_summary"]["isolated_completion_edges"], 1)
+        self.assertEqual(isolated["shared_device_events"]["devices"],
+                         ["259,0"])
+
+    def test_parse_trace_collects_diagnostic_events(self):
+        sample = "\n".join([
+            "# tracer: nop",
+            "# entries-in-buffer/entries-written: 5/5   #P:8",
+            " kworker/6:1H-135 [001] d..2. 1000.000100: block_rq_issue: "
+            "259,0 RM 16384 () 6175136 + 32 be,0,4 [kworker/6:1H]",
+            " rustfs-fsync-700 [000] d..2. 1000.000200: "
+            "folio_wait_writeback: bdi nvme0n1p3: ino=12345 index=7",
+            " kworker-51 [002] d..2. 1000.000300: btrfs_transaction_commit: "
+            "6320451e-6e11-4cbb-83ce-db232864bb96: root=5(FS_TREE) gen=4242",
+            " rustfs-fsync-700 [000] d..2. 1000.000400: "
+            "sys_fsync(fd: 0x3)",
+            " kworker/u8-50 [003] d..2. 1000.000450: sched_waking: "
+            "comm=rustfs-fsync pid=700 prio=120 target_cpu=000",
+        ]) + "\n"
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        timelines, syscalls, stats = parse_trace(self._trace_file(tmp, sample))
+        self.assertEqual(stats["bad_lines"], 0)
+        self.assertEqual(len(stats["diag_events"]), 3)
+        self.assertEqual(stats["diag_events"][0]["event"], "block_rq_issue")
+        self.assertEqual(stats["diag_events"][0]["tid"], 135)
+        self.assertEqual(stats["diag_events"][1]["tid"], 700)
+        self.assertEqual(
+            stats["event_counts"]["btrfs_transaction_commit"], 1)
+        # Syscall lines stay syscall lines, not diagnostic events.
+        self.assertEqual(syscalls[700],
+                         [(1000 * 10**9 + 400 * 1000, "fsync", "enter")])
+        self.assertEqual(stats["event_counts"]["sys_fsync_enter"], 1)
+        # Wake lines record the waker comm (task current on the CPU);
+        # LINE_RE splits "comm-tid", so comm is "kworker/u8" of tid 50.
+        self.assertEqual(stats["wakes"][700],
+                         [(1000 * 10**9 + 450 * 1000, "kworker/u8")])
+
+    def test_parse_settings_keeps_diag_event_lines_as_events(self):
+        from fs_trace import parse_settings_file
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        p = tmp / "trace.settings"
+        p.write_text(
+            "trace_clock=mono\nbuffer_size_kb=16387\n"
+            "syscalls/sys_enter_fsync enable=1 filter=none\n"
+            "block/block_rq_issue enable=1 filter=dev == 271581184\n"
+            "btrfs/btrfs_tree_lock enable=1 filter=none\n")
+        parsed = parse_settings_file(p)
+        self.assertEqual(parsed["buffer_size_kb"], "16387")
+        self.assertIn(
+            "block/block_rq_issue enable=1 filter=dev == 271581184",
+            parsed["events"])
+        self.assertIn("btrfs/btrfs_tree_lock enable=1 filter=none",
+                      parsed["events"])
+        # The event line's "=" must not leak into the key=value section.
+        self.assertNotIn("block/block_rq_issue enable", parsed)
 
     def test_fixture_identity_preserves_job_and_operation(self):
         result, _ = self._analyze_fixture(timelines=0)
@@ -1985,7 +2240,13 @@ class FtraceScriptTests(unittest.TestCase):
     EVENT_DIRS = ("sched/sched_switch", "sched/sched_waking",
                   "sched/sched_wakeup", "syscalls/sys_enter_fsync",
                   "syscalls/sys_exit_fsync", "syscalls/sys_enter_fdatasync",
-                  "syscalls/sys_exit_fdatasync")
+                  "syscalls/sys_exit_fdatasync",
+                  "btrfs/btrfs_transaction_commit",
+                  "btrfs/btrfs_finish_ordered_extent",
+                  "btrfs/btrfs_reserve_ticket", "btrfs/btrfs_tree_lock",
+                  "writeback/folio_wait_writeback",
+                  "block/block_bio_queue", "block/block_rq_issue",
+                  "block/block_rq_complete")
     EMPTY_TRACE = ("# tracer: nop\n#\n"
                    "# entries-in-buffer/entries-written: 0/0   #P:8\n")
     TWO_ENTRY_TRACE = (
@@ -2078,9 +2339,19 @@ class FtraceScriptTests(unittest.TestCase):
             'prev_comm ~ "rustfs*" || next_comm ~ "rustfs*"')
         for e in ("sched/sched_switch", "sched/sched_waking",
                   "sched/sched_wakeup", "syscalls/sys_enter_fsync",
-                  "syscalls/sys_exit_fdatasync"):
+                  "syscalls/sys_exit_fdatasync",
+                  "btrfs/btrfs_transaction_commit",
+                  "btrfs/btrfs_tree_lock",
+                  "writeback/folio_wait_writeback",
+                  "block/block_rq_issue"):
             self.assertEqual((inst / f"events/{e}/enable").read_text().strip(),
                              "1", e)
+        # Block events carry the device filter before they are enabled.
+        for e in ("block/block_bio_queue", "block/block_rq_issue",
+                  "block/block_rq_complete"):
+            self.assertEqual(
+                (inst / f"events/{e}/filter").read_text().strip(),
+                "dev == 271581184", e)
         # The default tracer is untouched: every sentinel survives.
         self.assertEqual(self._default_snapshot(root), before)
         # Ownership marker recorded, and status names the instance.

@@ -75,6 +75,7 @@ Usage:
                         [--threshold-ms 50] [--probe-reference DIR]
 """
 import argparse
+import bisect
 import hashlib
 import json
 import re
@@ -99,6 +100,18 @@ SWITCH_RE = re.compile(
 # initiation event, matching the previous parser.
 WAKE_RE = re.compile(r"sched_wak(?:ing|eup|e):\s+comm=(?P<comm>.+?) pid=(?P<pid>\d+)")
 SYSCALL_RE = re.compile(r"^sys_(?P<name>fsync|fdatasync)(?P<rest>.*)$")
+
+# Predeclared diagnostic event set (the ftrace.sh FS_BLOCK_EVENTS array):
+# filesystem/block/writeback events captured to locate the kernel wait
+# inside the long directory-sync wrappers.  Lines are recorded into
+# stats["diag_events"] (popped by analyze) so captures without these
+# events reproduce byte-identical results.
+DIAG_EVENTS = frozenset({
+    "btrfs_transaction_commit", "btrfs_finish_ordered_extent",
+    "btrfs_reserve_ticket", "btrfs_tree_lock", "folio_wait_writeback",
+    "block_bio_queue", "block_rq_issue", "block_rq_complete",
+})
+DIAG_RE = re.compile(r"^(?P<event>[a-z][a-z0-9_]*):\s+(?P<fields>.+)$")
 
 # Tags whose wrapped call is one of the traced syscalls.  Which syscall each
 # tag actually performs is derived from the capture itself (see
@@ -346,6 +359,14 @@ def parse_trace(path):
         "rustfs_comms": set(), "header_entries": None,
         "equal_ts_ties": 0, "equal_ts_causal_repairs": 0,
         "equal_ts_ambiguous": 0, "equal_ts_unresolved": 0,
+        # Diagnostic fs/block/writeback events, chronologically appended
+        # (raw dumps are emitted in timestamp order across CPUs; analyze
+        # pops this list so results of captures without these events stay
+        # byte-identical).
+        "diag_events": [],
+        # sched_waking/sched_wakeup lines per wakee tid: (ts, comm-current-
+        # on-cpu), popped by analyze alongside diag_events.
+        "wakes": {},
     }
     with path.open() as fh:
         for line in fh:
@@ -400,6 +421,18 @@ def parse_trace(path):
                 timelines.setdefault(wakee, []).append(
                     ("wakeup" if kind == "sched_wakeup" else "waking",
                      ts, None, m.group("cpu")))
+                stats["wakes"].setdefault(wakee, []).append(
+                    (ts, m.group("prefix")))
+                continue
+            dm = DIAG_RE.match(rest)
+            if dm and dm.group("event") in DIAG_EVENTS:
+                stats["event_counts"][dm.group("event")] = \
+                    stats["event_counts"].get(dm.group("event"), 0) + 1
+                stats["diag_events"].append({
+                    "ts": ts, "event": dm.group("event"), "tid": tid,
+                    "cpu": int(m.group("cpu")), "comm": m.group("prefix"),
+                    "fields": dm.group("fields"),
+                })
                 continue
     # Equal-timestamp ties (1 us quantization): order per thread by
     # scheduler admissibility over the recorded line order — same-CPU
@@ -1198,7 +1231,13 @@ def parse_settings_file(path):
     out = {}
     events = []
     for line in path.read_text().splitlines():
-        if "=" in line and not line.startswith(("sched", "syscalls")):
+        # Event lines look like "<subsys/event> enable=<0|1> filter=<f>";
+        # match them generically (the diag fs/block events are neither
+        # sched nor syscalls) so their "=" never leaks into the key=value
+        # section.
+        if re.match(r"^\S+ enable=\d+ filter=", line):
+            events.append(line.strip())
+        elif "=" in line and not line.startswith(("sched", "syscalls")):
             k, v = line.split("=", 1)
             out[k.strip()] = v.strip()
         elif line.strip():
@@ -1222,6 +1261,10 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
         raise SystemExit(f"{trace_path} not found (was the trace collected?)")
 
     timeline, syscalls, tstats = parse_trace(trace_path)
+    # Diagnostic fs/block/writeback events: popped out of stats so results
+    # of captures without these events stay byte-identical.
+    diag_events = tstats.pop("diag_events", [])
+    wakes = tstats.pop("wakes", {})
     trace_sha = sha256_file(trace_path)  # hashed once; reused below
     settings = parse_settings_file(run_dir / "trace.settings")
     stats = parse_stats_file(run_dir / "trace.stats")
@@ -1525,6 +1568,9 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
             inputs.append(input_entry("probe-reference dump", p))
     binary_cache = {}
 
+    kernel_wait = kernel_wait_section(diag_events, wakes, per_run, timeline,
+                                      syscalls, settings, cross_clock_ok)
+
     result = {
         "schema": "fs-trace-diagnostic/v3",
         "generated_by": "experiments/rustfs/fs_trace.py",
@@ -1647,6 +1693,7 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
             "derived_from_capture": mapping,
             "votes": votes,
         },
+        **({"kernel_wait": kernel_wait} if kernel_wait is not None else {}),
         "runs": per_run,
         "limitations": [
             "sched events are comm-filtered to rustfs* threads; foreign "
@@ -1705,6 +1752,26 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
         ],
     }
 
+    if kernel_wait is not None:
+        # This capture included the diagnostic fs/block/writeback events:
+        # the "no block/journal events captured" note no longer describes
+        # it, and the correlation caveats below apply instead.
+        result["limitations"] = [
+            s for s in result["limitations"]
+            if "no block/journal events captured" not in s
+        ] + [
+            "diagnostic btrfs/writeback events are not comm-filtered: "
+            "background activity on the same filesystem appears in their "
+            "totals; block events are capture-filtered to the volume's "
+            "device (kernel_wait.capture_filter)",
+            "kernel_wait evidence classes separate temporal overlap, "
+            "shared-device activity, a same-task writeback wait, and "
+            "proximity of a wake edge to a completion event; only the "
+            "same-task wait names its object, proximity is never proof, "
+            "and none of them identifies a single cause for the wait or "
+            "establishes response-criticality",
+        ]
+
     # Evidence-preservation note: format-version-1 dumps were produced by a
     # probe generation before the writer-admission flush barrier and the
     # raw-pointer ring-write fix existed.
@@ -1747,7 +1814,8 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
                         f"-job{ident['job_task_id']}"
                         f"-occ{ident['occurrence']}-w{w['w0_ns']}.txt")
                     p.write_text(render_timeline(w,
-                                                 timeline.get(w["tid"], [])))
+                                                 timeline.get(w["tid"], []),
+                                                 diag_events))
                     written.append(str(p.relative_to(run_dir)))
             result["timelines"] = written
     return result
@@ -1804,7 +1872,389 @@ def compare_summaries(traced, reference):
     return out
 
 
-def render_timeline(wrapper, timeline):
+# --- kernel-wait evidence (diagnostic fs/block/writeback events) ------------
+#
+# Predeclared rules for correlating the diagnostic event set
+# (ftrace.sh FS_BLOCK_EVENTS) with the long wrappers.  Evidence levels are
+# defined by what was OBSERVED, never by what it would imply about the
+# response path:
+#
+#   temporal_overlap        an event timestamp falls inside the wrapper
+#                           window (per-window event_counts); under dense
+#                           device activity wake-edge proximity is also
+#                           only temporal — counted in
+#                           proximity_summary, never claimed as causal;
+#   shared_device_temporal  a block event on the volume's device overlaps
+#                           the window: the device was busy, not that this
+#                           wait was for those requests (block events are
+#                           not tagged with the calling task's I/O);
+#   demonstrable_dependency the wrapper thread itself entered a writeback
+#                           wait (folio_wait_writeback recorded with the
+#                           wrapper's own tid) at/before entry into its
+#                           own blocked segment — waiter and waited folio
+#                           are named by the event;
+#   supported_causal        isolation rule: at most one event of that
+#                           completion class inside the segment, within
+#                           the temporal threshold of the wake edge —
+#                           under busy-device density any edge is within
+#                           the threshold of *some* completion, so only
+#                           the isolated candidate is reported, alongside
+#                           the observed waker comm (whose irq-context
+#                           ambiguity is documented).
+#
+KERNEL_WAIT_WRAPPERS_PER_RUN = 3
+KERNEL_WAIT_WAKE_EDGE_US = 1000.0
+# folio_wait_writeback fires just before the thread switches itself out;
+# allow that tracepoint-to-switch gap when matching a same-task wait to
+# the blocked segment it precedes.
+FOLIO_PRE_US = 200 * 1000
+# A wake edge is attributed to a waker comm only within this distance of
+# a sched_waking/sched_wakeup for the wrapper tid.
+WAKER_MATCH_US = 2_000 * 1000
+COMPLETION_EVENTS = ("btrfs_finish_ordered_extent", "block_rq_complete",
+                     "btrfs_transaction_commit")
+BLOCK_EVENTS = frozenset({"block_bio_queue", "block_rq_issue",
+                          "block_rq_complete"})
+
+_BLOCK_FIELDS_RE = re.compile(
+    r"^(?P<dev>\d+,\d+)\s+(?P<rwbs>\S+).*?(?P<sector>\d+)\s+\+\s+(?P<count>\d+)")
+_KV_PATTERNS = (
+    ("ino", r"\bino=(\d+)"), ("index", r"\bindex=(\d+)"),
+    ("root", r"\broot=(\d+)"), ("generation", r"\bgeneration=(\d+)"),
+    ("gen", r"\bgen=(\d+)"), ("diff_ns", r"\bdiff_ns=(\d+)"),
+    ("is_log_tree", r"\bis_log_tree=(-?\d+)"), ("bytes", r"\bbytes=(\d+)"),
+    ("error", r"\berror=(-?\d+)"), ("uptodate", r"\buptodate=(\d+)"),
+    ("start_ns", r"\bstart_ns=(\d+)"),
+)
+_FSID_RE = re.compile(
+    r"^(?P<fsid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-"
+    r"[0-9a-f]{12}):")
+_FOLIO_BDI_RE = re.compile(r"^bdi (?P<bdi>.*?): ino=")
+
+
+def diag_identity(event, fields):
+    """Correlation identity extracted from a diagnostic event's fields.
+
+    Only field values the event actually printed are extracted; the raw
+    ``fields`` string is always preserved alongside, so an absent field
+    stays missing rather than being guessed.
+    """
+    ident = {}
+    if event in BLOCK_EVENTS:
+        m = _BLOCK_FIELDS_RE.match(fields)
+        if m:
+            ident.update(m.groupdict())
+        return ident
+    fsid = _FSID_RE.match(fields)
+    if fsid:
+        ident["fsid"] = fsid.group("fsid")
+    bdi = _FOLIO_BDI_RE.match(fields)
+    if bdi:
+        ident["bdi"] = bdi.group("bdi")
+    for key, pat in _KV_PATTERNS:
+        m = re.search(pat, fields)
+        if m:
+            ident[key] = m.group(1)
+    return ident
+
+
+def _merge_windows(windows):
+    """Merge overlapping wrapper windows for an outside-any-window count."""
+    merged = []
+    for s, e in sorted(windows):
+        if merged and s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    return merged
+
+
+def kernel_wait_section(diag, wakes, per_run, timeline, syscalls, settings,
+                        cross_clock_ok):
+    """Evidence section for the diagnostic fs/block/writeback events.
+
+    Returns None when the capture contains no diagnostic events, so
+    captures without them reproduce byte-identical results.
+
+    The correlation rules below were fixed after inspecting a
+    rate-probe-style pilot window of this capture and observing that the
+    volume device completes thousands of requests per second: under such
+    density a wake edge is *always* within the temporal threshold of
+    *some* completion, so raw proximity carries no information.  Two
+    rules keep the classification honest:
+
+    * the isolation rule — a completion class only supports a
+      ``supported_causal`` entry when at most one event of that class
+      occurred inside the segment (the candidate at the edge is then the
+      only one of its kind); dense segments are reported through
+      ``proximity_summary`` instead;
+    * waker attribution — the ``comm`` recorded at a wake edge is the
+      task *current on that CPU* when the wake fired, which for
+      irq-context wakes is an unrelated task (observed: desktop apps
+      "waking" fsync threads).  Waker comms are reported as observed
+      facts with this ambiguity, never as a causal claim.
+    """
+    if not diag:
+        return None
+    diag = sorted(diag, key=lambda e: e["ts"])
+    totals = {}
+    by_name = {}
+    for e in diag:
+        totals[e["event"]] = totals.get(e["event"], 0) + 1
+        by_name.setdefault(e["event"], []).append(e["ts"])
+    block_filters = [line for line in settings.get("events", [])
+                     if line.startswith("block/")]
+    section = {
+        "status": ("analyzed" if cross_clock_ok
+                   else "withheld_cross_clock_not_validated"),
+        "event_totals": totals,
+        "capture_filter": {
+            "block_event_filter_lines": block_filters,
+            "note": ("block events were filtered to the volume's device at "
+                     "capture time (the filter lines are collected from "
+                     "trace.settings); btrfs/writeback events carry no comm "
+                     "filter, so background activity on the same filesystem "
+                     "appears in the totals"),
+        },
+        "correlation_rules": {
+            "evidence_levels": {
+                "temporal_overlap":
+                    "event timestamp inside the wrapper window or a "
+                    "blocked segment; reported as event_counts and "
+                    "proximity_summary only, with no relationship claimed "
+                    "(under dense device activity any wake edge is within "
+                    "the threshold of some completion — such proximity is "
+                    "counted as dense, not causal)",
+                "shared_device_temporal":
+                    "block event on the volume device overlapping the "
+                    "window — device busy, not wait attribution",
+                "demonstrable_dependency":
+                    "the wrapper thread's own writeback-wait event "
+                    "(folio_wait_writeback with this tid) inside its own "
+                    "blocked segment, allowing folio_pre_segment_us for "
+                    "the tracepoint that fires just before the "
+                    "switch-out (waiter and folio named)",
+                "supported_causal":
+                    "isolation rule: at most one event of that completion "
+                    "class inside the segment, within "
+                    "wake_edge_threshold_us before the wake edge (the "
+                    "candidate is then the only event of a class capable "
+                    "of releasing such a wait) — supported by proximity "
+                    "plus waker attribution, never proof of release",
+            },
+            "wake_edge_threshold_us": KERNEL_WAIT_WAKE_EDGE_US,
+            "folio_pre_segment_us": FOLIO_PRE_US / 1000.0,
+            "completion_events": list(COMPLETION_EVENTS),
+            "waker_comm_semantics":
+                "waker_comm is the comm of the task current on the CPU "
+                "when the wake fired: for workqueue/process-context wakes "
+                "that is the logical waker, for irq-context wakes it is "
+                "an unrelated task that happened to be running (observed: "
+                "desktop apps and <idle> as waker_comm) — an observed "
+                "fact, not a causal attribution",
+            "selection": (f"the {KERNEL_WAIT_WRAPPERS_PER_RUN} longest "
+                          "wrappers per repetition, ordered by duration"),
+            "no_response_criticality":
+                "none of these levels establishes response-criticality: a "
+                "job's temporal association with a filesystem or block "
+                "event does not show that the event was required before "
+                "the response",
+        },
+        "wrappers": [],
+    }
+    windows = [(w["w0_ns"], w["w1_ns"]) for run in per_run
+               for w in run["long_wrappers"]]
+    merged = _merge_windows(windows)
+    starts = [m[0] for m in merged]
+    outside = 0
+    for e in diag:
+        i = bisect.bisect_right(starts, e["ts"]) - 1
+        if i < 0 or e["ts"] > merged[i][1]:
+            outside += 1
+    section["outside_long_wrappers"] = outside
+
+    if cross_clock_ok:
+        eps = int(KERNEL_WAIT_WAKE_EDGE_US * 1000)
+
+        def count_in(name, a, b):
+            arr = by_name.get(name)
+            if not arr:
+                return 0
+            return (bisect.bisect_left(arr, b) - bisect.bisect_left(arr, a))
+
+        def nearest_isolated(name, s, en):
+            """Latest event of class ``name`` inside [s, en], else None."""
+            arr = by_name.get(name)
+            if not arr:
+                return None
+            i = bisect.bisect_left(arr, en) - 1
+            if i < 0 or arr[i] < s:
+                return None
+            ts = arr[i]
+            return ts if 0 <= en - ts <= eps else None
+
+        for run in per_run:
+            for w in run["long_wrappers"][:KERNEL_WAIT_WRAPPERS_PER_RUN]:
+                w0, w1, tid = w["w0_ns"], w["w1_ns"], w["tid"]
+                lo = bisect.bisect_left(diag, w0, key=lambda e: e["ts"])
+                hi = bisect.bisect_right(diag, w1, key=lambda e: e["ts"])
+                win = diag[lo:hi]
+                rows = decompose_wrapper(timeline.get(tid, []),
+                                         syscalls.get(tid, ()), w0, w1)[0]
+                blocked = [(s, en) for _z, state, s, en in rows
+                           if state.startswith("blocked")]
+                tid_wakes = wakes.get(tid, [])
+
+                def waker_at(edge):
+                    best = None
+                    best_d = None
+                    for ts, comm in tid_wakes:
+                        d = abs(ts - edge)
+                        if d <= WAKER_MATCH_US and (best_d is None
+                                                    or d < best_d):
+                            best, best_d = comm, d
+                    return best
+
+                counts, evidence = {}, []
+                claimed_folios = set()
+                for e in win:
+                    counts[e["event"]] = counts.get(e["event"], 0) + 1
+
+                # Per-segment correlation.
+                proximity = {"wake_edges": len(blocked),
+                             "dense_completion_edges": 0,
+                             "isolated_completion_edges": 0,
+                             "no_completion_within_threshold_edges": 0,
+                             "nearest_completion_us": None}
+                nearest_dists = []
+                wakes_by_comm = {}
+                top_segments = []
+                for s, en in blocked:
+                    waker = waker_at(en)
+                    if waker is not None:
+                        wakes_by_comm[waker] = wakes_by_comm.get(waker, 0) + 1
+                    top_segments.append({
+                        "start_offset_ms": round((s - w0) / 1e6, 6),
+                        "dur_ms": round((en - s) / 1e6, 6),
+                        "rq_completions_during": count_in(
+                            "block_rq_complete", s, en),
+                        "waker_comm": waker,
+                    })
+
+                    # demonstrable_dependency: this thread's own folio
+                    # wait, immediately before / during the switch-out.
+                    fol = [e for e in win
+                           if e["event"] == "folio_wait_writeback"
+                           and e["tid"] == tid
+                           and s - FOLIO_PRE_US <= e["ts"] < en
+                           and e["ts"] not in claimed_folios]
+                    if fol:
+                        fe = max(fol, key=lambda e: e["ts"])
+                        claimed_folios.add(fe["ts"])
+                        evidence.append({
+                            "level": "demonstrable_dependency",
+                            "event": fe["event"],
+                            "offset_ms": round((fe["ts"] - w0) / 1e6, 6),
+                            "segment_start_offset_ms": round(
+                                (s - w0) / 1e6, 6),
+                            "identity": diag_identity(fe["event"],
+                                                      fe["fields"]),
+                            "basis": (
+                                f"tid {tid} itself recorded this writeback "
+                                "wait at/before the switch-out into its own "
+                                "blocked:D segment; the event names the "
+                                "waited folio (bdi/ino/index)"),
+                        })
+
+                    # supported_causal: isolation rule per class.
+                    rq_n = count_in("block_rq_complete", s, en)
+                    near_rq = nearest_isolated("block_rq_complete", s, en)
+                    if near_rq is not None:
+                        nearest_dists.append(en - near_rq)
+                    if rq_n >= 2:
+                        proximity["dense_completion_edges"] += 1
+                    elif rq_n == 1 and near_rq is not None:
+                        proximity["isolated_completion_edges"] += 1
+                    else:
+                        proximity["no_completion_within_threshold_edges"] += 1
+                    for cls in COMPLETION_EVENTS:
+                        if count_in(cls, s, en) > 1:
+                            continue  # dense for this class: vacuous
+                        ts = nearest_isolated(cls, s, en)
+                        if ts is None:
+                            continue
+                        evidence.append({
+                            "level": "supported_causal",
+                            "event": cls,
+                            "offset_ms": round((ts - w0) / 1e6, 6),
+                            "wake_edge_offset_ms": round((en - w0) / 1e6, 6),
+                            "distance_us": round((en - ts) / 1000.0, 3),
+                            "segment_dur_ms": round((en - s) / 1e6, 6),
+                            "waker_comm": waker,
+                            "identity": diag_identity(cls, next(
+                                e["fields"] for e in win
+                                if e["event"] == cls and e["ts"] == ts)),
+                            "basis": (
+                                "isolation rule: this is the only event "
+                                "of its class inside the segment and it "
+                                "occurred within the predeclared wake-edge "
+                                "threshold of the wake — the single "
+                                "captured candidate of a class capable of "
+                                "releasing the wait; supported by waker "
+                                "attribution where present, not proof"),
+                        })
+                if nearest_dists:
+                    proximity["nearest_completion_us"] = {
+                        "p50": round(percentile(nearest_dists, 0.5) / 1000.0,
+                                     3),
+                        "max": round(max(nearest_dists) / 1000.0, 3),
+                    }
+                proximity["note"] = (
+                    "dense edges (>= 2 completions during the segment) "
+                    "cannot single out a cause by proximity and are "
+                    "reported here instead of as supported_causal")
+
+                evidence.sort(key=lambda x: x["offset_ms"])
+                top_segments.sort(key=lambda x: -x["dur_ms"])
+                fs_events = [{
+                    "event": e["event"],
+                    "offset_ms": round((e["ts"] - w0) / 1e6, 6),
+                    "tid": e["tid"],
+                    "identity": diag_identity(e["event"], e["fields"]),
+                } for e in win
+                    if e["event"] in ("btrfs_transaction_commit",
+                                      "btrfs_finish_ordered_extent")][:20]
+                devs = sorted({d for d in (
+                    diag_identity(e["event"], e["fields"]).get("dev")
+                    for e in win if e["event"] in BLOCK_EVENTS) if d})
+                section["wrappers"].append({
+                    "run": run["run"], "tag": w["tag"], "tid": tid,
+                    "dur_ms": w["dur_ms"], "w0_ns": w0, "w1_ns": w1,
+                    "job_task_id": w["identity"]["job_task_id"],
+                    "events_in_window": len(win),
+                    "event_counts": counts,
+                    "phase_summary": {
+                        "blocked_segments": len(blocked),
+                        "blocked_total_ms": round(
+                            sum(en - s for s, en in blocked) / 1e6, 3),
+                        "top_segments": top_segments[:5],
+                        "wakes_by_comm": wakes_by_comm,
+                    },
+                    "proximity_summary": proximity,
+                    "fs_events_in_window": fs_events,
+                    "shared_device_events": (
+                        {"devices": devs, "level": "shared_device_temporal",
+                         "note": ("block events on these devices overlap the "
+                                  "window: the device was busy, not that "
+                                  "this wait was for these requests")}
+                        if devs else None),
+                    "evidence": evidence,
+                    "no_diagnostic_events_in_window": not win,
+                })
+    return section
+
+
+def render_timeline(wrapper, timeline, diag_events=None):
     """Readable text timeline for one wrapper (all segments, in order)."""
     w0, w1 = wrapper["w0_ns"], wrapper["w1_ns"]
     ident = wrapper.get("identity") or {}
@@ -1834,6 +2284,17 @@ def render_timeline(wrapper, timeline):
     for zone, st, s, e in rows:
         lines.append(f"{(s - w0) / 1e6:10.3f} {(e - w0) / 1e6:10.3f} "
                      f"{(e - s) / 1e6:9.3f}  {zone}/{st}")
+    if diag_events:
+        win = [e for e in diag_events if w0 <= e["ts"] <= w1]
+        lines.append(
+            f"# fs/block/writeback events in window: {len(win)} "
+            "(offset ms from w0; temporal unless noted in kernel_wait)")
+        for e in win[:500]:
+            same = "*" if e["tid"] == wrapper["tid"] else " "
+            lines.append(f"{(e['ts'] - w0) / 1e6:10.3f}{same} "
+                         f"{e['event']:<26} tid={e['tid']} {e['fields']}")
+        if len(win) > 500:
+            lines.append(f"# ... {len(win) - 500} more events not rendered")
     return "\n".join(lines) + "\n"
 
 

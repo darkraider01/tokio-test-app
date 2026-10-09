@@ -657,12 +657,19 @@ Fixture-tested vs. host-validated, stated separately:
 * **Host-validated on this host** (previous capture, pre-isolation script):
   filter semantics, `trace_clock=mono`, stop-on-full loss accounting, and the
   analyzer's clock/alignment validation against a real capture.
-* **Still to be host-validated** (needs one root smoke run, no new experiment
-  budget beyond it): instance creation under `$TRACEFS/instances/`,
-  per-instance `trace_clock`/`options/overwrite`/`error_log` support, and a
-  smoke `collect` proving `instance=` metadata lands in `trace.settings`. The
-  current script fails loudly rather than falling back to the default tracer
-  if any of that is unsupported.
+* **Host-validated (updated 2026-10-09, live isolated-instance workflow
+  run):** instance creation under `$TRACEFS/instances/` with per-instance
+  `trace_clock`/`options/overwrite`/`error_log` support, a smoke `collect`
+  proving `instance=`/`instance_dir=`/`instance_owned=yes` metadata lands in
+  `trace.settings` with `tracing_on=0` (stop-before-read), ownership
+  refusals on all five commands for both a missing marker and a foreign
+  marker (instance untouched, no files created), refusal of nonempty-buffer
+  `destroy`/re-`arm` without `--force`, fail-closed partial `arm`
+  (`TRACE_BUFFER_KB=not-a-number` → exit 1, `tracing_on=0`), repeatable
+  `off`, `destroy` on an empty ring, and the default tracer byte-identical
+  to its baseline before and after everything (`nop`, `tracing_on=0`,
+  `buffer_size_kb=16387`, `overwrite=0`, zero enabled root events). No
+  `--force` was ever used.
 
 Optional instance cleanup (never required; the owned instance persists
 between captures and `arm` reuses it):
@@ -838,6 +845,204 @@ and the representative text timelines under `<capture>/timelines/`, named
 per repetition, tag, tid, job, occurrence, and start timestamp so repeated
 tags on one tid never overwrite each other); the compact results file is
 `results/fs-trace-diagnostic.json`.
+
+## Event-guided kernel-wait diagnostic (isolated instance, v4 probe)
+
+This run validates the whole workflow on the current host and answers the
+question the raw-ftrace section could not: *what is the thread waiting for*
+inside the long directory-sync wrappers. All artifacts below are from this
+phase and are deliberately **not committed** (`.repro/` is ignored; the
+committed baseline `results/fs-trace-diagnostic.json` regenerates
+byte-identically).
+
+Host topology, verified before attributing anything to "disks": the four
+RustFS volume directories are created under the output directory on **one
+btrfs filesystem (subvolume `/home` of a single NVMe**, KIOXIA
+KXG80ZNV512G, `/dev/nvme0n1p3`, disk `259,0`) — one physical device, never
+four independent disks; `zram0` is swap only. Block events therefore carry
+`dev 259,0` and are capture-filtered to it
+(`BLOCK_DEV_FILTER='dev == 271581184'`, i.e. `259<<20`; a rejected filter
+write fails the `arm` — verified with a bogus field). Stack sampling
+(`/proc/<tid>/stack`) exists as a fallback facility but was not used: it is
+root-only, gives point samples rather than continuous coverage, and races
+with wakeup; the event set below was able to bound the wait instead.
+
+### Build record for the `-v4` probe (compile-validated, then smoke-validated)
+
+* Patches, byte-verified against the pristine pinned sources before
+  building (tokio 1.53.2, rustfs `6b1554003ebf8f2037ffb7da9c9b906527e758da`):
+  `patches/tokio-1.53.2-fs-probe-v4.patch` SHA-256
+  `7bd0547894b9fc9bc94d9b2ae18b7f5c6b65b3ea4b598f8acd1fd7388eb66b84`,
+  `patches/rustfs-probe-v4.patch` SHA-256
+  `7845d7349205cb44f465c39dd853805db5c2dac0b6686aff98dd9e24b2e4de09`.
+* Command (from `.repro/rustfs-probe`, log `.repro/rustfs-probe/build-v4.log`):
+
+  ```sh
+  CARGO_TARGET_DIR="$PWD/target-v4" \
+  RUSTFLAGS="--cfg tokio_unstable --cfg rustfs_fs_probe -Aunexpected_cfgs" \
+  cargo build --release --offline -p rustfs --bin rustfs --features dial9 --jobs 2
+  ```
+
+  `BUILD_EXIT=0` (83 m 50 s, rustc/cargo 1.99.0). New binary
+  `.repro/rustfs-probe/target-v4/release/rustfs` SHA-256
+  `e8c4f77375f7055825139900c408b5d1bdbc5e4d90e724db0f5671f7a3e95f3e`.
+  The only copy of the v3 binary was preserved first
+  (`.repro/preserved-binaries/…`, `8fc0577b…`) and still compares equal to
+  `target/release/rustfs`.
+* Warnings: 16 total — 15 **new** (missing-doc: 11 in `src/fs_probe.rs`,
+  4 in `src/fs_probe_stub.rs`, secondary span `src/lib.rs:9:5` — all inside
+  the probe modules the patch adds) vs 1 **pre-existing** (deprecated
+  `Atomic::fetch_update` in `src/runtime/io/scheduled_io.rs:208`, a file the
+  patch does not touch). No baseline build log exists, so classification is
+  by patch-touched file path.
+* The binary is called runtime-validated only after the smoke below
+  succeeded (format-v2 dump parsed, counters consistent); compiling alone
+  was never treated as validation.
+
+### Predeclared diagnostic event set (why these eight)
+
+Selected from host evidence (rate probes of 2–3 s in throwaway instances),
+one question per event; the full table with per-event rationale lives in
+[ftrace.sh](ftrace.sh) (`FS_BLOCK_EVENTS`) and the pre-run notes:
+
+| event | question it answers |
+|---|---|
+| `btrfs/btrfs_transaction_commit` | transaction/journal coordination (generation, root incl. TREE_LOG) |
+| `btrfs/btrfs_finish_ordered_extent` | ordered-data completion (ino/range/uptodate) |
+| `btrfs/btrfs_reserve_ticket` | space-reservation wait (start_ns, flush mode, error) |
+| `btrfs/btrfs_tree_lock` | lock coordination (diff_ns hold time, is_log_tree) |
+| `writeback/folio_wait_writeback` | named waiter on writeback (`common_pid` = waiter, ino/index = object) |
+| `block/block_bio_queue` | block arrival / queue side |
+| `block/block_rq_issue` | request dispatch to the device |
+| `block/block_rq_complete` | device completion / service end |
+
+Excluded with reasons: ext4/jbd2 events (host filesystem is btrfs);
+`block_rq_insert` (fires for ≈0.02 % of requests here — `bio_queue` is the
+arrival marker); `btrfs_sync_file/_fs` (redundant with the captured
+sys_enter/exit_fsync); `balance_dirty_pages` (dirty throttling acts on
+write *producers*; **note: the flagship wait below is not explained by any
+captured event, and an fsync thread is also a metadata-write producer, so
+this is the first candidate to add if a further budget is approved — it was
+not added here**); delayed-ref add/run (a sub-mechanism of commit).
+Measured idle rates: `btrfs_tree_lock` ≈270/s, nvme `rq_issue`/`rq_complete`
+≈900/s each, `bio_queue` ≈2.4k/s, `folio_wait_writeback` ≈5/s,
+`finish_ordered_extent` ≈2/s, `transaction_commit` and `reserve_ticket` ≈0
+when idle. Buffer raised to `TRACE_BUFFER_KB=32768` per CPU (18 GB RAM
+host).
+
+### Commands actually executed (this phase)
+
+```sh
+# smoke (1 rep × c8 × 1 s, fresh dir, new binary, no tracing):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fsprobe-smoke-v4 \
+  --binary .repro/rustfs-probe/target-v4/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 1 --duration 1 --concurrency 8 --rates
+# arm the isolated instance with the diagnostic set (fail-closed):
+echo '<password>' | sudo -S -p '' env TRACE_BUFFER_KB=32768 \
+  experiments/rustfs/ftrace.sh arm
+# traced diagnostic (2 reps × c1+c8 × 3 s):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fstrace-diag-v4 \
+  --binary .repro/rustfs-probe/target-v4/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 2 --duration 3 --concurrency 1 8 --rates
+echo '<password>' | sudo -S -p '' experiments/rustfs/ftrace.sh \
+  collect .repro/rustfs-fstrace-diag-v4 trace
+# probe-only reference (1 rep × c1+c8 × 3 s, tracer off):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fstrace-diagv4-probeonly \
+  --binary .repro/rustfs-probe/target-v4/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 1 --duration 3 --concurrency 1 8 --rates
+# analysis (writes the results JSON + per-wrapper timelines):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/fs_trace.py \
+  .repro/rustfs-fstrace-diag-v4 \
+  --probe-reference .repro/rustfs-fstrace-diagv4-probeonly \
+  --output experiments/rustfs/results/fs-trace-diagnostic-v4.json \
+  --timelines 3
+```
+
+Budget used vs. allowed: 1 smoke run (allowed 1 + at most one corrective
+repeat; no corrective repeat was needed), 2 traced repetitions (allowed ≤2),
+1 probe-only reference (allowed 1), no automatic extension. Server runs
+total for this phase: 4. The capture was collected with
+`entries-in-buffer = entries-written = 4 063 712` (zero overrun), empty
+`trace.error_log`, probe `dropped_records=0` and `rejected_closed=0` in
+both runs (`rejected_closed=0` is an observation that no post-close write
+was rejected — it does **not** prove the admission barrier; a non-zero
+value after gate close would be legitimate gate behaviour, not corruption).
+Analyzer clock validation: compatibility/alignment/direct-subtraction all
+`validated`, 4 063 712 lines parsed, 0 bad, unknown-state total 0 ms.
+
+### Evidence rules for the `kernel_wait` section (fixed before reading results)
+
+After a pilot window showed the device completes thousands of requests per
+second (6–9k/s under c8), two rules keep the correlation honest — both are
+encoded in `fs_trace.kernel_wait_section` and asserted by tests:
+
+* **Isolation rule** (`supported_causal`): a completion class only supports
+  a causal entry when at most one event of that class occurred *inside* the
+  blocked segment, within 1 ms of the wake edge. Under busy-device density
+  any edge is within the threshold of *some* completion, so raw proximity
+  would be vacuous — dense edges are reported as `proximity_summary`
+  counts instead.
+* **Waker ambiguity**: `waker_comm` is the task *current on that CPU* when
+  the wake fired; for irq-context wakes it is an unrelated task (observed:
+  `spotify`, `Compositor`, `ai.opencode.des`, `<idle>` appearing as
+  wakers). Reported as an observed fact with this caveat, never as a
+  causal attribution.
+
+Levels reported per wrapper: `temporal_overlap` (counts only),
+`shared_device_temporal` (device busy, not wait attribution),
+`demonstrable_dependency` (the wrapper thread's own
+`folio_wait_writeback` at/before its own switch-out — waiter and folio
+named), `supported_causal` (isolation rule). None of them establishes
+response-criticality, device latency from fsync duration, or a single
+cause for the wait; those are listed under `limitations` in the results
+JSON.
+
+Main findings from `results/fs-trace-diagnostic-v4.json` (full detail,
+including per-wrapper phase summaries, waker distributions, and
+`fs_events_in_window`, in that file and the rendered
+`.repro/rustfs-fstrace-diag-v4/timelines/`):
+
+* **Long intervals reproduced** in both repetitions (406 + 88 wrappers ≥50
+  ms; representative set: 6 wrappers, all `sub_dir_sync`/`sub_scan`).
+* Flagship (run-1 `sub_dir_sync`, job 138, tid 3917276, one 275.842 ms
+  fsync): **two giant back-to-back `blocked:D` segments — 69.709 ms and
+  83.365 ms — fill the first 153 ms** (thread asleep 99.98 % of it), then a
+  mostly-running phase (108.159 ms on-CPU: 11 575 sub-µs tree locks,
+  2 235 bios submitted by the thread itself) ending with
+  `btrfs_transaction_commit root=1 gen=7876` fired **by that thread 6 µs
+  before the wrapper ends**. Zones: blocked:D 166.637 ms, running 108.159
+  ms, runnable 0.632 ms, wakeup_transition 0.409 ms.
+* The 83.365 ms segment's wake is preceded by an **isolated**
+  `btrfs_finish_ordered_extent ino=4517992` at +153.116 ms (159 µs before
+  the edge; itself preceded 24 µs earlier by
+  `folio_wait_writeback bdi=btrfs-1 ino=4517992` from another thread),
+  with `waker_comm=kworker/u48:0` — the strongest supported chain in the
+  capture. The 69.709 ms segment's wake-edge proximity is classified
+  **dense/temporal only** (440 completions during it), and its
+  `waker_comm=spotify` is an irq-attribution artifact.
+* Across the six representative wrappers: 810 wake edges — 527 isolated
+  (≈1 completion inside, classified or counted), 259 dense (temporal only),
+  24 with no completion inside; wakers are dominated by unbound
+  `kworker/u48:*` (writeback/ordered workqueue context) with peer
+  `rustfs-worker`/`rustfs-fsync` and the irq-attribution artifacts.
+* Run-1 vs run-2 variance (c8 p50 250 ms vs 48 ms under identical tracing)
+  exceeds the traced-vs-probe-only p50 delta (`sub_dir_sync` +0.167 ms),
+  so tracing perturbation cannot be separated from system-state variance
+  at this repetition count — recorded as a limitation, not resolved.
+* The two giant waits are **not explained by any captured event class**:
+  not tree locks (hold p50 0.2 µs), not ordered-extent finishes (only one
+  isolated candidate, at the *second* giant edge), not a transaction
+  commit (the only in-window commit is at exit), not space reservation
+  (`reserve_ticket` absent), not same-task folio waits (none with that
+  tid). Unresolved; the honest next candidate is `balance_dirty_pages`
+  (rationale in the event-set section) or one stack sample of the blocked
+  thread — both need a new, separately approved budget.
 
 ## Preserved preliminary evidence
 

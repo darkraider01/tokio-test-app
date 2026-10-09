@@ -48,6 +48,43 @@ BUFFER_KB="${TRACE_BUFFER_KB:-16384}"  # per-CPU; 12 CPUs -> 192 MiB total
 SYSCALL_EVENTS=(sys_enter_fsync sys_exit_fsync sys_enter_fdatasync sys_exit_fdatasync)
 SCHED_EVENTS=(sched_switch sched_waking sched_wakeup)
 
+# Diagnostic event set for the kernel-wait investigation (predeclared;
+# one event per candidate mechanism, each chosen to answer a specific
+# question about the long directory-sync waits — see README "Kernel
+# trace of the directory-sync wrappers", event-selection paragraph):
+FS_BLOCK_EVENTS=(
+  btrfs/btrfs_transaction_commit   # journal/transaction coordination
+                                   # (generation + root, incl. TREE_LOG)
+  btrfs/btrfs_finish_ordered_extent  # ordered-data completion (ino/range)
+  btrfs/btrfs_reserve_ticket       # space-reservation wait (start_ns+flush)
+  btrfs/btrfs_tree_lock            # lock coordination (diff_ns, is_log_tree)
+  writeback/folio_wait_writeback   # NAMED waiter on writeback (ino, index)
+  block/block_bio_queue            # block arrival / queue side
+  block/block_rq_issue             # request dispatched to the device
+  block/block_rq_complete          # device completion / service end
+)
+# Excluded on purpose: ext4/jbd2 events (the volume dirs live on btrfs —
+# topology verified, single NVMe); block_rq_insert (fires for ~0.02% of
+# requests on this host — bio_queue is the reliable arrival marker);
+# btrfs_sync_file/_fs (redundant with the captured sys_enter/exit_fsync
+# bounds); balance_dirty_pages (dirty throttling acts on write producers
+# during generation, not on fsync waiters — add only if evidence points
+# there).  Idle rate probes: tree_lock ~270/s, nvme block issue ~900/s,
+# bio_queue ~2.4k/s — all fit the buffer; overrun is visible in stats.
+#
+# Block events are capture-filtered to the one device that holds all
+# four volume dirs (events' dev field prints the disk as 259,0 ->
+# dev == 259<<20; zram/loop traffic excluded at capture time).  A
+# rejected filter write fails the arm (ERR trap) instead of silently
+# recording everything.  Override, or empty to disable, per host.
+BLOCK_DEV_FILTER="${TRACE_BLOCK_DEV_FILTER:-dev == 271581184}"
+
+# Every event this script enables, for status/collect reporting.
+ALL_EVENTS=()
+for e in "${SCHED_EVENTS[@]}"; do ALL_EVENTS+=("sched/$e"); done
+for e in "${SYSCALL_EVENTS[@]}"; do ALL_EVENTS+=("syscalls/$e"); done
+ALL_EVENTS+=("${FS_BLOCK_EVENTS[@]}")
+
 usage() {
   echo "usage: $0 arm [--force] | collect <outdir> <label> | off | status | destroy [--force]" >&2
   exit 2
@@ -195,9 +232,7 @@ print_status() {
   echo "owned=$([[ -f "$MARKER" ]] && echo yes || echo no) marker=$MARKER"
   echo "tracing_on=$(cat "$T/tracing_on" 2>/dev/null || echo '?') trace_clock=$(cat "$T/trace_clock" 2>/dev/null || echo '?')"
   echo "buffer_size_kb=$(cat "$T/buffer_size_kb" 2>/dev/null || echo '?') overwrite=$(cat "$T/options/overwrite" 2>/dev/null || echo n/a)"
-  for e in sched/sched_switch sched/sched_waking sched/sched_wakeup \
-           syscalls/sys_enter_fsync syscalls/sys_exit_fsync \
-           syscalls/sys_enter_fdatasync syscalls/sys_exit_fdatasync; do
+  for e in "${ALL_EVENTS[@]}"; do
     en=$(cat "$T/events/$e/enable" 2>/dev/null || echo "?")
     f=$(cat "$T/events/$e/filter" 2>/dev/null | head -1 || true)
     echo "  $e enable=$en filter=${f:-<none>}"
@@ -272,6 +307,16 @@ arm() {
   for e in "${SYSCALL_EVENTS[@]}"; do
     echo 1 > "$T/events/syscalls/$e/enable"
   done
+  # Predeclared diagnostic fs/block/writeback events (rationale above).
+  # Block events get their device filter BEFORE being enabled: a rejected
+  # filter write fails this arm (ERR trap -> instance left disabled)
+  # instead of flooding the ring unfiltered.
+  for e in "${FS_BLOCK_EVENTS[@]}"; do
+    if [[ -n "$BLOCK_DEV_FILTER" && "$e" == block/* ]]; then
+      echo "$BLOCK_DEV_FILTER" > "$T/events/$e/filter"
+    fi
+    echo 1 > "$T/events/$e/enable"
+  done
   echo 1 > "$T/tracing_on"
   trap - ERR
   print_status
@@ -307,9 +352,7 @@ collect() {
     echo "kernel=$(uname -r)"
     echo "tracefs_tools=none (raw ftrace via shell)"
   } > "$out/$label.settings"
-  for e in sched/sched_switch sched/sched_waking sched/sched_wakeup \
-           syscalls/sys_enter_fsync syscalls/sys_exit_fsync \
-           syscalls/sys_enter_fdatasync syscalls/sys_exit_fdatasync; do
+  for e in "${ALL_EVENTS[@]}"; do
     printf '%s enable=%s filter=%s\n' "$e" \
       "$(cat "$T/events/$e/enable" 2>/dev/null || echo '?')" \
       "$(cat "$T/events/$e/filter" 2>/dev/null | head -1 || true)" \
