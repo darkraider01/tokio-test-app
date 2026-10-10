@@ -3524,6 +3524,63 @@ class WaitPathTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, "missing_required_capture_hash_for_run-1/fs-probe.bin")
 
+    def test_validate_capture_hashes_rejects_missing_files_on_disk(self):
+        from wait_path_v5 import validate_capture_hashes, generate_summary
+        repo_root = Path(__file__).resolve().parents[2]
+        stacks_file = repo_root / "experiments/rustfs/results/wait-path-v5-joint-stacks.json"
+        if not stacks_file.is_file():
+            self.skipTest("wait-path-v5-joint-stacks.json missing")
+        real_data = json.loads(stacks_file.read_text())
+
+        # 1. Empty directory with claimed hashes
+        with tempfile.TemporaryDirectory() as empty_dir:
+            fake_stacks = {
+                "inputs": {
+                    f"{empty_dir}/trace.raw": "0" * 64,
+                    f"{empty_dir}/run-1/fs-probe.bin": "1" * 64,
+                    f"{empty_dir}/run-1/tiers.json": "2" * 64,
+                }
+            }
+            ok, reason = validate_capture_hashes(fake_stacks, empty_dir, {}, selected_runs=["run-1"])
+            self.assertFalse(ok)
+            self.assertEqual(reason, "missing_capture_file_on_disk_for_trace.raw")
+
+        # 2. Missing run-1/fs-probe.bin on disk
+        with tempfile.TemporaryDirectory() as partial_dir:
+            p = Path(partial_dir)
+            (p / "trace.raw").write_bytes(b"trace data")
+            r1 = p / "run-1"
+            r1.mkdir()
+            (r1 / "tiers.json").write_text("[]")
+            fake_stacks = {
+                "inputs": {
+                    f"{partial_dir}/trace.raw": "0" * 64,
+                    f"{partial_dir}/run-1/fs-probe.bin": "1" * 64,
+                    f"{partial_dir}/run-1/tiers.json": "2" * 64,
+                }
+            }
+            ok, reason = validate_capture_hashes(fake_stacks, partial_dir, {}, selected_runs=["run-1"])
+            self.assertFalse(ok)
+            self.assertEqual(reason, "missing_capture_file_on_disk_for_run-1/fs-probe.bin")
+
+        # 3. Missing run-1/tiers.json on disk
+        with tempfile.TemporaryDirectory() as partial_dir:
+            p = Path(partial_dir)
+            (p / "trace.raw").write_bytes(b"trace data")
+            r1 = p / "run-1"
+            r1.mkdir()
+            (r1 / "fs-probe.bin").write_bytes(b"probe")
+            fake_stacks = {
+                "inputs": {
+                    f"{partial_dir}/trace.raw": "0" * 64,
+                    f"{partial_dir}/run-1/fs-probe.bin": "1" * 64,
+                    f"{partial_dir}/run-1/tiers.json": "2" * 64,
+                }
+            }
+            ok, reason = validate_capture_hashes(fake_stacks, partial_dir, {}, selected_runs=["run-1"])
+            self.assertFalse(ok)
+            self.assertEqual(reason, "missing_capture_file_on_disk_for_run-1/tiers.json")
+
     def test_joint_v5_capture_script_structure(self):
         repo_root = Path(__file__).resolve().parents[2]
         script_path = repo_root / "experiments/rustfs/joint_v5_capture.sh"

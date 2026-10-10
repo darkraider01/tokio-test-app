@@ -306,21 +306,36 @@ def validate_capture_hashes(stacks_data, run_dir, input_hashes, selected_runs=No
 
     if not selected_runs:
         selected_runs = [d.name for d in sorted(run_dir.glob("run-*")) if d.is_dir()]
+    if not selected_runs:
+        selected_runs = ["run-1"]
 
-    required_files = []
-    if (run_dir / "trace.raw").is_file():
-        required_files.append("trace.raw")
+    required_files = ["trace.raw"]
     for r in selected_runs:
-        if (run_dir / r / "fs-probe.bin").is_file():
-            required_files.append(f"{r}/fs-probe.bin")
-        if (run_dir / r / "tiers.json").is_file():
-            required_files.append(f"{r}/tiers.json")
+        required_files.append(f"{r}/fs-probe.bin")
+        required_files.append(f"{r}/tiers.json")
 
+    # 1. Reject missing declarations in artifact
     for req in required_files:
         if req not in declared_by_rel:
             return False, f"missing_required_capture_hash_for_{req}"
 
+    # 2. Reject missing files on disk before hash comparison
+    for req in required_files:
+        disk_p = run_dir / req
+        if not disk_p.is_file():
+            return False, f"missing_capture_file_on_disk_for_{req}"
+
+    # 3. Compare hashes for required files
+    for req in required_files:
+        disk_p = run_dir / req
+        actual_h = sha256_file(disk_p)
+        if declared_by_rel[req] != actual_h:
+            return False, f"capture_hash_mismatch_for_{req}"
+
+    # 4. Compare hashes for any other declared files present on disk
     for norm, decl_hash in declared_by_rel.items():
+        if norm in required_files:
+            continue
         disk_p = run_dir / norm
         if disk_p.is_file():
             actual_h = sha256_file(disk_p)
