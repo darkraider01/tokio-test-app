@@ -22,6 +22,12 @@ DEFAULT_HISTORICAL_OPERATIONS = [
     {"run": "run-2", "key": "c8/37.bin", "criterion": "run2_slow_successful_put"},
 ]
 
+DEFAULT_JOINT_OPERATIONS = [
+    {"run": "run-1", "key": "c8/82.bin", "criterion": "slow_successful_put_with_counted_fsync_and_stack"},
+    {"run": "run-1", "key": "c8/373.bin", "criterion": "slowest_put_with_stack_covered_fsync"},
+    {"run": "run-1", "key": "c8/80.bin", "criterion": "counted_and_tail_fsyncs_with_stacks"},
+]
+
 CRITERIA_DEFINITIONS = {
     "slow_successful_put_with_counted_long_wait": (
         "Successful PUT (HTTP 200, unshed) with the highest client attempt-to-completion "
@@ -39,6 +45,18 @@ CRITERIA_DEFINITIONS = {
     "run2_slow_successful_put": (
         "Successful PUT in run-2 with the highest client attempt-to-completion latency. "
         "Tie-breaking: earliest attempted_ns, then lexicographical key."
+    ),
+    "slow_successful_put_with_counted_fsync_and_stack": (
+        "Successful PUT (HTTP 200, unshed) with a validated quorum sequence where a counted acknowledgement "
+        "(counted_before_quorum or quorum_triggering) contains an fsync wrapper with a matching kernel switch-out stack."
+    ),
+    "slowest_put_with_stack_covered_fsync": (
+        "Successful PUT (HTTP 200, unshed) with the highest client attempt-to-completion latency in the capture "
+        "having counted fsync wrappers with matching kernel switch-out stacks."
+    ),
+    "counted_and_tail_fsyncs_with_stacks": (
+        "Successful PUT exhibiting both counted pre-quorum fsync waits with matching stacks and an observed post-send, "
+        "post-client-completion tail."
     ),
 }
 
@@ -87,10 +105,11 @@ def collect_input_hashes(run_dir):
     if candidate_binary.is_file():
         inputs["binary/rustfs-v5"] = sha256_file(candidate_binary)
 
-    manifest = run_dir / "manifest.json"
-    if manifest.is_file():
-        rel = str(manifest.relative_to(repo_root)) if manifest.is_relative_to(repo_root) else str(manifest)
-        inputs[rel] = sha256_file(manifest)
+    for fname in ["manifest.json", "trace.raw", "measurement.json"]:
+        fpath = run_dir / fname
+        if fpath.is_file():
+            rel = str(fpath.relative_to(repo_root)) if fpath.is_relative_to(repo_root) else str(fpath)
+            inputs[rel] = sha256_file(fpath)
 
     for run_subdir in sorted(run_dir.glob("run-*")):
         for fname in ["tiers.json", "fs-probe.bin"]:
@@ -251,6 +270,9 @@ def generate_summary(run_dir, declared_operations=None, automatic=False):
     elif declared_operations:
         spec = declared_operations
         selection_mode = "declared_keys"
+    elif "run-2" not in run_data:
+        spec = DEFAULT_JOINT_OPERATIONS
+        selection_mode = "declared_joint_keys"
     else:
         spec = DEFAULT_HISTORICAL_OPERATIONS
         selection_mode = "declared_historical_keys"

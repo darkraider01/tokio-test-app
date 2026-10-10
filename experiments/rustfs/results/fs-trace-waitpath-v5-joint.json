@@ -1,0 +1,5146 @@
+{
+  "schema": "fs-trace-diagnostic/v3",
+  "generated_by": "experiments/rustfs/fs_trace.py",
+  "provenance": {
+    "run_dir": ".repro/rustfs-waitpath-v5-joint",
+    "inputs": [
+      {
+        "role": "ftrace raw capture",
+        "path": ".repro/rustfs-waitpath-v5-joint/trace.raw",
+        "present": true,
+        "bytes": 382950169,
+        "sha256": "db4ba273434a1e67e576385f777afc480172132e0c3ce4e789e5a8e4b8ae27ae"
+      },
+      {
+        "role": "trace settings",
+        "path": ".repro/rustfs-waitpath-v5-joint/trace.settings",
+        "present": true,
+        "bytes": 1179,
+        "sha256": "bb219515a6eb8a4713551eee56f0fd9ce7f5e8d5d0842514a1e685f4c7e63268"
+      },
+      {
+        "role": "trace stats",
+        "path": ".repro/rustfs-waitpath-v5-joint/trace.stats",
+        "present": true,
+        "bytes": 2485,
+        "sha256": "a6859a0f10e974c78e667acf7d00db29e5803485dbdcbacd488114fd258f812f"
+      },
+      {
+        "role": "trace error log",
+        "path": ".repro/rustfs-waitpath-v5-joint/trace.error_log",
+        "present": true,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "role": "capture manifest",
+        "path": ".repro/rustfs-waitpath-v5-joint/manifest.json",
+        "present": true,
+        "bytes": 3232,
+        "sha256": "c30ba7cebf48a343ce223cf3547f9f677f521b379f34ede6dd677c794e0e43de"
+      },
+      {
+        "role": "probe dump",
+        "path": ".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin",
+        "present": true,
+        "bytes": 14748248,
+        "sha256": "9574d13873b43cc639f24001979a6d8beddf0713e672fad533594c1d9aecb957"
+      },
+      {
+        "role": "client tiers",
+        "path": ".repro/rustfs-waitpath-v5-joint/run-1/tiers.json",
+        "present": true,
+        "bytes": 333031,
+        "sha256": "37d4444e35c3fb03f3c2bd1d7447732a4570b88d534c6368a4b6e739c3fd7bf1"
+      }
+    ],
+    "parameters": {
+      "long_wrapper_threshold_ms": 25.0,
+      "timelines_per_run": 3,
+      "timeline_selection": "the N longest wrappers per repetition, ordered by duration (0 disables text timelines)",
+      "probe_reference": null,
+      "selection_counts": {
+        "long_wrappers_by_run": {
+          "run-1": 53
+        },
+        "long_wrappers_total": 53,
+        "paired_calls_by_run": {
+          "run-1": 37336
+        },
+        "alignment_samples": 13884
+      },
+      "clock_validation_thresholds": {
+        "compatible_trace_clocks": [
+          "mono"
+        ],
+        "min_alignment_samples": 30,
+        "min_match_rate": 0.95,
+        "note": "alignment tolerance is derived from the observed timestamp precision and reported under quality.alignment"
+      }
+    },
+    "manifest": {
+      "binary_sha256": "9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58",
+      "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+      "repetitions": 1,
+      "generation_seconds_per_tier": 3.0,
+      "payload_bytes": 1048576,
+      "workers": 2,
+      "fs_probe_enabled": true
+    },
+    "binary": {
+      "declared_path": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-probe/target-v5/release/rustfs",
+      "declared_sha256": "9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58",
+      "declared_sha256_source": "capture manifest, written at capture time",
+      "file_sha256": "9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58",
+      "file_bytes": 259956632,
+      "matches_declared": true,
+      "verification": "independently hashed during this analysis by reading the declared path; this verifies the file on disk now, not that trace.raw was produced by this exact binary"
+    },
+    "probe_reference_inputs": null,
+    "trace": {
+      "path": ".repro/rustfs-waitpath-v5-joint/trace.raw",
+      "sha256": "db4ba273434a1e67e576385f777afc480172132e0c3ce4e789e5a8e4b8ae27ae",
+      "bytes": 382950169,
+      "settings": {
+        "collected_at": "2026-10-10T23:21:42+05:30",
+        "instance": "rustfs-v5-joint",
+        "instance_dir": "/sys/kernel/tracing/instances/rustfs-v5-joint",
+        "instance_owned": "yes",
+        "tracefs": "/sys/kernel/tracing",
+        "trace_clock": "local global counter uptime perf [mono] mono_raw boot tai x86-tsc",
+        "tracing_on": "0",
+        "buffer_size_kb": "32771",
+        "overwrite": "0",
+        "current_tracer": "nop",
+        "kernel": "6.19.10-300.fc44.x86_64",
+        "tracefs_tools": "none (raw ftrace via shell)",
+        "events": [
+          "sched/sched_switch enable=1* filter=prev_comm ~ \"rustfs*\" || next_comm ~ \"rustfs*\"",
+          "sched/sched_waking enable=1 filter=comm ~ \"rustfs*\"",
+          "sched/sched_wakeup enable=1 filter=comm ~ \"rustfs*\"",
+          "syscalls/sys_enter_fsync enable=1 filter=none",
+          "syscalls/sys_exit_fsync enable=1 filter=none",
+          "syscalls/sys_enter_fdatasync enable=1 filter=none",
+          "syscalls/sys_exit_fdatasync enable=1 filter=none",
+          "btrfs/btrfs_transaction_commit enable=1 filter=none",
+          "btrfs/btrfs_finish_ordered_extent enable=1 filter=none",
+          "btrfs/btrfs_reserve_ticket enable=1 filter=none",
+          "btrfs/btrfs_tree_lock enable=1 filter=none",
+          "writeback/folio_wait_writeback enable=1 filter=none",
+          "block/block_bio_queue enable=1 filter=dev == 271581184",
+          "block/block_rq_issue enable=1 filter=dev == 271581184",
+          "block/block_rq_complete enable=1 filter=dev == 271581184"
+        ]
+      },
+      "stats": {
+        "cpus": 12,
+        "entries_total": 2006616,
+        "overrun_total": 0,
+        "dropped_total": 0,
+        "bytes_total": 144138556
+      },
+      "error_log_bytes": 0,
+      "error_log_excerpt": []
+    }
+  },
+  "quality": {
+    "clock": {
+      "trace_clock": "local global counter uptime perf [mono] mono_raw boot tai x86-tsc",
+      "trace_clock_selected": "mono",
+      "probe_clock_ids": [
+        1
+      ],
+      "probe_clock": "CLOCK_MONOTONIC",
+      "probe_clock_source": "probe dump header clock_id written by fs_probe.rs (now_ns -> clock_gettime(CLOCK_MONOTONIC), header stores libc::CLOCK_MONOTONIC as u32)",
+      "timestamp_fraction_digits": [
+        6
+      ],
+      "timestamp_resolution_us": 1,
+      "compatibility": {
+        "status": "validated",
+        "reason": "selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain"
+      },
+      "direct_subtraction": {
+        "status": "validated",
+        "reason": "compatibility validated: selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain | alignment validated: 13884/13884 paired sync wrappers contain their expected syscall-enter; earliest enter -0.299 us is within the 1 us timestamp tolerance; worst per-run match rate 1.0000"
+      }
+    },
+    "trace_parse": {
+      "lines": 2006616,
+      "bad_lines": 0,
+      "bad_line_samples": [],
+      "event_counts": {
+        "block_bio_queue": 35334,
+        "block_rq_issue": 43637,
+        "block_rq_complete": 45138,
+        "btrfs_tree_lock": 618937,
+        "btrfs_finish_ordered_extent": 291665,
+        "sched_switch": 392777,
+        "sched_waking": 210056,
+        "kernel_stack": 101163,
+        "sched_wakeup": 210056,
+        "sys_fdatasync_enter": 4710,
+        "sys_fdatasync_exit": 4710,
+        "sys_fsync_enter": 9365,
+        "sys_fsync_exit": 9365,
+        "btrfs_transaction_commit": 24,
+        "folio_wait_writeback": 29679
+      },
+      "foreign_syscall_lines": 38,
+      "rustfs_comms": [
+        "rustfs",
+        "rustfs-fsync",
+        "rustfs-worker"
+      ],
+      "header_entries": [
+        2006616,
+        2006616
+      ],
+      "equal_ts_ties": 32610,
+      "equal_ts_causal_repairs": 8267,
+      "equal_ts_ambiguous": 3881,
+      "equal_ts_unresolved": 8287
+    },
+    "loss": {
+      "entries_written_equal": true,
+      "overrun_total": 0,
+      "dropped_total": 0,
+      "error_log_empty": true,
+      "probe_dropped_records": {
+        "run-1": 0
+      },
+      "probe_rejected_after_close": {
+        "run-1": 0
+      }
+    },
+    "coverage": [
+      {
+        "run": "run-1",
+        "probe_tids": 87,
+        "probe_tids_in_trace": 87,
+        "trace_covers_probe_markers": true
+      }
+    ],
+    "alignment": {
+      "status": "validated",
+      "reason": "13884/13884 paired sync wrappers contain their expected syscall-enter; earliest enter -0.299 us is within the 1 us timestamp tolerance; worst per-run match rate 1.0000",
+      "tolerance_us": 1,
+      "tolerance_basis": "one timestamp quantization step (1 us at 6-digit fractions): an enter may follow its own start marker by arbitrary user-space time, so only the negative direction is bounded; the +-2 us matching window is a search slack, not proof of clock compatibility",
+      "min_samples_required": 30,
+      "min_match_rate_required": 0.95,
+      "paired_sync_calls": 13884,
+      "matched_with_syscall_enter": 13884,
+      "match_rate": 1.0,
+      "enter_offset_us": {
+        "min": -0.299,
+        "p50": 0.508,
+        "max": 800.664
+      },
+      "per_run": {
+        "run-1": {
+          "paired_sync_calls": 13884,
+          "matched_with_syscall_enter": 13884,
+          "match_rate": 1.0,
+          "enter_offset_us": {
+            "min": -0.299,
+            "max": 800.664
+          }
+        }
+      }
+    },
+    "unknown_state_ns_total": 0,
+    "reconciliation_max_abs_diff_ms": 0.0
+  },
+  "cross_clock_analysis": {
+    "status": "reported",
+    "withheld": []
+  },
+  "accounting": {
+    "long_wrapper_threshold_ms": 25.0,
+    "definitions": {
+      "wrapper_observation": "one marker-delimited call-wrapper interval (start marker to end marker); observations may be nested inside another wrapper on the same thread, so the count is a count of observations, not of independent syscalls or waits",
+      "per_tag_totals": "per-tag sums across observations; explicitly overlapping across tags and across nested wrappers (shared thread time is double-counted) \u2014 for composition inspection only",
+      "non_overlapping_union": "union of wrapper regions merged only within one repetition and one executor TID; never merged across TIDs or across repetitions; the summed thread-time is per-thread wall time inside wrapper regions \u2014 neither client latency nor elapsed experiment time",
+      "syscall_region_union": "union of the traced syscall windows belonging to long wrappers, per repetition and TID (a narrower coverage than the wrapper-region union)"
+    },
+    "wrapper_observations": {
+      "run-1": 53,
+      "total": 53,
+      "note": "marker-delimited wrapper observations, not independent syscalls or waits"
+    },
+    "per_tag": {
+      "sub_dir_sync": {
+        "observations": 30,
+        "observations_by_run": {
+          "run-1": 30
+        },
+        "duration_sum_ms": 1052.107182,
+        "zones_states_ms": {
+          "post-exit|running": 0.076135,
+          "pre-entry|running": 0.024264,
+          "syscall|blocked:D": 876.652,
+          "syscall|runnable": 5.085,
+          "syscall|running": 168.724782,
+          "syscall|wakeup_transition": 1.545
+        },
+        "overlapping_across_tags": true
+      },
+      "sub_prep_write": {
+        "observations": 1,
+        "observations_by_run": {
+          "run-1": 1
+        },
+        "duration_sum_ms": 30.881869,
+        "zones_states_ms": {
+          "post-exit|running": 0.001748,
+          "pre-entry|running": 0.020121,
+          "syscall|blocked:D": 26.685,
+          "syscall|runnable": 0.104,
+          "syscall|running": 4.013,
+          "syscall|wakeup_transition": 0.058
+        },
+        "overlapping_across_tags": true
+      },
+      "sub_scan": {
+        "observations": 22,
+        "observations_by_run": {
+          "run-1": 22
+        },
+        "duration_sum_ms": 613.770473,
+        "zones_states_ms": {
+          "between|runnable": 0.208,
+          "between|running": 0.466,
+          "post-exit|runnable": 0.085,
+          "post-exit|running": 0.15136,
+          "pre-entry|blocked:D": 22.503,
+          "pre-entry|runnable": 11.728,
+          "pre-entry|running": 1.642113,
+          "pre-entry|wakeup_transition": 0.216,
+          "syscall|blocked:D": 480.404,
+          "syscall|runnable": 43.381,
+          "syscall|running": 51.16,
+          "syscall|wakeup_transition": 1.826
+        },
+        "overlapping_across_tags": true
+      }
+    },
+    "nesting_and_overlap": {
+      "nested": {
+        "run-1:sub_scan>sub_dir_sync": 4
+      },
+      "partial_overlaps": {}
+    },
+    "cross_clock_analysis": "reported",
+    "non_overlapping": {
+      "by_run": {
+        "run-1": {
+          "wrapper_regions": {
+            "tids": 35,
+            "regions": 49,
+            "thread_time_ms": 1571.035697,
+            "states_ms": {
+              "blocked:D": 1315.97,
+              "runnable": 59.485,
+              "running": 192.090697,
+              "wakeup_transition": 3.49
+            }
+          },
+          "syscall_regions": {
+            "tids": 35,
+            "regions": 71,
+            "thread_time_ms": 1533.929782,
+            "states_ms": {
+              "blocked:D": 1293.467,
+              "runnable": 47.464,
+              "running": 189.724782,
+              "wakeup_transition": 3.274
+            }
+          }
+        }
+      },
+      "wrapper_thread_time_sum_ms": 1571.035697,
+      "syscall_thread_time_sum_ms": 1533.929782,
+      "sum_note": "arithmetic sum of the per-repetition unions; repetitions are reported separately and never merged into one interval"
+    }
+  },
+  "syscall_mapping": {
+    "derived_from_capture": {
+      "sub_dir_sync": "fsync",
+      "sub_fdatasync": "fdatasync",
+      "sub_fsync_files": "fdatasync"
+    },
+    "votes": {
+      "sub_dir_sync": {
+        "observed": {
+          "fsync": 9364
+        },
+        "empty_windows": 0
+      },
+      "sub_fdatasync": {
+        "observed": {
+          "fdatasync": 2260
+        },
+        "empty_windows": 0
+      },
+      "sub_fsync_files": {
+        "observed": {
+          "fdatasync": 2260
+        },
+        "empty_windows": 0
+      }
+    }
+  },
+  "kernel_wait": {
+    "status": "analyzed",
+    "event_totals": {
+      "block_bio_queue": 35334,
+      "block_rq_issue": 43637,
+      "block_rq_complete": 45138,
+      "btrfs_tree_lock": 618937,
+      "btrfs_finish_ordered_extent": 291665,
+      "btrfs_transaction_commit": 24,
+      "folio_wait_writeback": 29679
+    },
+    "capture_filter": {
+      "block_event_filter_lines": [
+        "block/block_bio_queue enable=1 filter=dev == 271581184",
+        "block/block_rq_issue enable=1 filter=dev == 271581184",
+        "block/block_rq_complete enable=1 filter=dev == 271581184"
+      ],
+      "note": "block events were filtered to the volume's device at capture time (the filter lines are collected from trace.settings); btrfs/writeback events carry no comm filter, so background activity on the same filesystem appears in the totals"
+    },
+    "correlation_rules": {
+      "evidence_levels": {
+        "temporal_overlap": "event timestamp inside the wrapper window or a blocked segment; reported as event_counts and proximity_summary only, with no relationship claimed (under dense device activity any wake edge is within the threshold of some completion \u2014 such proximity is counted as dense, not causal)",
+        "shared_device_temporal": "block event on the volume device overlapping the window \u2014 device busy, not wait attribution",
+        "demonstrable_dependency": "the wrapper thread's own writeback-wait event (folio_wait_writeback with this tid) inside its own blocked segment, allowing folio_pre_segment_us for the tracepoint that fires just before the switch-out (waiter and folio named). Establishes that the task entered that wait path; proximity to the switch-out does not prove that this wait accounts for the full following blocked segment duration, which remains inferred",
+        "isolated_temporal_candidate": "isolation rule: at most one event of that completion class inside the segment, within wake_edge_threshold_us before the wake edge. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is CPU execution context at wake time, not proof of release"
+      },
+      "wake_edge_threshold_us": 1000.0,
+      "folio_pre_segment_us": 200.0,
+      "completion_events": [
+        "btrfs_finish_ordered_extent",
+        "block_rq_complete",
+        "btrfs_transaction_commit"
+      ],
+      "waker_comm_semantics": "waker_comm is the comm of the task current on the CPU when the wake fired: for workqueue/process-context wakes that is the logical waker, for irq-context wakes it is an unrelated task that happened to be running (observed: desktop apps and <idle> as waker_comm) \u2014 an observed fact, not a causal attribution",
+      "selection": "the 3 longest wrappers per repetition, ordered by duration",
+      "no_response_criticality": "none of these levels establishes response-criticality: a job's temporal association with a filesystem or block event does not show that the event was required before the response"
+    },
+    "wrappers": [
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 298960,
+        "dur_ms": 66.108512,
+        "w0_ns": 39071867052083,
+        "w1_ns": 39071933160595,
+        "job_task_id": 136,
+        "events_in_window": 19724,
+        "event_counts": {
+          "btrfs_tree_lock": 15266,
+          "block_bio_queue": 1485,
+          "block_rq_issue": 1485,
+          "block_rq_complete": 1487,
+          "btrfs_transaction_commit": 1
+        },
+        "phase_summary": {
+          "blocked_segments": 19,
+          "blocked_total_ms": 17.682,
+          "top_segments": [
+            {
+              "start_offset_ms": 0.120917,
+              "dur_ms": 15.163,
+              "rq_completions_during": 15,
+              "waker_comm": "rustfs-worker"
+            },
+            {
+              "start_offset_ms": 63.912917,
+              "dur_ms": 0.373,
+              "rq_completions_during": 2,
+              "waker_comm": "<idle>"
+            },
+            {
+              "start_offset_ms": 64.310917,
+              "dur_ms": 0.192,
+              "rq_completions_during": 3,
+              "waker_comm": "<idle>"
+            },
+            {
+              "start_offset_ms": 19.237917,
+              "dur_ms": 0.157,
+              "rq_completions_during": 1,
+              "waker_comm": "kworker/u48:1"
+            },
+            {
+              "start_offset_ms": 17.752917,
+              "dur_ms": 0.154,
+              "rq_completions_during": 1,
+              "waker_comm": "kworker/u48:1"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-worker": 1,
+            "kworker/u48:1": 15,
+            "kworker/u48:9": 1,
+            "<idle>": 2
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 19,
+          "dense_completion_edges": 3,
+          "isolated_completion_edges": 16,
+          "no_completion_within_threshold_edges": 0,
+          "nearest_completion_us": {
+            "p50": 43.0,
+            "max": 71.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [
+          {
+            "event": "btrfs_transaction_commit",
+            "offset_ms": 66.105917,
+            "tid": 298960,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "root": "1",
+              "gen": "10526"
+            }
+          }
+        ],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 15.788917,
+            "wake_edge_offset_ms": 15.842917,
+            "distance_us": 54.0,
+            "segment_dur_ms": 0.121,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "83639232",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 16.138917,
+            "wake_edge_offset_ms": 16.147917,
+            "distance_us": 9.0,
+            "segment_dur_ms": 0.115,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "7411520",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 16.582917,
+            "wake_edge_offset_ms": 16.634917,
+            "distance_us": 52.0,
+            "segment_dur_ms": 0.143,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "6244704",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 16.866917,
+            "wake_edge_offset_ms": 16.914917,
+            "distance_us": 48.0,
+            "segment_dur_ms": 0.143,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "269390592",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 17.062917,
+            "wake_edge_offset_ms": 17.113917,
+            "distance_us": 51.0,
+            "segment_dur_ms": 0.112,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "84472448",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 17.392917,
+            "wake_edge_offset_ms": 17.434917,
+            "distance_us": 42.0,
+            "segment_dur_ms": 0.139,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "6026688",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 17.572917,
+            "wake_edge_offset_ms": 17.643917,
+            "distance_us": 71.0,
+            "segment_dur_ms": 0.137,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "6807008",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 17.835917,
+            "wake_edge_offset_ms": 17.906917,
+            "distance_us": 71.0,
+            "segment_dur_ms": 0.154,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "7560256",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 18.272917,
+            "wake_edge_offset_ms": 18.320917,
+            "distance_us": 48.0,
+            "segment_dur_ms": 0.122,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "83933536",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 18.469917,
+            "wake_edge_offset_ms": 18.487917,
+            "distance_us": 18.0,
+            "segment_dur_ms": 0.109,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "83897824",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 19.097917,
+            "wake_edge_offset_ms": 19.156917,
+            "distance_us": 59.0,
+            "segment_dur_ms": 0.122,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "267838496",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 19.336917,
+            "wake_edge_offset_ms": 19.394917,
+            "distance_us": 58.0,
+            "segment_dur_ms": 0.157,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "6280256",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 19.642917,
+            "wake_edge_offset_ms": 19.685917,
+            "distance_us": 43.0,
+            "segment_dur_ms": 0.114,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "269680544",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 20.923917,
+            "wake_edge_offset_ms": 20.935917,
+            "distance_us": 12.0,
+            "segment_dur_ms": 0.069,
+            "waker_comm": "kworker/u48:9",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "268067136",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 32.318917,
+            "wake_edge_offset_ms": 32.344917,
+            "distance_us": 26.0,
+            "segment_dur_ms": 0.097,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "6147840",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 33.028917,
+            "wake_edge_offset_ms": 33.060917,
+            "distance_us": 32.0,
+            "segment_dur_ms": 0.1,
+            "waker_comm": "kworker/u48:1",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "83638752",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          }
+        ],
+        "no_diagnostic_events_in_window": false
+      },
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 298956,
+        "dur_ms": 64.980539,
+        "w0_ns": 39071867055540,
+        "w1_ns": 39071932036078,
+        "job_task_id": 138,
+        "events_in_window": 19694,
+        "event_counts": {
+          "btrfs_tree_lock": 15237,
+          "block_bio_queue": 1485,
+          "block_rq_issue": 1485,
+          "block_rq_complete": 1487
+        },
+        "phase_summary": {
+          "blocked_segments": 3,
+          "blocked_total_ms": 64.861,
+          "top_segments": [
+            {
+              "start_offset_ms": 0.00746,
+              "dur_ms": 34.054,
+              "rq_completions_during": 31,
+              "waker_comm": "rustfs-worker"
+            },
+            {
+              "start_offset_ms": 34.16946,
+              "dur_ms": 30.795,
+              "rq_completions_during": 1456,
+              "waker_comm": "rustfs-worker"
+            },
+            {
+              "start_offset_ms": 34.13246,
+              "dur_ms": 0.012,
+              "rq_completions_during": 0,
+              "waker_comm": "rustfs-worker"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-worker": 3
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 3,
+          "dense_completion_edges": 2,
+          "isolated_completion_edges": 0,
+          "no_completion_within_threshold_edges": 1,
+          "nearest_completion_us": {
+            "p50": 8.0,
+            "max": 8.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [],
+        "no_diagnostic_events_in_window": false
+      },
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 298963,
+        "dur_ms": 64.967065,
+        "w0_ns": 39071867057403,
+        "w1_ns": 39071932024468,
+        "job_task_id": 137,
+        "events_in_window": 19694,
+        "event_counts": {
+          "btrfs_tree_lock": 15237,
+          "block_bio_queue": 1485,
+          "block_rq_issue": 1485,
+          "block_rq_complete": 1487
+        },
+        "phase_summary": {
+          "blocked_segments": 5,
+          "blocked_total_ms": 63.485,
+          "top_segments": [
+            {
+              "start_offset_ms": 0.007597,
+              "dur_ms": 34.05,
+              "rq_completions_during": 31,
+              "waker_comm": "rustfs-worker"
+            },
+            {
+              "start_offset_ms": 35.512597,
+              "dur_ms": 28.99,
+              "rq_completions_during": 1385,
+              "waker_comm": "rustfs-worker"
+            },
+            {
+              "start_offset_ms": 64.523597,
+              "dur_ms": 0.221,
+              "rq_completions_during": 2,
+              "waker_comm": "<idle>"
+            },
+            {
+              "start_offset_ms": 64.763597,
+              "dur_ms": 0.192,
+              "rq_completions_during": 1,
+              "waker_comm": "<idle>"
+            },
+            {
+              "start_offset_ms": 34.216597,
+              "dur_ms": 0.032,
+              "rq_completions_during": 4,
+              "waker_comm": "kworker/u48:9"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-worker": 2,
+            "kworker/u48:9": 1,
+            "<idle>": 2
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 5,
+          "dense_completion_edges": 4,
+          "isolated_completion_edges": 1,
+          "no_completion_within_threshold_edges": 0,
+          "nearest_completion_us": {
+            "p50": 4.0,
+            "max": 6.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 64.954597,
+            "wake_edge_offset_ms": 64.955597,
+            "distance_us": 1.0,
+            "segment_dur_ms": 0.192,
+            "waker_comm": "<idle>",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "WFSM",
+              "sector": "5425280",
+              "count": "8"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          }
+        ],
+        "no_diagnostic_events_in_window": false
+      }
+    ],
+    "outside_long_wrappers": 998336
+  },
+  "runs": [
+    {
+      "run": "run-1",
+      "probe_records": 368704,
+      "probe_dropped": 0,
+      "probe_rejected_closed": 0,
+      "probe_counters": {
+        "duplicate_boundaries": 0,
+        "non_blocking_join_ready": 18539,
+        "orphan_sub_markers": 0
+      },
+      "paired_calls": 37336,
+      "long_wrappers": [
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298960,
+          "dur_ms": 66.108512,
+          "w0_ns": 39071867052083,
+          "w1_ns": 39071933160595,
+          "enter_ns": 39071867052000,
+          "exit_ns": 39071933159000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": -8.3e-05,
+              "dur_ms": 66.107,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001595,
+            "syscall|blocked:D": 17.682,
+            "syscall|runnable": 0.323,
+            "syscall|running": 48.020917,
+            "syscall|wakeup_transition": 0.081
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 136,
+            "op_hash": null,
+            "step_tag": "untagged",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298960,
+            "submit_tid": 298939
+          },
+          "operation_link": {
+            "association": "missing",
+            "op_hash": null,
+            "commit_wait": null,
+            "overlaps_commit_wait": null,
+            "send": null,
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298956,
+          "dur_ms": 64.980539,
+          "w0_ns": 39071867055540,
+          "w1_ns": 39071932036078,
+          "enter_ns": 39071867056000,
+          "exit_ns": 39071932034000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.00046,
+              "dur_ms": 64.978,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002078,
+            "pre-entry|running": 0.00046,
+            "syscall|blocked:D": 64.861,
+            "syscall|runnable": 0.049,
+            "syscall|running": 0.052,
+            "syscall|wakeup_transition": 0.016
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 138,
+            "op_hash": null,
+            "step_tag": "untagged",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298956,
+            "submit_tid": 298939
+          },
+          "operation_link": {
+            "association": "missing",
+            "op_hash": null,
+            "commit_wait": null,
+            "overlaps_commit_wait": null,
+            "send": null,
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298963,
+          "dur_ms": 64.967065,
+          "w0_ns": 39071867057403,
+          "w1_ns": 39071932024468,
+          "enter_ns": 39071867058000,
+          "exit_ns": 39071932022000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000597,
+              "dur_ms": 64.964,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002468,
+            "pre-entry|running": 0.000597,
+            "syscall|blocked:D": 63.485,
+            "syscall|runnable": 0.087,
+            "syscall|running": 1.365,
+            "syscall|wakeup_transition": 0.027
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 137,
+            "op_hash": null,
+            "step_tag": "untagged",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298963,
+            "submit_tid": 298939
+          },
+          "operation_link": {
+            "association": "missing",
+            "op_hash": null,
+            "commit_wait": null,
+            "overlaps_commit_wait": null,
+            "send": null,
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298965,
+          "dur_ms": 64.527637,
+          "w0_ns": 39071867051783,
+          "w1_ns": 39071931579420,
+          "enter_ns": 39071867052000,
+          "exit_ns": 39071931576000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000217,
+              "dur_ms": 64.524,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.00342,
+            "pre-entry|running": 0.000217,
+            "syscall|blocked:D": 50.989,
+            "syscall|runnable": 0.044,
+            "syscall|running": 13.434,
+            "syscall|wakeup_transition": 0.057
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 135,
+            "op_hash": null,
+            "step_tag": "untagged",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298965,
+            "submit_tid": 298939
+          },
+          "operation_link": {
+            "association": "missing",
+            "op_hash": null,
+            "commit_wait": null,
+            "overlaps_commit_wait": null,
+            "send": null,
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299045,
+          "dur_ms": 47.816113,
+          "w0_ns": 39074576469222,
+          "w1_ns": 39074624285335,
+          "enter_ns": 39074577128000,
+          "exit_ns": 39074624277000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.658778,
+              "dur_ms": 2.685,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 3.363778,
+              "dur_ms": 44.444,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.02,
+            "post-exit|running": 0.008335,
+            "pre-entry|blocked:D": 0.523,
+            "pre-entry|runnable": 0.051,
+            "pre-entry|running": 0.073778,
+            "pre-entry|wakeup_transition": 0.011,
+            "syscall|blocked:D": 11.809,
+            "syscall|runnable": 0.862,
+            "syscall|running": 34.379,
+            "syscall|wakeup_transition": 0.079
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60339,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299045,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -0.762675,
+              "end_offset_ms": 53.592362
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 53.589176,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [
+              {
+                "run": "run-1",
+                "tag": "sub_dir_sync",
+                "tid": 299045,
+                "w0_ns": 39074579832471,
+                "w1_ns": 39074624279373
+              }
+            ],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299045,
+          "dur_ms": 44.446902,
+          "w0_ns": 39074579832471,
+          "w1_ns": 39074624279373,
+          "enter_ns": 39074579833000,
+          "exit_ns": 39074624277000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000529,
+              "dur_ms": 44.444,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002373,
+            "pre-entry|running": 0.000529,
+            "syscall|blocked:D": 9.934,
+            "syscall|runnable": 0.83,
+            "syscall|running": 33.634,
+            "syscall|wakeup_transition": 0.046
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60339,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299045,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -4.125924,
+              "end_offset_ms": 50.229113
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 50.225927,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [
+              {
+                "run": "run-1",
+                "tag": "sub_scan",
+                "tid": 299045,
+                "w0_ns": 39074576469222,
+                "w1_ns": 39074624285335
+              }
+            ],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299015,
+          "dur_ms": 44.244302,
+          "w0_ns": 39074580041534,
+          "w1_ns": 39074624285836,
+          "enter_ns": 39074580042000,
+          "exit_ns": 39074624283000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000466,
+              "dur_ms": 44.241,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002836,
+            "pre-entry|running": 0.000466,
+            "syscall|blocked:D": 43.872,
+            "syscall|runnable": 0.034,
+            "syscall|running": 0.294,
+            "syscall|wakeup_transition": 0.041
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60435,
+            "op_hash": 103545940118859566,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299015,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 103545940118859566,
+            "commit_wait": {
+              "begin_ns": 39074561146761,
+              "end_ns": 39074624522170,
+              "begin_offset_ms": -18.894773,
+              "end_offset_ms": 44.480636
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074624518574,
+              "offset_ms": 44.47704,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299046,
+          "dur_ms": 44.189428,
+          "w0_ns": 39074580096037,
+          "w1_ns": 39074624285465,
+          "enter_ns": 39074580096000,
+          "exit_ns": 39074624283000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": -3.7e-05,
+              "dur_ms": 44.187,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002465,
+            "syscall|blocked:D": 36.848,
+            "syscall|runnable": 0.094,
+            "syscall|running": 7.145963,
+            "syscall|wakeup_transition": 0.099
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60440,
+            "op_hash": 103545940118859566,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299046,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 103545940118859566,
+            "commit_wait": {
+              "begin_ns": 39074561146761,
+              "end_ns": 39074624522170,
+              "begin_offset_ms": -18.949276,
+              "end_offset_ms": 44.426133
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074624518574,
+              "offset_ms": 44.422537,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299035,
+          "dur_ms": 44.150966,
+          "w0_ns": 39074580134689,
+          "w1_ns": 39074624285655,
+          "enter_ns": 39074580135000,
+          "exit_ns": 39074624283000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000311,
+              "dur_ms": 44.148,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002655,
+            "pre-entry|running": 0.000311,
+            "syscall|blocked:D": 43.758,
+            "syscall|runnable": 0.039,
+            "syscall|running": 0.317,
+            "syscall|wakeup_transition": 0.034
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60442,
+            "op_hash": 12769630655950665959,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299035,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12769630655950665959,
+            "commit_wait": {
+              "begin_ns": 39074562610926,
+              "end_ns": 39074610419134,
+              "begin_offset_ms": -17.523763,
+              "end_offset_ms": 30.284445
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074610413613,
+              "offset_ms": 30.278924,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_prep_write",
+          "tid": 299070,
+          "dur_ms": 30.881869,
+          "w0_ns": 39074593436879,
+          "w1_ns": 39074624318748,
+          "enter_ns": 39074593457000,
+          "exit_ns": 39074624317000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.020121,
+              "dur_ms": 30.86,
+              "name": "fdatasync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001748,
+            "pre-entry|running": 0.020121,
+            "syscall|blocked:D": 26.685,
+            "syscall|runnable": 0.104,
+            "syscall|running": 4.013,
+            "syscall|wakeup_transition": 0.058
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60539,
+            "op_hash": 2727090467043549440,
+            "step_tag": "staged_meta_write",
+            "tag": "sub_prep_write",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299070,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2727090467043549440,
+            "commit_wait": {
+              "begin_ns": 39074592885261,
+              "end_ns": 39074634312913,
+              "begin_offset_ms": -0.551618,
+              "end_offset_ms": 40.876034
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074634304778,
+              "offset_ms": 40.867899,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299045,
+          "dur_ms": 30.777933,
+          "w0_ns": 39072643958877,
+          "w1_ns": 39072674736810,
+          "enter_ns": 39072643961000,
+          "exit_ns": 39072674735000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.002123,
+              "dur_ms": 30.774,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.00181,
+            "pre-entry|running": 0.002123,
+            "syscall|blocked:D": 29.589,
+            "syscall|runnable": 0.843,
+            "syscall|running": 0.319,
+            "syscall|wakeup_transition": 0.023
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15307,
+            "op_hash": 11493508540231881915,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299045,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 11493508540231881915,
+            "commit_wait": {
+              "begin_ns": 39072624117633,
+              "end_ns": 39072676062735,
+              "begin_offset_ms": -19.841244,
+              "end_offset_ms": 32.103858
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072676059799,
+              "offset_ms": 32.100922,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298978,
+          "dur_ms": 30.617751,
+          "w0_ns": 39074576333457,
+          "w1_ns": 39074606951208,
+          "enter_ns": 39074576467000,
+          "exit_ns": 39074606941000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.133543,
+              "dur_ms": 3.347,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 3.562543,
+              "dur_ms": 27.045,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|runnable": 0.061,
+            "between|running": 0.021,
+            "post-exit|running": 0.010208,
+            "pre-entry|blocked:D": 0.009,
+            "pre-entry|runnable": 0.049,
+            "pre-entry|running": 0.070543,
+            "pre-entry|wakeup_transition": 0.005,
+            "syscall|blocked:D": 28.945,
+            "syscall|runnable": 0.395,
+            "syscall|running": 0.974,
+            "syscall|wakeup_transition": 0.078
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60332,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298978,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -0.62691,
+              "end_offset_ms": 53.728127
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 53.724941,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [
+              {
+                "run": "run-1",
+                "tag": "sub_dir_sync",
+                "tid": 298978,
+                "w0_ns": 39074579895389,
+                "w1_ns": 39074606945137
+              }
+            ],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298981,
+          "dur_ms": 30.575141,
+          "w0_ns": 39074576377390,
+          "w1_ns": 39074606952531,
+          "enter_ns": 39074576931000,
+          "exit_ns": 39074606944000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.55361,
+              "dur_ms": 2.883,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 3.45761,
+              "dur_ms": 27.109,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.021,
+            "post-exit|running": 0.008531,
+            "pre-entry|blocked:D": 0.036,
+            "pre-entry|runnable": 0.444,
+            "pre-entry|running": 0.06861,
+            "pre-entry|wakeup_transition": 0.005,
+            "syscall|blocked:D": 28.078,
+            "syscall|runnable": 1.011,
+            "syscall|running": 0.84,
+            "syscall|wakeup_transition": 0.063
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60336,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298981,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -0.670843,
+              "end_offset_ms": 53.684194
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 53.681008,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [
+              {
+                "run": "run-1",
+                "tag": "sub_dir_sync",
+                "tid": 298981,
+                "w0_ns": 39074579834264,
+                "w1_ns": 39074606946620
+              }
+            ],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299017,
+          "dur_ms": 30.475093,
+          "w0_ns": 39074576476135,
+          "w1_ns": 39074606951228,
+          "enter_ns": 39074577141000,
+          "exit_ns": 39074606941000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.664865,
+              "dur_ms": 2.672,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 3.354865,
+              "dur_ms": 27.11,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.018,
+            "post-exit|running": 0.010228,
+            "pre-entry|blocked:D": 0.521,
+            "pre-entry|runnable": 0.067,
+            "pre-entry|running": 0.063865,
+            "pre-entry|wakeup_transition": 0.013,
+            "syscall|blocked:D": 28.673,
+            "syscall|runnable": 0.105,
+            "syscall|running": 0.923,
+            "syscall|wakeup_transition": 0.081
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60341,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299017,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -0.769588,
+              "end_offset_ms": 53.585449
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 53.582263,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [
+              {
+                "run": "run-1",
+                "tag": "sub_dir_sync",
+                "tid": 299017,
+                "w0_ns": 39074579830307,
+                "w1_ns": 39074606945127
+              }
+            ],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299046,
+          "dur_ms": 29.752614,
+          "w0_ns": 39072645486030,
+          "w1_ns": 39072675238644,
+          "enter_ns": 39072645487000,
+          "exit_ns": 39072675237000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.00097,
+              "dur_ms": 29.75,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001644,
+            "pre-entry|running": 0.00097,
+            "syscall|blocked:D": 19.677,
+            "syscall|runnable": 0.152,
+            "syscall|running": 9.773,
+            "syscall|wakeup_transition": 0.148
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15317,
+            "op_hash": 12014830839877865781,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299046,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12014830839877865781,
+            "commit_wait": {
+              "begin_ns": 39072623982328,
+              "end_ns": 39072675623157,
+              "begin_offset_ms": -21.503702,
+              "end_offset_ms": 30.137127
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072675619561,
+              "offset_ms": 30.133531,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298984,
+          "dur_ms": 29.731754,
+          "w0_ns": 39072645508653,
+          "w1_ns": 39072675240407,
+          "enter_ns": 39072645509000,
+          "exit_ns": 39072675238000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000347,
+              "dur_ms": 29.729,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002407,
+            "pre-entry|running": 0.000347,
+            "syscall|blocked:D": 29.295,
+            "syscall|runnable": 0.071,
+            "syscall|running": 0.278,
+            "syscall|wakeup_transition": 0.085
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15321,
+            "op_hash": 12014830839877865781,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298984,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12014830839877865781,
+            "commit_wait": {
+              "begin_ns": 39072623982328,
+              "end_ns": 39072675623157,
+              "begin_offset_ms": -21.526325,
+              "end_offset_ms": 30.114504
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072675619561,
+              "offset_ms": 30.110908,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299032,
+          "dur_ms": 29.440206,
+          "w0_ns": 39072645048657,
+          "w1_ns": 39072674488863,
+          "enter_ns": 39072645049000,
+          "exit_ns": 39072674486000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000343,
+              "dur_ms": 29.437,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002863,
+            "pre-entry|running": 0.000343,
+            "syscall|blocked:D": 28.91,
+            "syscall|runnable": 0.155,
+            "syscall|running": 0.309,
+            "syscall|wakeup_transition": 0.063
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15313,
+            "op_hash": 11493508540231881915,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299032,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 11493508540231881915,
+            "commit_wait": {
+              "begin_ns": 39072624117633,
+              "end_ns": 39072676062735,
+              "begin_offset_ms": -20.931024,
+              "end_offset_ms": 31.014078
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072676059799,
+              "offset_ms": 31.011142,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298969,
+          "dur_ms": 29.435517,
+          "w0_ns": 39072645048527,
+          "w1_ns": 39072674484044,
+          "enter_ns": 39072645049000,
+          "exit_ns": 39072674479000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000473,
+              "dur_ms": 29.43,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.005044,
+            "pre-entry|running": 0.000473,
+            "syscall|blocked:D": 28.82,
+            "syscall|runnable": 0.091,
+            "syscall|running": 0.467,
+            "syscall|wakeup_transition": 0.052
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15318,
+            "op_hash": 1743720095374774351,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298969,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 1743720095374774351,
+            "commit_wait": {
+              "begin_ns": 39072623970145,
+              "end_ns": 39072675509604,
+              "begin_offset_ms": -21.078382,
+              "end_offset_ms": 30.461077
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072675502761,
+              "offset_ms": 30.454234,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299030,
+          "dur_ms": 29.413195,
+          "w0_ns": 39072645097098,
+          "w1_ns": 39072674510293,
+          "enter_ns": 39072645097000,
+          "exit_ns": 39072674508000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": -9.8e-05,
+              "dur_ms": 29.411,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002293,
+            "syscall|blocked:D": 28.812,
+            "syscall|runnable": 0.112,
+            "syscall|running": 0.435902,
+            "syscall|wakeup_transition": 0.051
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15320,
+            "op_hash": 3579060953567012741,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299030,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 3579060953567012741,
+            "commit_wait": {
+              "begin_ns": 39072624410935,
+              "end_ns": 39072678817949,
+              "begin_offset_ms": -20.686163,
+              "end_offset_ms": 33.720851
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072678814703,
+              "offset_ms": 33.717605,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299024,
+          "dur_ms": 29.411121,
+          "w0_ns": 39072645072933,
+          "w1_ns": 39072674484054,
+          "enter_ns": 39072645073000,
+          "exit_ns": 39072674479000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 6.7e-05,
+              "dur_ms": 29.406,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.005054,
+            "pre-entry|running": 6.7e-05,
+            "syscall|blocked:D": 28.94,
+            "syscall|runnable": 0.104,
+            "syscall|running": 0.328,
+            "syscall|wakeup_transition": 0.034
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15319,
+            "op_hash": 3579060953567012741,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299024,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 3579060953567012741,
+            "commit_wait": {
+              "begin_ns": 39072624410935,
+              "end_ns": 39072678817949,
+              "begin_offset_ms": -20.661998,
+              "end_offset_ms": 33.745016
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072678814703,
+              "offset_ms": 33.74177,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299025,
+          "dur_ms": 29.310412,
+          "w0_ns": 39072645929274,
+          "w1_ns": 39072675239686,
+          "enter_ns": 39072645930000,
+          "exit_ns": 39072675238000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000726,
+              "dur_ms": 29.308,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001686,
+            "pre-entry|running": 0.000726,
+            "syscall|blocked:D": 28.454,
+            "syscall|runnable": 0.057,
+            "syscall|running": 0.735,
+            "syscall|wakeup_transition": 0.062
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15330,
+            "op_hash": 11493508540231881915,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299025,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 11493508540231881915,
+            "commit_wait": {
+              "begin_ns": 39072624117633,
+              "end_ns": 39072676062735,
+              "begin_offset_ms": -21.811641,
+              "end_offset_ms": 30.133461
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072676059799,
+              "offset_ms": 30.130525,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299021,
+          "dur_ms": 28.673533,
+          "w0_ns": 39072645900240,
+          "w1_ns": 39072674573773,
+          "enter_ns": 39072645901000,
+          "exit_ns": 39072674572000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.00076,
+              "dur_ms": 28.671,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001773,
+            "pre-entry|running": 0.00076,
+            "syscall|blocked:D": 28.318,
+            "syscall|runnable": 0.124,
+            "syscall|running": 0.164,
+            "syscall|wakeup_transition": 0.065
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15325,
+            "op_hash": 11493508540231881915,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299021,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 11493508540231881915,
+            "commit_wait": {
+              "begin_ns": 39072624117633,
+              "end_ns": 39072676062735,
+              "begin_offset_ms": -21.782607,
+              "end_offset_ms": 30.162495
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072676059799,
+              "offset_ms": 30.159559,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298985,
+          "dur_ms": 28.668614,
+          "w0_ns": 39072645906341,
+          "w1_ns": 39072674574955,
+          "enter_ns": 39072645916000,
+          "exit_ns": 39072674573000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.009659,
+              "dur_ms": 28.657,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001955,
+            "pre-entry|running": 0.009659,
+            "syscall|blocked:D": 28.025,
+            "syscall|runnable": 0.188,
+            "syscall|running": 0.407,
+            "syscall|wakeup_transition": 0.037
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15327,
+            "op_hash": 3579060953567012741,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298985,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 3579060953567012741,
+            "commit_wait": {
+              "begin_ns": 39072624410935,
+              "end_ns": 39072678817949,
+              "begin_offset_ms": -21.495406,
+              "end_offset_ms": 32.911608
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072678814703,
+              "offset_ms": 32.908362,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299019,
+          "dur_ms": 28.255427,
+          "w0_ns": 39072646978879,
+          "w1_ns": 39072675234306,
+          "enter_ns": 39072646979000,
+          "exit_ns": 39072675232000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000121,
+              "dur_ms": 28.253,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002306,
+            "pre-entry|running": 0.000121,
+            "syscall|blocked:D": 12.707,
+            "syscall|runnable": 0.324,
+            "syscall|running": 15.191,
+            "syscall|wakeup_transition": 0.031
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15328,
+            "op_hash": 1743720095374774351,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299019,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 1743720095374774351,
+            "commit_wait": {
+              "begin_ns": 39072623970145,
+              "end_ns": 39072675509604,
+              "begin_offset_ms": -23.008734,
+              "end_offset_ms": 28.530725
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072675502761,
+              "offset_ms": 28.523882,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298977,
+          "dur_ms": 27.928051,
+          "w0_ns": 39072646996282,
+          "w1_ns": 39072674924333,
+          "enter_ns": 39072646997000,
+          "exit_ns": 39072674923000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000718,
+              "dur_ms": 27.926,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001333,
+            "pre-entry|running": 0.000718,
+            "syscall|blocked:D": 27.594,
+            "syscall|runnable": 0.027,
+            "syscall|running": 0.268,
+            "syscall|wakeup_transition": 0.037
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 15329,
+            "op_hash": 12014830839877865781,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298977,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12014830839877865781,
+            "commit_wait": {
+              "begin_ns": 39072623982328,
+              "end_ns": 39072675623157,
+              "begin_offset_ms": -23.013954,
+              "end_offset_ms": 28.626875
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39072675619561,
+              "offset_ms": 28.623279,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298985,
+          "dur_ms": 27.804147,
+          "w0_ns": 39074132768781,
+          "w1_ns": 39074160572928,
+          "enter_ns": 39074132823000,
+          "exit_ns": 39074160568000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.054219,
+              "dur_ms": 21.253,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 21.326219,
+              "dur_ms": 6.473,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.019,
+            "post-exit|running": 0.004928,
+            "pre-entry|running": 0.054219,
+            "syscall|blocked:D": 26.235,
+            "syscall|runnable": 0.811,
+            "syscall|running": 0.646,
+            "syscall|wakeup_transition": 0.034
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51293,
+            "op_hash": 17325568976311468842,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298985,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17325568976311468842,
+            "commit_wait": {
+              "begin_ns": 39074128670960,
+              "end_ns": 39074176221623,
+              "begin_offset_ms": -4.097821,
+              "end_offset_ms": 43.452842
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074176218678,
+              "offset_ms": 43.449897,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299017,
+          "dur_ms": 27.11482,
+          "w0_ns": 39074579830307,
+          "w1_ns": 39074606945127,
+          "enter_ns": 39074579831000,
+          "exit_ns": 39074606941000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000693,
+              "dur_ms": 27.11,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.004127,
+            "pre-entry|running": 0.000693,
+            "syscall|blocked:D": 26.862,
+            "syscall|runnable": 0.047,
+            "syscall|running": 0.159,
+            "syscall|wakeup_transition": 0.042
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60341,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299017,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -4.12376,
+              "end_offset_ms": 50.231277
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 50.228091,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [
+              {
+                "run": "run-1",
+                "tag": "sub_scan",
+                "tid": 299017,
+                "w0_ns": 39074576476135,
+                "w1_ns": 39074606951228
+              }
+            ],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298981,
+          "dur_ms": 27.112356,
+          "w0_ns": 39074579834264,
+          "w1_ns": 39074606946620,
+          "enter_ns": 39074579835000,
+          "exit_ns": 39074606944000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000736,
+              "dur_ms": 27.109,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.00262,
+            "pre-entry|running": 0.000736,
+            "syscall|blocked:D": 26.779,
+            "syscall|runnable": 0.126,
+            "syscall|running": 0.164,
+            "syscall|wakeup_transition": 0.04
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60336,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298981,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -4.127717,
+              "end_offset_ms": 50.22732
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 50.224134,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [
+              {
+                "run": "run-1",
+                "tag": "sub_scan",
+                "tid": 298981,
+                "w0_ns": 39074576377390,
+                "w1_ns": 39074606952531
+              }
+            ],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 298978,
+          "dur_ms": 27.049748,
+          "w0_ns": 39074579895389,
+          "w1_ns": 39074606945137,
+          "enter_ns": 39074579896000,
+          "exit_ns": 39074606941000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000611,
+              "dur_ms": 27.045,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.004137,
+            "pre-entry|running": 0.000611,
+            "syscall|blocked:D": 26.699,
+            "syscall|runnable": 0.103,
+            "syscall|running": 0.216,
+            "syscall|wakeup_transition": 0.027
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60332,
+            "op_hash": 2819666169766028951,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298978,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2819666169766028951,
+            "commit_wait": {
+              "begin_ns": 39074575706547,
+              "end_ns": 39074630061584,
+              "begin_offset_ms": -4.188842,
+              "end_offset_ms": 50.166195
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074630058398,
+              "offset_ms": 50.163009,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [
+              {
+                "run": "run-1",
+                "tag": "sub_scan",
+                "tid": 298978,
+                "w0_ns": 39074576333457,
+                "w1_ns": 39074606951208
+              }
+            ],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299016,
+          "dur_ms": 26.731599,
+          "w0_ns": 39074133855456,
+          "w1_ns": 39074160587055,
+          "enter_ns": 39074138419000,
+          "exit_ns": 39074160583000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 4.563544,
+              "dur_ms": 15.745,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 20.331544,
+              "dur_ms": 6.396,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.023,
+            "post-exit|running": 0.004055,
+            "pre-entry|blocked:D": 3.551,
+            "pre-entry|runnable": 0.904,
+            "pre-entry|running": 0.094544,
+            "pre-entry|wakeup_transition": 0.014,
+            "syscall|blocked:D": 18.804,
+            "syscall|runnable": 2.499,
+            "syscall|running": 0.745,
+            "syscall|wakeup_transition": 0.093
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51304,
+            "op_hash": 14191887572482624234,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299016,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 14191887572482624234,
+            "commit_wait": {
+              "begin_ns": 39074128893329,
+              "end_ns": 39074178668097,
+              "begin_offset_ms": -4.962127,
+              "end_offset_ms": 44.812641
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074178664780,
+              "offset_ms": 44.809324,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299034,
+          "dur_ms": 26.688037,
+          "w0_ns": 39074127293689,
+          "w1_ns": 39074153981726,
+          "enter_ns": 39074127586000,
+          "exit_ns": 39074153975000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.292311,
+              "dur_ms": 7.309,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 7.769311,
+              "dur_ms": 18.912,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|runnable": 0.147,
+            "between|running": 0.021,
+            "post-exit|running": 0.006726,
+            "pre-entry|blocked:D": 0.013,
+            "pre-entry|runnable": 0.212,
+            "pre-entry|running": 0.067311,
+            "syscall|blocked:D": 21.725,
+            "syscall|runnable": 3.388,
+            "syscall|running": 1.047,
+            "syscall|wakeup_transition": 0.061
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51215,
+            "op_hash": 7075274892500004843,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299034,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 7075274892500004843,
+            "commit_wait": {
+              "begin_ns": 39074125995316,
+              "end_ns": 39074173282212,
+              "begin_offset_ms": -1.298373,
+              "end_offset_ms": 45.988523
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074173275490,
+              "offset_ms": 45.981801,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299025,
+          "dur_ms": 26.599371,
+          "w0_ns": 39074133910549,
+          "w1_ns": 39074160509920,
+          "enter_ns": 39074137440000,
+          "exit_ns": 39074160506000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 3.529451,
+              "dur_ms": 16.896,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 20.448451,
+              "dur_ms": 6.147,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.023,
+            "post-exit|running": 0.00392,
+            "pre-entry|blocked:D": 2.816,
+            "pre-entry|runnable": 0.596,
+            "pre-entry|running": 0.093451,
+            "pre-entry|wakeup_transition": 0.024,
+            "syscall|blocked:D": 19.643,
+            "syscall|runnable": 2.402,
+            "syscall|running": 0.852,
+            "syscall|wakeup_transition": 0.146
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51306,
+            "op_hash": 17325568976311468842,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299025,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17325568976311468842,
+            "commit_wait": {
+              "begin_ns": 39074128670960,
+              "end_ns": 39074176221623,
+              "begin_offset_ms": -5.239589,
+              "end_offset_ms": 42.311074
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074176218678,
+              "offset_ms": 42.308129,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299022,
+          "dur_ms": 26.527776,
+          "w0_ns": 39074134028471,
+          "w1_ns": 39074160556247,
+          "enter_ns": 39074138419000,
+          "exit_ns": 39074160551000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 4.390529,
+              "dur_ms": 16.051,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 20.465529,
+              "dur_ms": 6.057,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.024,
+            "post-exit|running": 0.005247,
+            "pre-entry|blocked:D": 2.271,
+            "pre-entry|runnable": 1.998,
+            "pre-entry|running": 0.107529,
+            "pre-entry|wakeup_transition": 0.014,
+            "syscall|blocked:D": 20.107,
+            "syscall|runnable": 1.196,
+            "syscall|running": 0.726,
+            "syscall|wakeup_transition": 0.079
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51311,
+            "op_hash": 17325568976311468842,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299022,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17325568976311468842,
+            "commit_wait": {
+              "begin_ns": 39074128670960,
+              "end_ns": 39074176221623,
+              "begin_offset_ms": -5.357511,
+              "end_offset_ms": 42.193152
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074176218678,
+              "offset_ms": 42.190207,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299026,
+          "dur_ms": 26.512116,
+          "w0_ns": 39074580715302,
+          "w1_ns": 39074607227418,
+          "enter_ns": 39074580716000,
+          "exit_ns": 39074607225000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000698,
+              "dur_ms": 26.509,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002418,
+            "pre-entry|running": 0.000698,
+            "syscall|blocked:D": 26.265,
+            "syscall|runnable": 0.095,
+            "syscall|running": 0.116,
+            "syscall|wakeup_transition": 0.033
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60470,
+            "op_hash": 12769630655950665959,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299026,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12769630655950665959,
+            "commit_wait": {
+              "begin_ns": 39074562610926,
+              "end_ns": 39074610419134,
+              "begin_offset_ms": -18.104376,
+              "end_offset_ms": 29.703832
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074610413613,
+              "offset_ms": 29.698311,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299027,
+          "dur_ms": 26.508228,
+          "w0_ns": 39074134019635,
+          "w1_ns": 39074160527863,
+          "enter_ns": 39074137466000,
+          "exit_ns": 39074160523000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 3.446365,
+              "dur_ms": 16.524,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 19.995365,
+              "dur_ms": 6.508,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.025,
+            "post-exit|running": 0.004863,
+            "pre-entry|blocked:D": 2.581,
+            "pre-entry|runnable": 0.747,
+            "pre-entry|running": 0.097365,
+            "pre-entry|wakeup_transition": 0.021,
+            "syscall|blocked:D": 18.788,
+            "syscall|runnable": 3.33,
+            "syscall|running": 0.794,
+            "syscall|wakeup_transition": 0.12
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51309,
+            "op_hash": 17325568976311468842,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299027,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17325568976311468842,
+            "commit_wait": {
+              "begin_ns": 39074128670960,
+              "end_ns": 39074176221623,
+              "begin_offset_ms": -5.348675,
+              "end_offset_ms": 42.201988
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074176218678,
+              "offset_ms": 42.199043,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298980,
+          "dur_ms": 26.506987,
+          "w0_ns": 39074134066843,
+          "w1_ns": 39074160573830,
+          "enter_ns": 39074138860000,
+          "exit_ns": 39074160481000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 4.793157,
+              "dur_ms": 15.159,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 19.974157,
+              "dur_ms": 6.44,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.022,
+            "post-exit|runnable": 0.085,
+            "post-exit|running": 0.00783,
+            "pre-entry|blocked:D": 2.269,
+            "pre-entry|runnable": 2.404,
+            "pre-entry|running": 0.105157,
+            "pre-entry|wakeup_transition": 0.015,
+            "syscall|blocked:D": 17.731,
+            "syscall|runnable": 2.813,
+            "syscall|running": 0.945,
+            "syscall|wakeup_transition": 0.11
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51320,
+            "op_hash": 2102402446788161976,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298980,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2102402446788161976,
+            "commit_wait": {
+              "begin_ns": 39074131846966,
+              "end_ns": 39074177645543,
+              "begin_offset_ms": -2.219877,
+              "end_offset_ms": 43.5787
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074177642286,
+              "offset_ms": 43.575443,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299020,
+          "dur_ms": 26.496116,
+          "w0_ns": 39074580720912,
+          "w1_ns": 39074607217028,
+          "enter_ns": 39074580721000,
+          "exit_ns": 39074607215000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 8.8e-05,
+              "dur_ms": 26.494,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002028,
+            "pre-entry|running": 8.8e-05,
+            "syscall|blocked:D": 23.554,
+            "syscall|runnable": 0.163,
+            "syscall|running": 2.742,
+            "syscall|wakeup_transition": 0.035
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60471,
+            "op_hash": 12769630655950665959,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299020,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12769630655950665959,
+            "commit_wait": {
+              "begin_ns": 39074562610926,
+              "end_ns": 39074610419134,
+              "begin_offset_ms": -18.109986,
+              "end_offset_ms": 29.698222
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074610413613,
+              "offset_ms": 29.692701,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298969,
+          "dur_ms": 26.446623,
+          "w0_ns": 39074134095367,
+          "w1_ns": 39074160541990,
+          "enter_ns": 39074135247000,
+          "exit_ns": 39074160537000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.151633,
+              "dur_ms": 18.865,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 20.031633,
+              "dur_ms": 6.41,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.015,
+            "post-exit|running": 0.00499,
+            "pre-entry|blocked:D": 1.003,
+            "pre-entry|runnable": 0.088,
+            "pre-entry|running": 0.057633,
+            "pre-entry|wakeup_transition": 0.003,
+            "syscall|blocked:D": 21.078,
+            "syscall|runnable": 3.239,
+            "syscall|running": 0.84,
+            "syscall|wakeup_transition": 0.118
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51322,
+            "op_hash": 2102402446788161976,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298969,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2102402446788161976,
+            "commit_wait": {
+              "begin_ns": 39074131846966,
+              "end_ns": 39074177645543,
+              "begin_offset_ms": -2.248401,
+              "end_offset_ms": 43.550176
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074177642286,
+              "offset_ms": 43.546919,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299046,
+          "dur_ms": 26.4292,
+          "w0_ns": 39074134064158,
+          "w1_ns": 39074160493358,
+          "enter_ns": 39074136161000,
+          "exit_ns": 39074160487000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 2.096842,
+              "dur_ms": 17.78,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 19.902842,
+              "dur_ms": 6.52,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.026,
+            "post-exit|running": 0.006358,
+            "pre-entry|blocked:D": 1.425,
+            "pre-entry|runnable": 0.575,
+            "pre-entry|running": 0.082842,
+            "pre-entry|wakeup_transition": 0.014,
+            "syscall|blocked:D": 20.626,
+            "syscall|runnable": 2.716,
+            "syscall|running": 0.861,
+            "syscall|wakeup_transition": 0.097
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51317,
+            "op_hash": 2102402446788161976,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299046,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2102402446788161976,
+            "commit_wait": {
+              "begin_ns": 39074131846966,
+              "end_ns": 39074177645543,
+              "begin_offset_ms": -2.217192,
+              "end_offset_ms": 43.581385
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074177642286,
+              "offset_ms": 43.578128,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299028,
+          "dur_ms": 26.42433,
+          "w0_ns": 39074580799621,
+          "w1_ns": 39074607223951,
+          "enter_ns": 39074580800000,
+          "exit_ns": 39074607221000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000379,
+              "dur_ms": 26.421,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002951,
+            "pre-entry|running": 0.000379,
+            "syscall|blocked:D": 26.199,
+            "syscall|runnable": 0.057,
+            "syscall|running": 0.132,
+            "syscall|wakeup_transition": 0.033
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 60472,
+            "op_hash": 103545940118859566,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299028,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 103545940118859566,
+            "commit_wait": {
+              "begin_ns": 39074561146761,
+              "end_ns": 39074624522170,
+              "begin_offset_ms": -19.65286,
+              "end_offset_ms": 43.722549
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074624518574,
+              "offset_ms": 43.718953,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299045,
+          "dur_ms": 26.399093,
+          "w0_ns": 39074134184605,
+          "w1_ns": 39074160583698,
+          "enter_ns": 39074138258000,
+          "exit_ns": 39074160580000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 4.073395,
+              "dur_ms": 16.205,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 20.298395,
+              "dur_ms": 6.097,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.02,
+            "post-exit|running": 0.003698,
+            "pre-entry|blocked:D": 2.888,
+            "pre-entry|runnable": 1.089,
+            "pre-entry|running": 0.079395,
+            "pre-entry|wakeup_transition": 0.017,
+            "syscall|blocked:D": 17.453,
+            "syscall|runnable": 3.813,
+            "syscall|running": 0.894,
+            "syscall|wakeup_transition": 0.142
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51324,
+            "op_hash": 2102402446788161976,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299045,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 2102402446788161976,
+            "commit_wait": {
+              "begin_ns": 39074131846966,
+              "end_ns": 39074177645543,
+              "begin_offset_ms": -2.337639,
+              "end_offset_ms": 43.460938
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074177642286,
+              "offset_ms": 43.457681,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299026,
+          "dur_ms": 26.188668,
+          "w0_ns": 39074127833975,
+          "w1_ns": 39074154022643,
+          "enter_ns": 39074127878000,
+          "exit_ns": 39074154015000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.044025,
+              "dur_ms": 7.108,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 7.176025,
+              "dur_ms": 19.005,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.024,
+            "post-exit|running": 0.007643,
+            "pre-entry|running": 0.044025,
+            "syscall|blocked:D": 24.233,
+            "syscall|runnable": 1.158,
+            "syscall|running": 0.665,
+            "syscall|wakeup_transition": 0.057
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51221,
+            "op_hash": 14244096144585574056,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299026,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 14244096144585574056,
+            "commit_wait": {
+              "begin_ns": 39074126408403,
+              "end_ns": 39074175731150,
+              "begin_offset_ms": -1.425572,
+              "end_offset_ms": 47.897175
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074175726612,
+              "offset_ms": 47.892637,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299037,
+          "dur_ms": 26.131981,
+          "w0_ns": 39074127780695,
+          "w1_ns": 39074153912676,
+          "enter_ns": 39074127824000,
+          "exit_ns": 39074153903000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.043305,
+              "dur_ms": 7.338,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 7.397305,
+              "dur_ms": 18.725,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.016,
+            "post-exit|running": 0.009676,
+            "pre-entry|running": 0.043305,
+            "syscall|blocked:D": 24.153,
+            "syscall|runnable": 1.086,
+            "syscall|running": 0.777,
+            "syscall|wakeup_transition": 0.047
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51217,
+            "op_hash": 7075274892500004843,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299037,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 7075274892500004843,
+            "commit_wait": {
+              "begin_ns": 39074125995316,
+              "end_ns": 39074173282212,
+              "begin_offset_ms": -1.785379,
+              "end_offset_ms": 45.501517
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074173275490,
+              "offset_ms": 45.494795,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299014,
+          "dur_ms": 26.037583,
+          "w0_ns": 39074128021689,
+          "w1_ns": 39074154059272,
+          "enter_ns": 39074128591000,
+          "exit_ns": 39074154053000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.569311,
+              "dur_ms": 6.309,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 6.900311,
+              "dur_ms": 19.131,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.022,
+            "post-exit|running": 0.006272,
+            "pre-entry|blocked:D": 0.173,
+            "pre-entry|runnable": 0.309,
+            "pre-entry|running": 0.080311,
+            "pre-entry|wakeup_transition": 0.007,
+            "syscall|blocked:D": 23.276,
+            "syscall|runnable": 1.337,
+            "syscall|running": 0.749,
+            "syscall|wakeup_transition": 0.078
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51223,
+            "op_hash": 7075274892500004843,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299014,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 7075274892500004843,
+            "commit_wait": {
+              "begin_ns": 39074125995316,
+              "end_ns": 39074173282212,
+              "begin_offset_ms": -2.026373,
+              "end_offset_ms": 45.260523
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074173275490,
+              "offset_ms": 45.253801,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 298981,
+          "dur_ms": 26.010392,
+          "w0_ns": 39074128055402,
+          "w1_ns": 39074154065794,
+          "enter_ns": 39074129116000,
+          "exit_ns": 39074154061000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.060598,
+              "dur_ms": 5.833,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 6.908598,
+              "dur_ms": 19.097,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.015,
+            "post-exit|running": 0.004794,
+            "pre-entry|blocked:D": 0.668,
+            "pre-entry|runnable": 0.308,
+            "pre-entry|running": 0.076598,
+            "pre-entry|wakeup_transition": 0.008,
+            "syscall|blocked:D": 22.154,
+            "syscall|runnable": 2.019,
+            "syscall|running": 0.685,
+            "syscall|wakeup_transition": 0.072
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51229,
+            "op_hash": 14244096144585574056,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 298981,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 14244096144585574056,
+            "commit_wait": {
+              "begin_ns": 39074126408403,
+              "end_ns": 39074175731150,
+              "begin_offset_ms": -1.646999,
+              "end_offset_ms": 47.675748
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074175726612,
+              "offset_ms": 47.67121,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299025,
+          "dur_ms": 25.97754,
+          "w0_ns": 39073591569553,
+          "w1_ns": 39073617547093,
+          "enter_ns": 39073591570000,
+          "exit_ns": 39073617546000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000447,
+              "dur_ms": 25.976,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001093,
+            "pre-entry|running": 0.000447,
+            "syscall|blocked:D": 18.06,
+            "syscall|runnable": 0.089,
+            "syscall|running": 7.764,
+            "syscall|wakeup_transition": 0.063
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 38449,
+            "op_hash": 17557738240658856673,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299025,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17557738240658856673,
+            "commit_wait": {
+              "begin_ns": 39073580891290,
+              "end_ns": 39073618098761,
+              "begin_offset_ms": -10.678263,
+              "end_offset_ms": 26.529208
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39073618086428,
+              "offset_ms": 26.516875,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299021,
+          "dur_ms": 25.976909,
+          "w0_ns": 39074128098413,
+          "w1_ns": 39074154075322,
+          "enter_ns": 39074129125000,
+          "exit_ns": 39074154070000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.026587,
+              "dur_ms": 5.974,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 7.019587,
+              "dur_ms": 18.952,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.019,
+            "post-exit|running": 0.005322,
+            "pre-entry|blocked:D": 0.547,
+            "pre-entry|runnable": 0.401,
+            "pre-entry|running": 0.068587,
+            "pre-entry|wakeup_transition": 0.01,
+            "syscall|blocked:D": 22.053,
+            "syscall|runnable": 2.114,
+            "syscall|running": 0.693,
+            "syscall|wakeup_transition": 0.066
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51233,
+            "op_hash": 14244096144585574056,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299021,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 14244096144585574056,
+            "commit_wait": {
+              "begin_ns": 39074126408403,
+              "end_ns": 39074175731150,
+              "begin_offset_ms": -1.69001,
+              "end_offset_ms": 47.632737
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074175726612,
+              "offset_ms": 47.628199,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299023,
+          "dur_ms": 25.941503,
+          "w0_ns": 39074128067354,
+          "w1_ns": 39074154008857,
+          "enter_ns": 39074129267000,
+          "exit_ns": 39074153995000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.199646,
+              "dur_ms": 5.646,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 6.869646,
+              "dur_ms": 19.058,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.024,
+            "post-exit|running": 0.013857,
+            "pre-entry|blocked:D": 0.492,
+            "pre-entry|runnable": 0.618,
+            "pre-entry|running": 0.073646,
+            "pre-entry|wakeup_transition": 0.016,
+            "syscall|blocked:D": 22.056,
+            "syscall|runnable": 1.913,
+            "syscall|running": 0.673,
+            "syscall|wakeup_transition": 0.062
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51231,
+            "op_hash": 14244096144585574056,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299023,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 14244096144585574056,
+            "commit_wait": {
+              "begin_ns": 39074126408403,
+              "end_ns": 39074175731150,
+              "begin_offset_ms": -1.658951,
+              "end_offset_ms": 47.663796
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074175726612,
+              "offset_ms": 47.659258,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299036,
+          "dur_ms": 25.910885,
+          "w0_ns": 39074128131966,
+          "w1_ns": 39074154042851,
+          "enter_ns": 39074129655000,
+          "exit_ns": 39074154037000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.523034,
+              "dur_ms": 5.362,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 6.909034,
+              "dur_ms": 18.996,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.024,
+            "post-exit|running": 0.005851,
+            "pre-entry|blocked:D": 0.621,
+            "pre-entry|runnable": 0.809,
+            "pre-entry|running": 0.076034,
+            "pre-entry|wakeup_transition": 0.017,
+            "syscall|blocked:D": 21.461,
+            "syscall|runnable": 2.173,
+            "syscall|running": 0.681,
+            "syscall|wakeup_transition": 0.043
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51239,
+            "op_hash": 7075274892500004843,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299036,
+            "submit_tid": 298953
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 7075274892500004843,
+            "commit_wait": {
+              "begin_ns": 39074125995316,
+              "end_ns": 39074173282212,
+              "begin_offset_ms": -2.13665,
+              "end_offset_ms": 45.150246
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074173275490,
+              "offset_ms": 45.143524,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299015,
+          "dur_ms": 25.774428,
+          "w0_ns": 39073591774448,
+          "w1_ns": 39073617548876,
+          "enter_ns": 39073591775000,
+          "exit_ns": 39073617547000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000552,
+              "dur_ms": 25.772,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.001876,
+            "pre-entry|running": 0.000552,
+            "syscall|blocked:D": 17.674,
+            "syscall|runnable": 0.253,
+            "syscall|running": 7.772,
+            "syscall|wakeup_transition": 0.073
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 38456,
+            "op_hash": 17557738240658856673,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299015,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17557738240658856673,
+            "commit_wait": {
+              "begin_ns": 39073580891290,
+              "end_ns": 39073618098761,
+              "begin_offset_ms": -10.883158,
+              "end_offset_ms": 26.324313
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39073618086428,
+              "offset_ms": 26.31198,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299034,
+          "dur_ms": 25.752016,
+          "w0_ns": 39073591798193,
+          "w1_ns": 39073617550209,
+          "enter_ns": 39073591799000,
+          "exit_ns": 39073617548000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000807,
+              "dur_ms": 25.749,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002209,
+            "pre-entry|running": 0.000807,
+            "syscall|blocked:D": 25.167,
+            "syscall|runnable": 0.299,
+            "syscall|running": 0.231,
+            "syscall|wakeup_transition": 0.052
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 38458,
+            "op_hash": 17557738240658856673,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299034,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17557738240658856673,
+            "commit_wait": {
+              "begin_ns": 39073580891290,
+              "end_ns": 39073618098761,
+              "begin_offset_ms": -10.906903,
+              "end_offset_ms": 26.300568
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39073618086428,
+              "offset_ms": 26.288235,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 299033,
+          "dur_ms": 25.479984,
+          "w0_ns": 39073592064634,
+          "w1_ns": 39073617544618,
+          "enter_ns": 39073592065000,
+          "exit_ns": 39073617542000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000366,
+              "dur_ms": 25.477,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002618,
+            "pre-entry|running": 0.000366,
+            "syscall|blocked:D": 8.823,
+            "syscall|runnable": 0.105,
+            "syscall|running": 16.491,
+            "syscall|wakeup_transition": 0.058
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 38460,
+            "op_hash": 17557738240658856673,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299033,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17557738240658856673,
+            "commit_wait": {
+              "begin_ns": 39073580891290,
+              "end_ns": 39073618098761,
+              "begin_offset_ms": -11.173344,
+              "end_offset_ms": 26.034127
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39073618086428,
+              "offset_ms": 26.021794,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_scan",
+          "tid": 299035,
+          "dur_ms": 25.447393,
+          "w0_ns": 39074135045635,
+          "w1_ns": 39074160493028,
+          "enter_ns": 39074135266000,
+          "exit_ns": 39074160485000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.220365,
+              "dur_ms": 18.661,
+              "name": "fdatasync",
+              "open": false
+            },
+            {
+              "enter_offset_ms": 18.905365,
+              "dur_ms": 6.534,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "between|running": 0.024,
+            "post-exit|running": 0.008028,
+            "pre-entry|blocked:D": 0.096,
+            "pre-entry|runnable": 0.059,
+            "pre-entry|running": 0.063365,
+            "pre-entry|wakeup_transition": 0.002,
+            "syscall|blocked:D": 21.323,
+            "syscall|runnable": 3.001,
+            "syscall|running": 0.771,
+            "syscall|wakeup_transition": 0.1
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 51331,
+            "op_hash": 10781792931424483470,
+            "step_tag": "src_dir_sync",
+            "tag": "sub_scan",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 299035,
+            "submit_tid": 298954
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 10781792931424483470,
+            "commit_wait": {
+              "begin_ns": 39074133630162,
+              "end_ns": 39074179353927,
+              "begin_offset_ms": -1.415473,
+              "end_offset_ms": 44.308292
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 39074179349409,
+              "offset_ms": 44.303774,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        }
+      ],
+      "long_wrapper_count": 53,
+      "clusters": [
+        {
+          "n_members": 4,
+          "enter_spread_ms": 0.006,
+          "exit_spread_ms": 1.583,
+          "exit_groups": [
+            {
+              "n": 4,
+              "spread_ms": 1.583
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298965,
+              "dur_ms": 64.527637,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298960,
+              "dur_ms": 66.108512,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 1.583
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298956,
+              "dur_ms": 64.980539,
+              "enter_offset_ms": 0.004,
+              "exit_offset_ms": 0.458
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298963,
+              "dur_ms": 64.967065,
+              "enter_offset_ms": 0.006,
+              "exit_offset_ms": 0.446
+            }
+          ]
+        },
+        {
+          "n_members": 12,
+          "enter_spread_ms": 3.036,
+          "exit_spread_ms": 0.759,
+          "exit_groups": [
+            {
+              "n": 12,
+              "spread_ms": 0.759
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299045,
+              "dur_ms": 30.777933,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.256
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298969,
+              "dur_ms": 29.435517,
+              "enter_offset_ms": 1.088,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299032,
+              "dur_ms": 29.440206,
+              "enter_offset_ms": 1.088,
+              "exit_offset_ms": 0.007
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299024,
+              "dur_ms": 29.411121,
+              "enter_offset_ms": 1.112,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299030,
+              "dur_ms": 29.413195,
+              "enter_offset_ms": 1.136,
+              "exit_offset_ms": 0.029
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299046,
+              "dur_ms": 29.752614,
+              "enter_offset_ms": 1.526,
+              "exit_offset_ms": 0.758
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298984,
+              "dur_ms": 29.731754,
+              "enter_offset_ms": 1.548,
+              "exit_offset_ms": 0.759
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299021,
+              "dur_ms": 28.673533,
+              "enter_offset_ms": 1.94,
+              "exit_offset_ms": 0.093
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298985,
+              "dur_ms": 28.668614,
+              "enter_offset_ms": 1.955,
+              "exit_offset_ms": 0.094
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299025,
+              "dur_ms": 29.310412,
+              "enter_offset_ms": 1.969,
+              "exit_offset_ms": 0.759
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299019,
+              "dur_ms": 28.255427,
+              "enter_offset_ms": 3.018,
+              "exit_offset_ms": 0.753
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298977,
+              "dur_ms": 27.928051,
+              "enter_offset_ms": 3.036,
+              "exit_offset_ms": 0.444
+            }
+          ]
+        },
+        {
+          "n_members": 4,
+          "enter_spread_ms": 0.495,
+          "exit_spread_ms": 0.006,
+          "exit_groups": [
+            {
+              "n": 4,
+              "spread_ms": 0.006
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299025,
+              "dur_ms": 25.97754,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.004
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299015,
+              "dur_ms": 25.774428,
+              "enter_offset_ms": 0.205,
+              "exit_offset_ms": 0.005
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299034,
+              "dur_ms": 25.752016,
+              "enter_offset_ms": 0.229,
+              "exit_offset_ms": 0.006
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299033,
+              "dur_ms": 25.479984,
+              "enter_offset_ms": 0.495,
+              "exit_offset_ms": 0.0
+            }
+          ]
+        },
+        {
+          "n_members": 18,
+          "enter_spread_ms": 11.274,
+          "exit_spread_ms": 6.68,
+          "exit_groups": [
+            {
+              "n": 8,
+              "spread_ms": 0.167
+            },
+            {
+              "n": 10,
+              "spread_ms": 0.102
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_scan",
+              "tid": 299034,
+              "dur_ms": 26.688037,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.072
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299037,
+              "dur_ms": 26.131981,
+              "enter_offset_ms": 0.238,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299026,
+              "dur_ms": 26.188668,
+              "enter_offset_ms": 0.292,
+              "exit_offset_ms": 0.112
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299014,
+              "dur_ms": 26.037583,
+              "enter_offset_ms": 1.005,
+              "exit_offset_ms": 0.15
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 298981,
+              "dur_ms": 26.010392,
+              "enter_offset_ms": 1.53,
+              "exit_offset_ms": 0.158
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299023,
+              "dur_ms": 25.941503,
+              "enter_offset_ms": 1.681,
+              "exit_offset_ms": 0.092
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299021,
+              "dur_ms": 25.976909,
+              "enter_offset_ms": 1.539,
+              "exit_offset_ms": 0.167
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299036,
+              "dur_ms": 25.910885,
+              "enter_offset_ms": 2.069,
+              "exit_offset_ms": 0.134
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 298985,
+              "dur_ms": 27.804147,
+              "enter_offset_ms": 5.237,
+              "exit_offset_ms": 6.665
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299016,
+              "dur_ms": 26.731599,
+              "enter_offset_ms": 10.833,
+              "exit_offset_ms": 6.68
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299025,
+              "dur_ms": 26.599371,
+              "enter_offset_ms": 9.854,
+              "exit_offset_ms": 6.603
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299027,
+              "dur_ms": 26.508228,
+              "enter_offset_ms": 9.88,
+              "exit_offset_ms": 6.62
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299022,
+              "dur_ms": 26.527776,
+              "enter_offset_ms": 10.833,
+              "exit_offset_ms": 6.648
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299046,
+              "dur_ms": 26.4292,
+              "enter_offset_ms": 8.575,
+              "exit_offset_ms": 6.584
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 298980,
+              "dur_ms": 26.506987,
+              "enter_offset_ms": 11.274,
+              "exit_offset_ms": 6.578
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 298969,
+              "dur_ms": 26.446623,
+              "enter_offset_ms": 7.661,
+              "exit_offset_ms": 6.634
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299045,
+              "dur_ms": 26.399093,
+              "enter_offset_ms": 10.672,
+              "exit_offset_ms": 6.677
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299035,
+              "dur_ms": 25.447393,
+              "enter_offset_ms": 7.68,
+              "exit_offset_ms": 6.582
+            }
+          ]
+        },
+        {
+          "n_members": 15,
+          "enter_spread_ms": 16.99,
+          "exit_spread_ms": 17.376,
+          "exit_groups": [
+            {
+              "n": 9,
+              "spread_ms": 0.284
+            },
+            {
+              "n": 6,
+              "spread_ms": 0.04
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_scan",
+              "tid": 298978,
+              "dur_ms": 30.617751,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 298981,
+              "dur_ms": 30.575141,
+              "enter_offset_ms": 0.464,
+              "exit_offset_ms": 0.003
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299045,
+              "dur_ms": 47.816113,
+              "enter_offset_ms": 0.661,
+              "exit_offset_ms": 17.336
+            },
+            {
+              "tag": "sub_scan",
+              "tid": 299017,
+              "dur_ms": 30.475093,
+              "enter_offset_ms": 0.674,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299017,
+              "dur_ms": 27.11482,
+              "enter_offset_ms": 3.364,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299045,
+              "dur_ms": 44.446902,
+              "enter_offset_ms": 3.366,
+              "exit_offset_ms": 17.336
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298981,
+              "dur_ms": 27.112356,
+              "enter_offset_ms": 3.368,
+              "exit_offset_ms": 0.003
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 298978,
+              "dur_ms": 27.049748,
+              "enter_offset_ms": 3.429,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299015,
+              "dur_ms": 44.244302,
+              "enter_offset_ms": 3.575,
+              "exit_offset_ms": 17.342
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299046,
+              "dur_ms": 44.189428,
+              "enter_offset_ms": 3.629,
+              "exit_offset_ms": 17.342
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299035,
+              "dur_ms": 44.150966,
+              "enter_offset_ms": 3.668,
+              "exit_offset_ms": 17.342
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299026,
+              "dur_ms": 26.512116,
+              "enter_offset_ms": 4.249,
+              "exit_offset_ms": 0.284
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299020,
+              "dur_ms": 26.496116,
+              "enter_offset_ms": 4.254,
+              "exit_offset_ms": 0.274
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 299028,
+              "dur_ms": 26.42433,
+              "enter_offset_ms": 4.333,
+              "exit_offset_ms": 0.28
+            },
+            {
+              "tag": "sub_prep_write",
+              "tid": 299070,
+              "dur_ms": 30.881869,
+              "enter_offset_ms": 16.99,
+              "exit_offset_ms": 17.376
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "sched events are comm-filtered to rustfs* threads; foreign threads appear only as the other side of a rustfs switch",
+    "syscall events are unfiltered in the capture; analysis restricts them to probe tids and counts foreign lines",
+    "unknown_* state spans are reported as unknown, never as zero",
+    "runnable time starts at sched_wakeup (task made runnable); the sched_waking -> sched_wakeup interval is the separate wakeup_transition state, counted as neither runnable nor blocked time, and a sched_waking with no observed sched_wakeup before the next event or window edge is unknown_wake_incomplete",
+    "sched_wakeup_new (a thread's first activation) is not captured, so such an initial switch-in appears as unknown_no_wake",
+    "equal-timestamp ties (1 us trace precision) within one thread are ordered by scheduler admissibility over the recorded line order: each CPU's recorded sequence is a hard constraint (only the earliest unplaced event of a CPU may be placed next, so observable order is never reversed); causally impossible recorded orders are repaired (counted in quality.trace_parse.equal_ts_causal_repairs); cross-CPU ties between different event kinds are genuinely ambiguous \u2014 they use the causal default out -> waking -> wakeup -> in and are counted as equal_ts_ambiguous rather than presented as observed order; equal_ts_unresolved counts ties where causality conflicts with the recorded per-CPU sequences (recorded order kept and uncertainty reported rather than reordering observable events)",
+    "wrapper observations may be nested or overlapping on one thread; per-tag and all-wrapper duration sums double-count shared time and are neither independent syscalls nor elapsed time \u2014 use accounting.non_overlapping for thread-time",
+    "thread-time totals are per-thread wall time inside wrapper regions: neither client latency nor elapsed experiment time, and repetitions are never merged into one interval",
+    "scheduler 'running' is scheduled residency: interrupt activity may occur while the task remains current, so it is not exact task CPU execution",
+    "exact tiling (reconciliation) is an accounting consistency check, not independent proof that every state classification is correct",
+    "zero recorded trace loss is a capture-quality finding, not proof of causal attribution",
+    "kernel D-state inside fsync/fdatasync locates blocked time within the syscall; it does not identify journal, writeback, lock, or device causes",
+    "op_hash is an FNV-1a hash of bucket+key and does not resolve to a client object name here; a job associated with an operation or overlapping its commit wait is not thereby response-critical, and a quorum snapshot (results_seen / write_quorum / disk_count) does not identify which disk or job supplied a required acknowledgement",
+    "diagnostic btrfs/writeback events are not comm-filtered: background activity on the same filesystem appears in their totals; block events are capture-filtered to the volume's device (kernel_wait.capture_filter)",
+    "kernel_wait evidence classes separate temporal overlap, shared-device activity, a same-task writeback wait, and proximity of a wake edge to a completion event; only the same-task wait names its object, proximity is never proof, and none of them identifies a single cause for the wait or establishes response-criticality"
+  ],
+  "timelines": [
+    "timelines/run-1-sub_dir_sync-tid298960-job136-occ0-w39071867052083.txt",
+    "timelines/run-1-sub_dir_sync-tid298956-job138-occ0-w39071867055540.txt",
+    "timelines/run-1-sub_dir_sync-tid298963-job137-occ0-w39071867057403.txt"
+  ]
+}

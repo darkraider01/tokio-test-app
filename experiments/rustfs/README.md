@@ -1247,3 +1247,96 @@ python3 experiments/rustfs/wait_path_v5.py \
      trigger (`prev_state & 2 && prev_comm ~ "rustfs*"`) and Btrfs transaction tracepoints
      (`btrfs/btrfs_transaction_commit`) in a single unified run. This will directly test whether the specific
      ancestor-fsyncs that block quorum satisfaction in v5 contain kernel Btrfs transaction commits.
+
+### Joint v5 probe and kernel-stack capture (2026-10-10)
+
+The cross-capture evidence gap left unresolved in §10.2 and v5 is now closed by a single,
+bounded joint capture (`.repro/rustfs-waitpath-v5-joint`) uniting v5 probe instrumentation
+with dedicated kernel ftrace sched-switch stack sampling.
+
+1. **Evidence Gap Status**:
+   - **Resolved**: In this capture, a source-established filesystem prerequisite on a disk
+     whose successful result was counted toward the request's write quorum (and which directly
+     triggered write quorum satisfaction) contained an observed Btrfs transaction wait path
+     (`wait_for_commit` under `btrfs_commit_transaction`) in the **same live capture**.
+   - **Distinction from cross-capture evidence**: Earlier v4 captures identified transaction
+     waits with kernel stacks on `rustfs-v4` without per-disk acknowledgement identities.
+     Earlier v5 captures identified per-disk acknowledgement ordering on `rustfs-v5` without
+     kernel stacks. This joint run links both phenomena in the same execution for the same
+     individual request.
+
+2. **Capture Parameters & Quality Gates**:
+   - Workload: 1 MiB objects, 1 run, c1 1s (8 attempts) + c8 3s (560 attempts) = 568 total PUTs;
+     568/568 completed HTTP 200 (0 client failures, 0 shed).
+   - Server binary: `9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58`.
+   - Patches: `tokio-1.53.2-fs-probe-v5.patch` (`ccf4619e...`), `rustfs-probe-v5.patch` (`1fc129b1...`).
+   - Dedicated tracefs instance: `rustfs-v5-joint` (32 MiB/CPU ring buffer, isolated from system tracer).
+   - Events & Trigger: `sched/sched_switch` with `stacktrace:100000 if prev_state & 2 && prev_comm ~ "rustfs*"`,
+     `btrfs/btrfs_transaction_commit`, `writeback/balance_dirty_pages`.
+   - Quality gates:
+     - Trace loss: 2,006,616 entries parsed, 0 bad lines, 0 overruns, 0 dropped events across all 12 CPUs.
+     - Probe ring: 368,704 records stored, 0 dropped records, 0 capacity rejections, 0 post-close rejections (`version=3`, `clock_id=1`).
+     - Clock direct subtraction: `status: validated` (13,884/13,884 paired sync wrappers matched, earliest enter -0.299 µs within 1 µs tolerance).
+     - Stack trigger range: active from 39071.84 s to 39074.28 s (101,163 stack events captured), covering the candidate workload window.
+     - 49 request-linked wrappers >= 25 ms; 34 wrappers contain captured switch-out stacks.
+
+3. **Representative Request Timeline (`c8/82.bin`)**:
+   - Key: `c8/82.bin` (op_hash `3579060953567012741`, server request `03487d16-881d-48dc-9ead-4275fbefdefe`).
+   - Client attempt latency: 85.971 ms (start: 39072593894233, end: 39072679865730; write_ms: 0.586 ms, header_wait: 84.615 ms).
+   - Quorum sequence:
+     - Disks execute concurrently in parallel across separate logical fanout members.
+     - **Disk 2**: Completed first. Mutation return at +44.604 ms, coordinator consumption at +44.613 ms (`success_count`: 0 -> 1, `counted_before_quorum`). Completed before the fsync stall cluster (no stacks).
+     - **Disk 3**: Mutation return at +84.813 ms, coordinator consumption at +84.821 ms (`success_count`: 1 -> 2, `counted_before_quorum`).
+       - Job 15320 (`dst_dir_fsync`, 29.434 ms, start +51.188 ms, end +80.622 ms, `prerequisite: established`):
+         Switches out at +53.158 ms, blocked for **27.422 ms** in `wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`.
+     - **Disk 0**: Mutation return at +84.913 ms, coordinator consumption at +84.917 ms (`success_count`: 2 -> 3 = `write_quorum`) -> **`quorum_triggering_acknowledgement`**!
+       - Job 15327 (`dst_dir_fsync`, 28.692 ms, start +51.996 ms, end +80.687 ms, `prerequisite: established`):
+         Switches out at +53.167 ms on executor TID `298985`, blocked for **27.408 ms** in `wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`.
+         Also captured: `wait_log_commit` under `btrfs_sync_log` (blocked 0.094 ms).
+     - **SEND_OK**: Emitted by coordinator at +84.920 ms (timestamp 39072678814703; `results_seen=3`, `write_quorum=3`).
+     - **Disk 1**: Mutation return at +85.206 ms (+0.286 ms after SEND), coordinator consumption at +85.213 ms (`success_count`: 3 -> 4, **`post_quorum`** tail).
+       - Job 15319 (`dst_dir_fsync`, 29.431 ms, start +51.169 ms, end +80.600 ms):
+         Switches out at +53.169 ms, blocked for **27.403 ms** in `wait_for_commit` -> `btrfs_commit_transaction`.
+     - Client completion: +85.971 ms (timestamp 39072679865730).
+
+4. **Attribution Boundaries (A through E)**:
+   - **A. Source-established fsync prerequisites on counted disks**:
+     Disk 0 Job 15327 (28.69 ms, prereq established via `commit.rs`) and Disk 3 Job 15320 (29.43 ms, prereq established).
+     Both disks contributed to write quorum and both fsyncs spent ~27.4 ms blocked in Btrfs transaction commits.
+   - **B. Counted disks without stack coverage**:
+     Disk 2 completed before the synchronized fsync stall cluster at +44.60 ms, providing a counted acknowledgement without stack events.
+   - **C. Unconsumed or post-quorum results**:
+     Disk 1 arrived after write quorum was already reached at +84.917 ms.
+   - **D. Work continuing after SEND**:
+     On `c8/82.bin`, Disk 1 mutation return (+85.21 ms) and tail ancestor fsync Job 15544 (ended +85.19 ms) finished after SEND (+84.92 ms).
+   - **E. Work continuing after client completion**:
+     On `c8/82.bin`, all 4 disks completed before client completion (+85.97 ms).
+     On `c8/80.bin`, Disk 2 mutation return (+84.57 ms) and tail ancestor fsyncs (Jobs 15453/15532, ending up to +84.10 ms) continued
+     both after SEND (+82.07 ms) and after client completion (+82.78 ms).
+
+5. **Reproduction Commands**:
+
+```sh
+# Execute joint capture (requires root for tracefs instance):
+bash experiments/rustfs/joint_v5_capture.sh
+
+# Generate trace diagnostic with quality gates (threshold 25 ms):
+python3 experiments/rustfs/fs_trace.py .repro/rustfs-waitpath-v5-joint \
+  --threshold-ms 25 \
+  --output experiments/rustfs/results/fs-trace-waitpath-v5-joint.json
+
+# Correlate kernel stacks to request-linked wrappers with input verification:
+python3 experiments/rustfs/wait_path.py .repro/rustfs-waitpath-v5-joint \
+  experiments/rustfs/results/fs-trace-waitpath-v5-joint.json \
+  --output experiments/rustfs/results/wait-path-v5-joint-stacks.json
+
+# Generate acknowledgement dependency table (schema v2):
+python3 experiments/rustfs/wait_path_v5.py .repro/rustfs-waitpath-v5-joint \
+  --output experiments/rustfs/results/wait-path-v5-joint.json
+```
+
+6. **Remaining Unresolved Questions**:
+   - **Transaction Identity**: Which transaction generation/ID was being committed remains unmeasured by stack sampling alone.
+   - **Releasing Entity**: The external thread, process, or kernel subsystem that released the transaction commit wait was not isolated.
+   - **Underlying Cause of Commit Duration**: Whether the 27.4 ms commit delay was driven by journal transaction coordination, dirty metadata writeback, or device queueing remains unresolved.
+   - **Generalization**: Not all slow PUTs necessarily share this cause, and this workload (1 MiB PUTs on single NVMe Btrfs) does not establish behavior at differing cluster topologies.

@@ -823,3 +823,25 @@ send, but the required disk-acknowledgement dependencies remain unmeasured.
 The earlier two-repetition trace lacked stack coverage of its long linked
 wrappers because the trigger was exhausted; this failed coverage result is
 preserved. No performance fix follows from these captures alone.
+
+### Follow-up: Joint probe and kernel-stack capture of quorum-triggering fsyncs
+
+A subsequent bounded joint capture (`.repro/rustfs-waitpath-v5-joint`) on `rustfs-v5`
+closes the cross-capture evidence gap by combining the v5 per-disk acknowledgement probe
+with kernel ftrace sched-switch stack sampling in the same live run. Full details are
+documented in `experiments/rustfs/README.md`, with results in `fs-trace-waitpath-v5-joint.json`,
+`wait-path-v5-joint-stacks.json`, and `wait-path-v5-joint.json`.
+
+In this capture, all 568 PUTs completed HTTP 200 without losses or dropped probe records.
+For a representative slow successful PUT (`c8/82.bin`, client latency 85.97 ms), Disk 0's
+`dst_dir_fsync` job was a source-established prerequisite that triggered write quorum
+(success count 2 -> 3) and contained an observed Btrfs transaction commit wait path
+(`wait_for_commit` under `btrfs_commit_transaction`, blocked for 27.41 ms) inside the
+same live capture. Disk 3 was also counted before quorum and contained a matching 27.42 ms
+transaction commit wait, while Disk 2 completed before the stall (+44.60 ms) and Disk 1
+completed as a post-quorum tail after SEND_OK (+85.21 ms).
+
+This establishes that an encountered Btrfs transaction wait path delayed the specific
+filesystem prerequisite on the disk that produced write quorum for that request. It does
+not establish transaction identity, the releasing entity, or why the commit required 27 ms,
+nor does it prove all slow requests share this cause.

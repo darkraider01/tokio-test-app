@@ -3346,6 +3346,23 @@ class WaitPathTests(unittest.TestCase):
         self.assertIn("mutation_return_ts", d0)
         self.assertIn("coordinator_consumed_ts", d0)
 
+    def test_wait_path_v5_summary_generator_joint(self):
+        from wait_path_v5 import summarize_waitpath_v5
+        repo_root = Path(__file__).resolve().parents[2]
+        run_dir = repo_root / ".repro" / "rustfs-waitpath-v5-joint"
+        if not run_dir.is_dir():
+            self.skipTest("waitpath-v5-joint repro capture missing")
+        summary = summarize_waitpath_v5(run_dir)
+        self.assertEqual(summary["schema_version"], "rustfs-acknowledgement-dependencies/v2")
+        self.assertEqual(summary["parameters"]["selection_mode"], "declared_joint_keys")
+        self.assertIn(".repro/rustfs-waitpath-v5-joint/trace.raw", summary["inputs"])
+        self.assertEqual(len(summary["representative_operations"]), 3)
+        op0 = summary["representative_operations"][0]
+        self.assertEqual(op0["key"], "c8/82.bin")
+        self.assertEqual(op0["quorum_trigger_disk"], 0)
+        self.assertEqual(op0["send_kind"], "send_ok")
+        self.assertEqual(op0["evidence_status"], "validated")
+
     def test_verify_inputs_rejects_missing_probe_hash_in_provenance(self):
         from wait_path import verify_inputs
         from fs_trace import sha256_file
