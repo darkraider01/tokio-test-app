@@ -3,7 +3,7 @@
   "schema_version": "rustfs-acknowledgement-dependencies/v2",
   "provenance": {
     "generator": "experiments/rustfs/wait_path_v5.py",
-    "git_commit": "d1165eb0dd35478c1f292f14a035348963208d8a",
+    "git_commit": "a94bc7c11795f473fa69762f09560a4e2dcade4a",
     "inputs": {
       "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
       "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
@@ -579,10 +579,30 @@
       ],
       "stack_validation": {
         "status": "verified",
+        "reason": null,
         "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
         "request_linked_wrappers": 3,
         "total_switch_out_stacks": 27,
-        "btrfs_transaction_commit_stacks": 3
+        "btrfs_transaction_commit_stacks": 3,
+        "btrfs_wait_stacks": 6,
+        "counted_fsync_jobs": [
+          {
+            "job_id": 15320,
+            "disk_index": 3,
+            "classification": "counted_before_quorum",
+            "step_tag": "dst_dir_fsync",
+            "commit_stacks": 1,
+            "wait_stacks": 2
+          },
+          {
+            "job_id": 15327,
+            "disk_index": 0,
+            "classification": "quorum_triggering_acknowledgement",
+            "step_tag": "dst_dir_fsync",
+            "commit_stacks": 1,
+            "wait_stacks": 2
+          }
+        ]
       }
     },
     {
@@ -1107,10 +1127,38 @@
       ],
       "stack_validation": {
         "status": "verified",
+        "reason": null,
         "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
         "request_linked_wrappers": 4,
         "total_switch_out_stacks": 79,
-        "btrfs_transaction_commit_stacks": 0
+        "btrfs_transaction_commit_stacks": 0,
+        "btrfs_wait_stacks": 8,
+        "counted_fsync_jobs": [
+          {
+            "job_id": 51233,
+            "disk_index": 2,
+            "classification": "quorum_triggering_acknowledgement",
+            "step_tag": "src_dir_sync",
+            "commit_stacks": 0,
+            "wait_stacks": 2
+          },
+          {
+            "job_id": 51229,
+            "disk_index": 0,
+            "classification": "counted_before_quorum",
+            "step_tag": "src_dir_sync",
+            "commit_stacks": 0,
+            "wait_stacks": 2
+          },
+          {
+            "job_id": 51231,
+            "disk_index": 1,
+            "classification": "counted_before_quorum",
+            "step_tag": "src_dir_sync",
+            "commit_stacks": 0,
+            "wait_stacks": 2
+          }
+        ]
       }
     },
     {
@@ -1635,10 +1683,38 @@
       ],
       "stack_validation": {
         "status": "verified",
+        "reason": null,
         "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
         "request_linked_wrappers": 4,
         "total_switch_out_stacks": 46,
-        "btrfs_transaction_commit_stacks": 5
+        "btrfs_transaction_commit_stacks": 5,
+        "btrfs_wait_stacks": 9,
+        "counted_fsync_jobs": [
+          {
+            "job_id": 15325,
+            "disk_index": 0,
+            "classification": "counted_before_quorum",
+            "step_tag": "dst_dir_fsync",
+            "commit_stacks": 1,
+            "wait_stacks": 2
+          },
+          {
+            "job_id": 15313,
+            "disk_index": 1,
+            "classification": "quorum_triggering_acknowledgement",
+            "step_tag": "dst_dir_fsync",
+            "commit_stacks": 1,
+            "wait_stacks": 2
+          },
+          {
+            "job_id": 15330,
+            "disk_index": 3,
+            "classification": "counted_before_quorum",
+            "step_tag": "ancestor_fsync",
+            "commit_stacks": 2,
+            "wait_stacks": 3
+          }
+        ]
       }
     }
   ],

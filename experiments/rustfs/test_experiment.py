@@ -3363,6 +3363,95 @@ class WaitPathTests(unittest.TestCase):
         self.assertEqual(op0["send_kind"], "send_ok")
         self.assertEqual(op0["evidence_status"], "validated")
         self.assertEqual(op0["stack_validation"]["status"], "verified")
+        self.assertGreaterEqual(len(op0["stack_validation"]["counted_fsync_jobs"]), 1)
+
+    def test_wait_path_v5_stack_verification_rejects_unrelated_evidence(self):
+        from wait_path_v5 import generate_summary
+        repo_root = Path(__file__).resolve().parents[2]
+        run_dir = repo_root / ".repro" / "rustfs-waitpath-v5-joint"
+        if not run_dir.is_dir():
+            self.skipTest("waitpath-v5-joint repro capture missing")
+        stacks_file = repo_root / "experiments/rustfs/results/wait-path-v5-joint-stacks.json"
+        if not stacks_file.is_file():
+            self.skipTest("wait-path-v5-joint-stacks.json missing")
+
+        real_data = json.loads(stacks_file.read_text())
+
+        # 1. Missing provenance / inputs
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            del fab["inputs"]
+            del fab["provenance"]
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+        # 2. Mismatched capture hash
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            fab["inputs"][".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin"] = "0" * 64
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+        # 3. Wrong run identity
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            for w in fab["request_linked_wrappers"]:
+                w["identity"]["run"] = "run-99"
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+        # 4. Fabricated / unrelated job_task_id
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            for w in fab["request_linked_wrappers"]:
+                w["identity"]["job_task_id"] = 99999999
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+        # 5. Unrelated stack frames
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            for w in fab["request_linked_wrappers"]:
+                for s in w.get("switch_out_stacks", []):
+                    s["frames"] = ["schedule", "pipe_read", "sys_read"]
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+        # 6. Only uncounted disk (post_quorum) wrapper retained
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            fab["request_linked_wrappers"] = [w for w in fab["request_linked_wrappers"] if w.get("identity", {}).get("job_task_id") == 15319]
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+
+    def test_joint_v5_capture_script_structure(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        script_path = repo_root / "experiments/rustfs/joint_v5_capture.sh"
+        self.assertTrue(script_path.is_file())
+        content = script_path.read_text()
+        self.assertIn("INSTANCE_ACQUIRED=0", content)
+        self.assertIn('if [[ "${INSTANCE_ACQUIRED:-0}" -eq 1 ]]; then', content)
+        self.assertIn("INSTANCE_ACQUIRED=1", content)
+        self.assertIn('concurrencies = "\'"$CONCURRENCY"\'".split()', content)
+        self.assertIn('duration_s = float("\'"$DURATION"\'")', content)
 
     def test_verify_inputs_rejects_missing_probe_hash_in_provenance(self):
         from wait_path import verify_inputs

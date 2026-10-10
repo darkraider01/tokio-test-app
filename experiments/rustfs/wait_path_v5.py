@@ -238,6 +238,166 @@ def select_automatic_operations(run_data):
     return selected
 
 
+BTRFS_WAIT_FRAMES = (
+    "wait_for_commit",
+    "btrfs_commit_transaction",
+    "wait_log_commit",
+    "btrfs_sync_log",
+)
+
+
+def validate_capture_hashes(stacks_data, run_dir, input_hashes):
+    """Validate that the stack artifact includes provenance and matching capture hashes."""
+    if not isinstance(stacks_data, dict):
+        return False, "stacks_data_not_dict"
+
+    declared_items = []
+    if isinstance(stacks_data.get("inputs"), dict):
+        for p, h in stacks_data["inputs"].items():
+            declared_items.append((p, h))
+    prov = stacks_data.get("provenance")
+    if isinstance(prov, dict):
+        if isinstance(prov.get("inputs"), dict):
+            for p, h in prov["inputs"].items():
+                declared_items.append((p, h))
+        input_ver = prov.get("input_verification")
+        if isinstance(input_ver, dict):
+            for item in input_ver.get("verified_inputs", []) + input_ver.get("verified_matches", []):
+                if isinstance(item, dict) and item.get("path") and item.get("sha256"):
+                    declared_items.append((item["path"], item["sha256"]))
+
+    if not declared_items:
+        return False, "missing_provenance_or_inputs"
+
+    matches = 0
+    for decl_path, decl_hash in declared_items:
+        decl_fname = Path(decl_path).name
+        for rel_path, actual_hash in input_hashes.items():
+            if decl_path == rel_path or decl_fname == Path(rel_path).name:
+                if decl_hash != actual_hash:
+                    return False, f"capture_hash_mismatch_for_{decl_fname}"
+                matches += 1
+                break
+
+    if matches == 0:
+        return False, "no_capture_inputs_matched"
+
+    return True, "hashes_verified"
+
+
+def validate_operation_stack_evidence(stacks_data, run_name, key, op_hash, ack, criterion=None):
+    """Validate that stacks_data contains matching run/op/job identity, a counted
+    source-established fsync prerequisite, and claimed Btrfs wait frames.
+    """
+    matched_wrappers = []
+    counted_fsync_matches = []
+    total_stacks = 0
+    commit_stacks = 0
+    total_wait_stacks = 0
+
+    for w in stacks_data.get("request_linked_wrappers", []):
+        if w.get("client_attempt", {}).get("key") != key:
+            continue
+        ident = w.get("identity", {})
+        if ident.get("run") != run_name:
+            continue
+        if ident.get("op_hash") != op_hash and w.get("operation_link", {}).get("op_hash") != op_hash:
+            continue
+        jid = ident.get("job_task_id")
+        matching_disk = None
+        matching_job = None
+        for d in ack.get("disks", []):
+            for j in d.get("jobs", []):
+                if j.get("job_id") == jid:
+                    matching_disk = d
+                    matching_job = j
+                    break
+            if matching_disk:
+                break
+        if not matching_disk or not matching_job:
+            continue
+
+        matched_wrappers.append(w)
+        stacks = w.get("switch_out_stacks", [])
+        total_stacks += len(stacks)
+
+        cur_tx = 0
+        cur_wait = 0
+        for s in stacks:
+            frames = s.get("frames", [])
+            has_tx = any("wait_for_commit" in f or "btrfs_commit_transaction" in f for f in frames)
+            has_wait = has_tx or any("wait_log_commit" in f or "btrfs_sync_log" in f for f in frames)
+            if has_tx:
+                cur_tx += 1
+            if has_wait:
+                cur_wait += 1
+
+        commit_stacks += cur_tx
+        total_wait_stacks += cur_wait
+
+        is_counted = matching_disk.get("classification") in (
+            "counted_before_quorum",
+            "quorum_triggering",
+            "quorum_triggering_acknowledgement",
+        )
+        is_prereq = (
+            matching_job.get("prerequisite") == "established"
+            and matching_job.get("completed_before_mutation_return") is True
+        ) or matching_job.get("is_prerequisite") is True
+        is_fsync = (
+            "fsync" in matching_job.get("step_tag", "")
+            or matching_job.get("step_tag", "").endswith("sync")
+            or ident.get("step_tag", "").endswith("sync")
+        )
+
+        requires_tx = bool(
+            criterion and "wait_for_commit" in CRITERIA_DEFINITIONS.get(criterion, "")
+        )
+        has_required_frames = cur_tx > 0 if requires_tx else cur_wait > 0
+
+        if is_counted and is_prereq and is_fsync and has_required_frames:
+            counted_fsync_matches.append({
+                "job_id": jid,
+                "disk_index": matching_disk.get("disk_index"),
+                "classification": matching_disk.get("classification"),
+                "step_tag": matching_job.get("step_tag") or ident.get("step_tag"),
+                "commit_stacks": cur_tx,
+                "wait_stacks": cur_wait,
+            })
+
+    if not matched_wrappers:
+        return {
+            "is_verified": False,
+            "reason": "no_matching_request_linked_wrappers",
+            "matched_wrappers": 0,
+            "total_switch_out_stacks": 0,
+            "btrfs_transaction_commit_stacks": 0,
+            "btrfs_wait_stacks": 0,
+            "counted_fsync_jobs": [],
+        }
+
+    if not counted_fsync_matches:
+        return {
+            "is_verified": False,
+            "reason": "no_counted_source_established_fsync_with_claimed_wait_frames",
+            "matched_wrappers": len(matched_wrappers),
+            "total_switch_out_stacks": total_stacks,
+            "btrfs_transaction_commit_stacks": commit_stacks,
+            "btrfs_wait_stacks": total_wait_stacks,
+            "counted_fsync_jobs": [],
+        }
+
+    return {
+        "is_verified": True,
+        "reason": None,
+        "matched_wrappers": len(matched_wrappers),
+        "total_switch_out_stacks": total_stacks,
+        "btrfs_transaction_commit_stacks": commit_stacks,
+        "btrfs_wait_stacks": total_wait_stacks,
+        "counted_fsync_jobs": counted_fsync_matches,
+    }
+
+
 def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_path=None):
     run_dir = Path(run_dir)
     repo_root = find_repo_root(run_dir)
@@ -266,6 +426,11 @@ def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_
         except Exception:
             stacks_data = None
 
+    capture_hashes_valid = False
+    capture_hash_reason = "no_stack_artifact"
+    if stacks_data:
+        capture_hashes_valid, capture_hash_reason = validate_capture_hashes(stacks_data, run_dir, input_hashes)
+
     run_data = {}
     for run_subdir in sorted(run_dir.glob("run-*")):
         run_name = run_subdir.name
@@ -291,16 +456,12 @@ def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_
 
     if automatic:
         spec = select_automatic_operations(run_data)
-        selection_mode = "automatic_criteria"
     elif declared_operations:
         spec = declared_operations
-        selection_mode = "declared_manual_keys"
     elif "run-2" not in run_data:
         spec = DEFAULT_JOINT_OPERATIONS
-        selection_mode = "stack_verified_declared_keys" if stacks_data else "declared_manual_keys"
     else:
         spec = DEFAULT_HISTORICAL_OPERATIONS
-        selection_mode = "declared_historical_keys"
 
     operations = []
     for item in spec:
@@ -333,25 +494,42 @@ def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_
             "disks": ack["disks"],
         }
         if stacks_data:
-            matched_wrappers = [
-                w for w in stacks_data.get("request_linked_wrappers", [])
-                if w.get("client_attempt", {}).get("key") == key
-            ]
-            total_stacks = sum(len(w.get("switch_out_stacks", [])) for w in matched_wrappers)
-            commit_stacks = 0
-            for w in matched_wrappers:
-                for s in w.get("switch_out_stacks", []):
-                    frames = s.get("frames", [])
-                    if any("wait_for_commit" in f or "btrfs_commit_transaction" in f for f in frames):
-                        commit_stacks += 1
-            op_entry["stack_validation"] = {
-                "status": "verified" if total_stacks > 0 else "unverified",
-                "artifact": str(resolved_stacks.relative_to(repo_root)) if resolved_stacks.is_relative_to(repo_root) else str(resolved_stacks),
-                "request_linked_wrappers": len(matched_wrappers),
-                "total_switch_out_stacks": total_stacks,
-                "btrfs_transaction_commit_stacks": commit_stacks,
-            }
+            if not capture_hashes_valid:
+                op_entry["stack_validation"] = {
+                    "status": "unverified",
+                    "reason": capture_hash_reason,
+                    "artifact": str(resolved_stacks.relative_to(repo_root)) if resolved_stacks.is_relative_to(repo_root) else str(resolved_stacks),
+                    "request_linked_wrappers": 0,
+                    "total_switch_out_stacks": 0,
+                    "btrfs_transaction_commit_stacks": 0,
+                    "btrfs_wait_stacks": 0,
+                    "counted_fsync_jobs": [],
+                }
+            else:
+                val = validate_operation_stack_evidence(stacks_data, run_name, key, op, ack, criterion=criterion)
+                op_entry["stack_validation"] = {
+                    "status": "verified" if val["is_verified"] else "unverified",
+                    "reason": val["reason"],
+                    "artifact": str(resolved_stacks.relative_to(repo_root)) if resolved_stacks.is_relative_to(repo_root) else str(resolved_stacks),
+                    "request_linked_wrappers": val["matched_wrappers"],
+                    "total_switch_out_stacks": val["total_switch_out_stacks"],
+                    "btrfs_transaction_commit_stacks": val["btrfs_transaction_commit_stacks"],
+                    "btrfs_wait_stacks": val["btrfs_wait_stacks"],
+                    "counted_fsync_jobs": val["counted_fsync_jobs"],
+                }
         operations.append(op_entry)
+
+    all_verified = bool(stacks_data and capture_hashes_valid and operations and all(
+        op.get("stack_validation", {}).get("status") == "verified" for op in operations
+    ))
+    if automatic:
+        selection_mode = "automatic_criteria"
+    elif declared_operations:
+        selection_mode = "stack_verified_declared_keys" if all_verified else "declared_manual_keys"
+    elif "run-2" not in run_data:
+        selection_mode = "stack_verified_declared_keys" if all_verified else "declared_manual_keys"
+    else:
+        selection_mode = "declared_historical_keys"
 
     git_commit = None
     repo_root = find_repo_root(run_dir)
