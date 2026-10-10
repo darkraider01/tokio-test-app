@@ -41,6 +41,8 @@ KIND_WAIT_BEGIN = 12
 KIND_WAIT_END = 13
 KIND_SEND_OK = 14
 KIND_SEND_ERR = 15
+KIND_DISK_COMPLETE = 16
+KIND_QUORUM_RESULT = 17
 
 KIND_NAMES = {
     KIND_SUBMIT: "submit",
@@ -55,9 +57,12 @@ KIND_NAMES = {
     KIND_WAIT_END: "wait_end",
     KIND_SEND_OK: "send_ok",
     KIND_SEND_ERR: "send_err",
+    KIND_DISK_COMPLETE: "disk_complete",
+    KIND_QUORUM_RESULT: "quorum_result",
 }
 
 OP_NONE = 0
+DISK_NONE = 0xFFFF_FFFF
 
 # Tag names must match the `scope_step` call sites in the probe build
 # (fs.rs, os.rs, and commit.rs). Frozen: changing a name changes its hash.
@@ -130,7 +135,7 @@ def read_probe(path):
      flushed_realtime_ns, clock_id, reserved, pid) = HEADER.unpack_from(raw)
     if magic != MAGIC:
         raise ValueError("probe dump magic mismatch")
-    if version not in (1, 2):
+    if version not in (1, 2, 3):
         raise ValueError(
             f"unsupported probe dump format version={version} record_size={record_size}")
     if record_size != RECORD.size:
@@ -163,9 +168,50 @@ def read_probe(path):
     records = []
     for offset in range(0, len(body), record_size):
         kind, _reserved, _pad, step, tid, reserved2, task_id, ts, a = RECORD.unpack_from(body, offset)
-        records.append({"kind": kind, "name": KIND_NAMES.get(kind, f"kind_{kind}"),
-                        "step": step, "tid": tid, "id": task_id, "ts": ts, "a": a,
-                        "reserved2": reserved2})
+        disk_index = None
+        attempt = None
+        status = None
+        quorum_satisfied = None
+        success_before = None
+        success_after = None
+        results_seen = None
+        write_quorum = None
+        if version >= 3:
+            if kind == KIND_SUBMIT:
+                if reserved2 != DISK_NONE:
+                    disk_index = reserved2 & 0xFFFF
+                    attempt = (reserved2 >> 16) & 0xFFFF
+            elif kind == KIND_DISK_COMPLETE:
+                disk_index = step & 0xFFFF
+                attempt = (step >> 16) & 0xFFFF
+                status = {0: "ok", 1: "err", 2: "panic"}.get(reserved2, f"status_{reserved2}")
+            elif kind == KIND_QUORUM_RESULT:
+                if step != DISK_NONE:
+                    disk_index = step & 0xFFFF
+                    attempt = (step >> 16) & 0xFFFF
+                status = {0: "ok", 1: "err", 2: "panic", 3: "join_error"}.get(reserved2 & 0xFF, f"status_{reserved2 & 0xFF}")
+                quorum_satisfied = bool((reserved2 >> 8) & 0xFF)
+                success_before = (reserved2 >> 16) & 0xFF
+                success_after = (reserved2 >> 24) & 0xFF
+                results_seen = task_id & 0xFFFF_FFFF
+                write_quorum = task_id >> 32
+
+        rec = {"kind": kind, "name": KIND_NAMES.get(kind, f"kind_{kind}"),
+               "step": step, "tid": tid, "id": task_id, "ts": ts, "a": a,
+               "reserved2": reserved2, "disk_index": disk_index, "attempt": attempt}
+        if status is not None:
+            rec["status"] = status
+        if quorum_satisfied is not None:
+            rec["quorum_satisfied"] = quorum_satisfied
+        if success_before is not None:
+            rec["success_before"] = success_before
+        if success_after is not None:
+            rec["success_after"] = success_after
+        if results_seen is not None:
+            rec["results_seen"] = results_seen
+        if write_quorum is not None:
+            rec["write_quorum"] = write_quorum
+        records.append(rec)
     header = {"version": version, "record_size": record_size, "capacity": capacity,
               "total_seen": total, "dropped_records": rejected_capacity,
               "stored_records": stored, "rejected_capacity": rejected_capacity,
@@ -206,6 +252,11 @@ def group_jobs(records):
             counters["duplicate_boundaries"] += 1
             continue
         job[name] = record
+        if kind == KIND_SUBMIT:
+            job["disk_index"] = record.get("disk_index")
+            job["attempt"] = record.get("attempt")
+            job["op_hash"] = record.get("a")
+            job["step_hash"] = record.get("step")
     for record in sorted(records, key=lambda r: r["ts"]):
         if record["kind"] != KIND_JOIN_READY:
             continue
@@ -387,6 +438,114 @@ def reconstruct_wait(records, poll_index, wait_begin, wait_end, op):
         "wait_begin_tid": wait_begin["tid"],
         "wait_end_tid": wait_end["tid"],
         "missing": missing,
+    }
+
+
+def reconstruct_acknowledgements(records, op, jobs=None):
+    """Reconstruct per-disk commit paths, acknowledgement counts, and quorum triggering."""
+    op_records = [r for r in records if r.get("a") == op]
+    sends = [r for r in op_records if r["kind"] in (KIND_SEND_OK, KIND_SEND_ERR)]
+    first_send = min(sends, key=lambda r: r["ts"]) if sends else None
+    send_ts = first_send["ts"] if first_send else None
+    send_kind = KIND_NAMES[first_send["kind"]] if first_send else None
+
+    completes = [r for r in op_records if r["kind"] == KIND_DISK_COMPLETE]
+    quorum_results = [r for r in op_records if r["kind"] == KIND_QUORUM_RESULT]
+
+    tag_names = {step_hash(tag): tag for tag in STEP_TAGS}
+    disk_jobs = {}
+    if jobs is not None:
+        for job_id, job in jobs.items():
+            if job.get("op_hash") == op and job.get("disk_index") is not None:
+                key = (job["disk_index"], job.get("attempt", 0))
+                disk_jobs.setdefault(key, []).append(job)
+
+    all_keys = set()
+    for r in completes + quorum_results:
+        if r.get("disk_index") is not None:
+            all_keys.add((r["disk_index"], r.get("attempt", 0)))
+    for key in disk_jobs:
+        all_keys.add(key)
+
+    disks = []
+    quorum_trigger_key = None
+
+    for key in sorted(all_keys):
+        d_idx, att = key
+        comp = next((r for r in completes if r.get("disk_index") == d_idx and r.get("attempt", 0) == att), None)
+        cons = next((r for r in quorum_results if r.get("disk_index") == d_idx and r.get("attempt", 0) == att), None)
+
+        associated_jobs = []
+        for j in sorted(disk_jobs.get(key, []), key=lambda j: j.get("submit", {}).get("ts", 0)):
+            sub = j.get("submit")
+            start = j.get("job_start")
+            end = j.get("job_end")
+            tag = tag_names.get(j.get("step_hash"), "unknown")
+            dur = _millis(end["ts"] - start["ts"]) if start and end else None
+            associated_jobs.append({
+                "job_id": (sub or {}).get("id") or (start or {}).get("id"),
+                "step_tag": tag,
+                "submit_ts": sub["ts"] if sub else None,
+                "start_ts": start["ts"] if start else None,
+                "end_ts": end["ts"] if end else None,
+                "dur_ms": dur,
+                "is_prerequisite": (comp is not None and end is not None and end["ts"] <= comp["ts"])
+            })
+
+        prod_ts = comp["ts"] if comp else None
+        prod_status = comp.get("status") if comp else None
+        cons_ts = cons["ts"] if cons else None
+        cons_status = cons.get("status") if cons else None
+        success_before = cons.get("success_before") if cons else None
+        success_after = cons.get("success_after") if cons else None
+        quorum_satisfied = cons.get("quorum_satisfied", False) if cons else False
+
+        if quorum_satisfied:
+            quorum_trigger_key = key
+            classification = "quorum_triggering_acknowledgement"
+        elif cons_status == "ok":
+            if send_ts is not None and cons_ts is not None and cons_ts <= send_ts:
+                classification = "counted_before_quorum"
+            else:
+                classification = "post_quorum_tail"
+        elif cons_status in ("err", "panic", "join_error"):
+            classification = "failed_result"
+        elif comp is not None:
+            if send_ts is not None and prod_ts is not None and prod_ts <= send_ts:
+                classification = "completed_before_quorum_unconsumed"
+            else:
+                classification = "post_quorum_tail"
+        else:
+            classification = "unestablished"
+
+        missing = []
+        if comp is None:
+            missing.append("prod_boundary")
+        if cons is None:
+            missing.append("cons_boundary")
+
+        disks.append({
+            "disk_index": d_idx,
+            "attempt": att,
+            "classification": classification,
+            "prod_ts": prod_ts,
+            "prod_status": prod_status,
+            "cons_ts": cons_ts,
+            "cons_status": cons_status,
+            "success_before": success_before,
+            "success_after": success_after,
+            "quorum_satisfied": quorum_satisfied,
+            "missing": missing,
+            "jobs": associated_jobs,
+        })
+
+    return {
+        "op_hash": op,
+        "send_kind": send_kind,
+        "send_ts": send_ts,
+        "quorum_trigger_disk": quorum_trigger_key[0] if quorum_trigger_key else None,
+        "quorum_trigger_attempt": quorum_trigger_key[1] if quorum_trigger_key else None,
+        "disks": disks,
     }
 
 
@@ -711,6 +870,7 @@ def analyze_run(root):
             "job_steps": step_names(job.get("submit", {}).get("step", 0)
                                     for job in op_jobs.values()
                                     if job.get("submit", {}).get("step")),
+            "acknowledgements": reconstruct_acknowledgements(records, op, jobs),
         })
     result["dial9"] = {
         "events": len(events),

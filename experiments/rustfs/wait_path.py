@@ -43,6 +43,13 @@ def analyze(run_dir, diagnostic_path):
         attempts = {fs_probe.op_hash(tier["bucket"], request["key"]): request
                     for tier in tiers for request in tier["requests"]
                     if not request.get("client_shed")}
+        probe_bin = run_dir / run["run"] / "fs-probe.bin"
+        if probe_bin.exists():
+            _, probe_records = fs_probe.read_probe(probe_bin)
+            probe_jobs, _ = fs_probe.group_jobs(probe_records)
+        else:
+            probe_records = []
+            probe_jobs = {}
         for wrapper in run["long_wrappers"]:
             identity = wrapper["identity"]
             if identity["op_hash"] is None:
@@ -63,10 +70,12 @@ def analyze(run_dir, diagnostic_path):
                                     "blocked_until_waking_ms": (e - s) / 1e6,
                                     "frames": stack["frames"]})
             matches.sort(key=lambda m: -m["blocked_until_waking_ms"])
+            ack = fs_probe.reconstruct_acknowledgements(probe_records, identity["op_hash"], probe_jobs)
             rows.append({"identity": identity, "dur_ms": wrapper["dur_ms"],
                          "operation_link": wrapper["operation_link"],
                          "client_attempt": attempts.get(identity["op_hash"]),
                          "switch_out_stacks": matches,
+                         "acknowledgements": ack,
                          "missing": [] if matches else ["switch_out_stack"]})
     rows.sort(key=lambda r: -max((m["blocked_until_waking_ms"]
                                  for m in r["switch_out_stacks"]), default=0))
@@ -74,6 +83,7 @@ def analyze(run_dir, diagnostic_path):
             "inputs": {str(p): fs_trace.sha256_file(p)
                        for p in [trace, diagnostic_path]
                        + sorted(run_dir.glob("run-*/tiers.json"))
+                       + sorted(run_dir.glob("run-*/fs-probe.bin"))
                        + [p for p in [run_dir / "measurement.json",
                                       run_dir / "sched-switch-trigger",
                                       run_dir / "sched-switch-format",
