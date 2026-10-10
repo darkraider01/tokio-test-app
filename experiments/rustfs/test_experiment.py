@@ -398,7 +398,7 @@ class FsProbeTests(unittest.TestCase):
         self.assertEqual(d2["success_after"], 3)
 
         d3 = ack["disks"][3]
-        self.assertEqual(d3["classification"], "post_quorum_tail")
+        self.assertEqual(d3["classification"], "post_quorum")
 
     def test_failed_results_do_not_increment_success_count(self):
         op = 99
@@ -442,7 +442,7 @@ class FsProbeTests(unittest.TestCase):
         # Disk 1 has prod without cons.
         records = [
             self._record(14, 300, tid=20, a=op, step=3, task_id=3, reserved2=4),
-            self._record(17, 200, tid=20, a=op, step=0, reserved2=0 | (1 << 8) | (0 << 16) | (1 << 24), task_id=1 | (3 << 32)),
+            self._record(17, 200, tid=20, a=op, step=0, reserved2=0 | (1 << 8) | (0 << 16) | (1 << 24), task_id=1 | (1 << 32)),
             self._record(16, 150, tid=11, a=op, step=1, reserved2=0),
         ]
         path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
@@ -467,6 +467,226 @@ class FsProbeTests(unittest.TestCase):
         self.assertIsNone(d1["cons_ts"])
         self.assertEqual(d1["classification"], "completed_before_quorum_unconsumed")
         self.assertIn("cons_boundary", d1["missing"])
+
+    def test_reconstruct_acknowledgements_source_verified_prerequisites(self):
+        op = 99
+        records = [
+            # Disk 0 jobs & boundaries
+            self._record(1, 100, tid=10, task_id=1, step=step_hash("dst_dir_fsync"), a=op, reserved2=0),
+            self._record(2, 110, tid=40, task_id=1),
+            self._record(3, 140, tid=40, task_id=1),
+
+            self._record(1, 102, tid=10, task_id=2, step=step_hash("mkdir"), a=op, reserved2=0),
+            self._record(2, 112, tid=40, task_id=2),
+            self._record(3, 145, tid=40, task_id=2),
+
+            self._record(1, 104, tid=10, task_id=3, step=step_hash("ancestor_fsync"), a=op, reserved2=0),
+            self._record(2, 114, tid=40, task_id=3),
+            self._record(3, 160, tid=40, task_id=3),
+
+            self._record(1, 106, tid=10, task_id=4, step=step_hash("src_dir_sync"), a=op, reserved2=0),
+            self._record(2, 116, tid=40, task_id=4),
+
+            # Disk 0 mutation return & quorum result
+            self._record(16, 150, tid=10, a=op, step=0, reserved2=0),
+            self._record(17, 180, tid=20, a=op, step=0, reserved2=0 | (0 << 8) | (0 << 16) | (1 << 24), task_id=1 | (1 << 32)),
+
+            # Disk 1 jobs & quorum result without mutation return (prod_ts is None)
+            self._record(1, 105, tid=11, task_id=5, step=step_hash("dst_dir_fsync"), a=op, reserved2=1),
+            self._record(2, 115, tid=41, task_id=5),
+            self._record(3, 130, tid=41, task_id=5),
+            self._record(17, 190, tid=20, a=op, step=1, reserved2=0 | (0 << 8) | (1 << 16) | (2 << 24), task_id=2 | (1 << 32)),
+
+            self._record(14, 200, tid=20, a=op, step=2, task_id=1, reserved2=2),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        jobs, _ = group_jobs(parsed)
+        ack = reconstruct_acknowledgements(parsed, op, jobs)
+
+        d0 = ack["disks"][0]
+        jobs_d0 = {j["job_id"]: j for j in d0["jobs"]}
+
+        # 1. Same-disk job ending before mutation return with verified awaited step
+        j1 = jobs_d0[1]
+        self.assertEqual(j1["step_tag"], "dst_dir_fsync")
+        self.assertEqual(j1["completed_before_mutation_return"], True)
+        self.assertEqual(j1["prerequisite"], "established")
+        self.assertTrue(j1["is_prerequisite"])
+        self.assertIn("dst_dir_fsync", j1["basis"])
+
+        # 2. Same-disk job ending before mutation return but lacking verified awaited path (unestablished)
+        j2 = jobs_d0[2]
+        self.assertEqual(j2["step_tag"], "mkdir")
+        self.assertEqual(j2["completed_before_mutation_return"], True)
+        self.assertEqual(j2["prerequisite"], "unestablished")
+        self.assertFalse(j2["is_prerequisite"])
+        self.assertIn("not verified", j2["basis"])
+
+        # 3. Same-disk job ending after mutation return (contradictory)
+        j3 = jobs_d0[3]
+        self.assertEqual(j3["step_tag"], "ancestor_fsync")
+        self.assertEqual(j3["completed_before_mutation_return"], False)
+        self.assertEqual(j3["prerequisite"], "contradictory")
+        self.assertFalse(j3["is_prerequisite"])
+        self.assertIn("Ordering contradiction", j3["basis"])
+
+        # 4. Missing job end (unestablished)
+        j4 = jobs_d0[4]
+        self.assertEqual(j4["step_tag"], "src_dir_sync")
+        self.assertIsNone(j4["completed_before_mutation_return"])
+        self.assertEqual(j4["prerequisite"], "unestablished")
+        self.assertFalse(j4["is_prerequisite"])
+        self.assertIn("missing job end or mutation-return", j4["basis"])
+
+        # 5. Missing mutation return on Disk 1 (unestablished)
+        d1 = ack["disks"][1]
+        j5 = d1["jobs"][0]
+        self.assertEqual(j5["step_tag"], "dst_dir_fsync")
+        self.assertIsNone(j5["completed_before_mutation_return"])
+        self.assertEqual(j5["prerequisite"], "unestablished")
+        self.assertFalse(j5["is_prerequisite"])
+        self.assertIn("missing job end or mutation-return", j5["basis"])
+
+        # 6. Parallel disk paths execute with independent ack tracking
+        self.assertEqual(d0["disk_index"], 0)
+        self.assertEqual(d1["disk_index"], 1)
+        self.assertNotEqual(d0["cons_ts"], d1["cons_ts"])
+
+    def test_reconstruct_acknowledgements_missing_send_marks_unestablished(self):
+        op = 99
+        records = [
+            self._record(16, 150, tid=10, a=op, step=0, reserved2=0),
+            self._record(17, 180, tid=20, a=op, step=0, reserved2=0 | (0 << 8) | (0 << 16) | (1 << 24), task_id=1 | (2 << 32)),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+        self.assertIsNone(ack["send_kind"])
+        self.assertIsNone(ack["send_ts"])
+        d0 = ack["disks"][0]
+        self.assertEqual(d0["classification"], "unestablished")
+
+    def test_reconstruct_acknowledgements_join_error_and_failed_results(self):
+        op = 99
+        DISK_NONE = 0xFFFF_FFFF
+        records = [
+            self._record(17, 150, tid=20, a=op, step=DISK_NONE, reserved2=3 | (0 << 8) | (0 << 16) | (0 << 24), task_id=1 | (2 << 32)),
+            self._record(16, 160, tid=11, a=op, step=1, reserved2=1),
+            self._record(17, 170, tid=20, a=op, step=1, reserved2=1 | (0 << 8) | (0 << 16) | (0 << 24), task_id=2 | (2 << 32)),
+            self._record(14, 200, tid=20, a=op, step=2, task_id=2, reserved2=2),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        self.assertEqual(len(ack["disks"]), 2)
+        d1 = ack["disks"][0]
+        self.assertEqual(d1["disk_index"], 1)
+        self.assertEqual(d1["prod_status"], "err")
+        self.assertEqual(d1["cons_status"], "err")
+        self.assertEqual(d1["classification"], "failed_result")
+
+        d_join = ack["disks"][1]
+        self.assertIsNone(d_join["disk_index"])
+        self.assertIsNone(d_join["attempt"])
+        self.assertEqual(d_join["cons_status"], "join_error")
+        self.assertEqual(d_join["classification"], "failed_result")
+
+    def test_reconstruct_acknowledgements_duplicate_boundaries_and_contradictions(self):
+        op = 99
+        records = [
+            self._record(16, 140, tid=10, a=op, step=0, reserved2=0),
+            self._record(16, 145, tid=10, a=op, step=0, reserved2=0),
+            self._record(17, 150, tid=20, a=op, step=0, reserved2=0 | (0 << 8) | (0 << 16) | (0 << 24), task_id=1 | (2 << 32)),
+            self._record(14, 200, tid=20, a=op, step=2, task_id=2, reserved2=2),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        d0 = ack["disks"][0]
+        self.assertEqual(d0["classification"], "ambiguous")
+        self.assertIn("duplicate_mutation_return_records", d0["diagnostics"])
+        self.assertEqual(ack["evidence_status"], "contradictory")
+        self.assertTrue(len(ack["validation_errors"]) > 0)
+
+    def test_reconstruct_acknowledgements_partial_prefix_and_missing_consumption(self):
+        op = 99
+        records = [
+            self._record(17, 150, tid=20, a=op, step=0, reserved2=0 | (1 << 8) | (1 << 16) | (2 << 24), task_id=2 | (2 << 32)),
+            self._record(14, 200, tid=20, a=op, step=2, task_id=2, reserved2=2),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        self.assertEqual(ack["evidence_status"], "partial_prefix")
+
+    def test_reconstruct_acknowledgements_rejects_impossible_ordering(self):
+        op = 99
+        # Disk 0 has coordinator consumption at ts 10 preceding mutation return at ts 20
+        records = [
+            self._record(17, 10, tid=20, a=op, step=0, reserved2=0 | (1 << 8) | (0 << 16) | (1 << 24), task_id=1 | (1 << 32)),
+            self._record(16, 20, tid=10, a=op, step=0, reserved2=0),
+            self._record(14, 30, tid=20, a=op, step=1, task_id=1, reserved2=1),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        self.assertEqual(ack["evidence_status"], "contradictory")
+        self.assertTrue(any("impossible ordering" in err for err in ack["validation_errors"]))
+        self.assertIsNone(ack["quorum_trigger_disk"])
+        d0 = ack["disks"][0]
+        self.assertIn("consumption_precedes_mutation_return", d0["diagnostics"])
+        self.assertEqual(d0["classification"], "ambiguous")
+        self.assertNotEqual(d0["classification"], "quorum_triggering_acknowledgement")
+
+    def test_reconstruct_acknowledgements_rejects_status_disagreement(self):
+        op = 99
+        records = [
+            self._record(16, 10, tid=10, a=op, step=0, reserved2=0),
+            self._record(17, 20, tid=20, a=op, step=0, reserved2=1 | (0 << 8) | (0 << 16) | (0 << 24), task_id=1 | (1 << 32)),
+            self._record(14, 30, tid=20, a=op, step=1, task_id=1, reserved2=1),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        self.assertEqual(ack["evidence_status"], "contradictory")
+        self.assertTrue(any("status disagreement" in err for err in ack["validation_errors"]))
+        self.assertIsNone(ack["quorum_trigger_disk"])
+        d0 = ack["disks"][0]
+        self.assertIn("status_disagreement", d0["diagnostics"])
+        self.assertEqual(d0["classification"], "ambiguous")
+
+    def test_reconstruct_acknowledgements_rejects_error_with_quorum_flag_when_already_at_quorum(self):
+        op = 99
+        records = [
+            self._record(16, 10, tid=10, a=op, step=0, reserved2=0),
+            self._record(17, 20, tid=20, a=op, step=0, reserved2=0 | (1 << 8) | (0 << 16) | (1 << 24), task_id=1 | (1 << 32)),
+            self._record(16, 15, tid=11, a=op, step=1, reserved2=1),
+            self._record(17, 25, tid=20, a=op, step=1, reserved2=1 | (1 << 8) | (1 << 16) | (1 << 24), task_id=2 | (1 << 32)),
+            self._record(14, 30, tid=20, a=op, step=2, task_id=1, reserved2=2),
+        ]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / "fs-probe.bin"
+        path.write_bytes(_probe_dump(records, version=3))
+        _, parsed = read_probe(path)
+        ack = reconstruct_acknowledgements(parsed, op)
+
+        self.assertEqual(ack["evidence_status"], "contradictory")
+        self.assertTrue(any("quorum_satisfied true on non-ok" in err or "already satisfied" in err for err in ack["validation_errors"]))
+        self.assertIsNone(ack["quorum_trigger_disk"])
+        d1 = ack["disks"][1]
+        self.assertNotEqual(d1["classification"], "quorum_triggering_acknowledgement")
 
     def test_version1_dump_stays_readable_with_missing_closed_counter(self):
         # Backward compatibility: captures produced before the format-2
@@ -2960,6 +3180,443 @@ class WaitPathTests(unittest.TestCase):
         self.assertIsNone(match_stack(stack, [("running", 99_000, 200_000)]))
         self.assertIsNone(match_stack(stack, [("blocked:D", 99_000, 200_000),
                                              ("blocked:D", 98_000, 200_000)]))
+
+    def test_verify_inputs_valid_fixture(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            trace = run_dir / "trace.raw"
+            trace.write_text("trace data\n")
+            trace_hash = sha256_file(trace)
+
+            r1 = run_dir / "run-1"
+            r1.mkdir()
+            probe = r1 / "fs-probe.bin"
+            probe.write_bytes(b"probe data")
+            probe_hash = sha256_file(probe)
+
+            tiers = r1 / "tiers.json"
+            tiers.write_text('{"tier": 1}')
+            tiers_hash = sha256_file(tiers)
+
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": trace_hash},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": trace_hash},
+                        {"role": "probe dump (run-1)", "path": str(probe), "sha256": probe_hash},
+                        {"role": "client tiers (run-1)", "path": str(tiers), "sha256": tiers_hash},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+
+            verified_inputs, _ = verify_inputs(run_dir, diagnostic)
+            self.assertEqual(len(verified_inputs), 3)
+            self.assertTrue(all(v["matches_diagnostic"] for v in verified_inputs))
+
+    def test_verify_inputs_detects_tampered_trace_or_probe(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            trace = run_dir / "trace.raw"
+            trace.write_text("trace data\n")
+            trace_hash = sha256_file(trace)
+
+            r1 = run_dir / "run-1"
+            r1.mkdir()
+            probe = r1 / "fs-probe.bin"
+            probe.write_bytes(b"probe data")
+            probe_hash = sha256_file(probe)
+
+            tiers = r1 / "tiers.json"
+            tiers.write_text('{"tier": 1}')
+            tiers_hash = sha256_file(tiers)
+
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": trace_hash},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": trace_hash},
+                        {"role": "probe dump (run-1)", "path": str(probe), "sha256": probe_hash},
+                        {"role": "client tiers (run-1)", "path": str(tiers), "sha256": tiers_hash},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+
+            # Tampered trace
+            trace.write_text("tampered trace\n")
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("trace.raw SHA-256", str(ctx.exception))
+            trace.write_text("trace data\n")
+
+            # Tampered probe
+            probe.write_bytes(b"tampered probe")
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("fs-probe.bin SHA-256", str(ctx.exception))
+            probe.write_bytes(b"probe data")
+
+            # Tampered tiers
+            tiers.write_text('{"tampered": true}')
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("tiers.json SHA-256", str(ctx.exception))
+            tiers.write_text('{"tier": 1}')
+
+            # Missing run-1
+            shutil.rmtree(r1)
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("required run run-1 missing", str(ctx.exception))
+
+    def test_verify_inputs_permits_relocated_identical_directory(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_orig, tempfile.TemporaryDirectory() as tmp_copy:
+            orig_dir = Path(tmp_orig)
+            trace = orig_dir / "trace.raw"
+            trace.write_text("trace data\n")
+            trace_hash = sha256_file(trace)
+
+            r1 = orig_dir / "run-1"
+            r1.mkdir()
+            probe = r1 / "fs-probe.bin"
+            probe.write_bytes(b"probe data")
+            probe_hash = sha256_file(probe)
+
+            tiers = r1 / "tiers.json"
+            tiers.write_text('{"tier": 1}')
+            tiers_hash = sha256_file(tiers)
+
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": trace_hash},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": trace_hash},
+                        {"role": "probe dump (run-1)", "path": str(probe), "sha256": probe_hash},
+                        {"role": "client tiers (run-1)", "path": str(tiers), "sha256": tiers_hash},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+
+            copy_dir = Path(tmp_copy)
+            (copy_dir / "trace.raw").write_text("trace data\n")
+            (copy_dir / "run-1").mkdir()
+            (copy_dir / "run-1" / "fs-probe.bin").write_bytes(b"probe data")
+            (copy_dir / "run-1" / "tiers.json").write_text('{"tier": 1}')
+
+            verified_inputs, _ = verify_inputs(copy_dir, diagnostic)
+            self.assertEqual(len(verified_inputs), 3)
+
+    def test_verify_inputs_rejects_legacy_diagnostic_without_provenance(self):
+        from wait_path import verify_inputs
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            (run_dir / "trace.raw").write_text("trace data\n")
+            legacy_diagnostic = {"runs": [{"run": "run-1"}]}
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, legacy_diagnostic)
+            self.assertIn("legacy diagnostic lacks input provenance", str(ctx.exception))
+
+    def test_wait_path_v5_summary_generator(self):
+        from wait_path_v5 import summarize_waitpath_v5
+        repo_root = Path(__file__).resolve().parents[2]
+        run_dir = repo_root / ".repro" / "rustfs-waitpath-v5"
+        if not run_dir.is_dir():
+            self.skipTest("waitpath-v5 repro capture missing")
+        summary = summarize_waitpath_v5(run_dir)
+        self.assertEqual(summary["schema_version"], "rustfs-acknowledgement-dependencies/v2")
+        self.assertIn("provenance", summary)
+        self.assertIn("parameters", summary)
+        self.assertIn("limitations", summary)
+        self.assertIn("representative_operations", summary)
+        self.assertEqual(len(summary["representative_operations"]), 4)
+        op = summary["representative_operations"][0]
+        self.assertIn("quorum_trigger_disk", op)
+        self.assertIn("disks", op)
+        self.assertTrue(len(op["disks"]) > 0)
+        d0 = op["disks"][0]
+        self.assertIn("classification", d0)
+        self.assertIn("mutation_return_ts", d0)
+        self.assertIn("coordinator_consumed_ts", d0)
+
+    def test_verify_inputs_rejects_missing_probe_hash_in_provenance(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            trace = run_dir / "trace.raw"
+            trace.write_text("trace\n")
+            r1 = run_dir / "run-1"
+            r1.mkdir()
+            (r1 / "fs-probe.bin").write_bytes(b"probe")
+            (r1 / "tiers.json").write_text('{"tier": 1}')
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": sha256_file(trace)},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": sha256_file(trace)},
+                        {"role": "client tiers", "path": str(r1 / "tiers.json"), "sha256": sha256_file(r1 / "tiers.json")},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("fs-probe.bin SHA-256", str(ctx.exception))
+
+    def test_verify_inputs_rejects_missing_tiers_hash_in_provenance(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            trace = run_dir / "trace.raw"
+            trace.write_text("trace\n")
+            r1 = run_dir / "run-1"
+            r1.mkdir()
+            (r1 / "fs-probe.bin").write_bytes(b"probe")
+            (r1 / "tiers.json").write_text('{"tier": 1}')
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": sha256_file(trace)},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": sha256_file(trace)},
+                        {"role": "probe dump", "path": str(r1 / "fs-probe.bin"), "sha256": sha256_file(r1 / "fs-probe.bin")},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+            with self.assertRaises(ValueError) as ctx:
+                verify_inputs(run_dir, diagnostic)
+            self.assertIn("tiers.json SHA-256", str(ctx.exception))
+
+    def test_verify_inputs_distinguishes_newly_hashed_optional_files(self):
+        from wait_path import verify_inputs
+        from fs_trace import sha256_file
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            run_dir = Path(tmp_dir)
+            trace = run_dir / "trace.raw"
+            trace.write_text("trace\n")
+            r1 = run_dir / "run-1"
+            r1.mkdir()
+            (r1 / "fs-probe.bin").write_bytes(b"probe")
+            (r1 / "tiers.json").write_text('{"tier": 1}')
+            trigger = run_dir / "sched-switch-trigger"
+            trigger.write_text("stacktrace:100\n")
+            diagnostic = {
+                "provenance": {
+                    "trace": {"sha256": sha256_file(trace)},
+                    "inputs": [
+                        {"role": "ftrace raw capture", "path": str(trace), "sha256": sha256_file(trace)},
+                        {"role": "probe dump", "path": str(r1 / "fs-probe.bin"), "sha256": sha256_file(r1 / "fs-probe.bin")},
+                        {"role": "client tiers", "path": str(r1 / "tiers.json"), "sha256": sha256_file(r1 / "tiers.json")},
+                    ],
+                },
+                "runs": [{"run": "run-1"}],
+            }
+            verified, _ = verify_inputs(run_dir, diagnostic)
+            by_role = {v["role"]: v for v in verified}
+            self.assertTrue(by_role["ftrace raw capture"]["matches_diagnostic"])
+            self.assertEqual(by_role["ftrace raw capture"]["status"], "verified_match")
+            self.assertFalse(by_role["sched-switch-trigger"]["matches_diagnostic"])
+            self.assertEqual(by_role["sched-switch-trigger"]["status"], "newly_hashed_unrecorded")
+
+    def test_select_automatic_operations_tie_breaking(self):
+        from wait_path_v5 import select_automatic_operations
+        run_data = {
+            "run-2": {
+                "attempts": {
+                    "z_late.bin": {"key": "z_late.bin", "attempt_to_completion_ms": 100.0, "attempted_ns": 200, "status": 200},
+                    "z_early.bin": {"key": "z_early.bin", "attempt_to_completion_ms": 100.0, "attempted_ns": 100, "status": 200},
+                    "a_early.bin": {"key": "a_early.bin", "attempt_to_completion_ms": 100.0, "attempted_ns": 100, "status": 200},
+                }
+            }
+        }
+        selected = select_automatic_operations(run_data)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["key"], "a_early.bin")
+
+    def test_select_automatic_operations_post_send_tail_duration_ranking(self):
+        from wait_path_v5 import select_automatic_operations
+        # Candidate A has longer total closure (100 ms vs 60 ms), but Candidate B has longer post-send tail (40 ms vs 10 ms)
+        op_a_records = [
+            {"kind": 16, "ts": 100_000_000, "tid": 10, "step": 0, "a": 1, "id": 1, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 14, "ts": 90_000_000, "tid": 20, "step": 1, "a": 1, "id": 1, "reserved2": 1},
+        ]
+        op_b_records = [
+            {"kind": 16, "ts": 60_000_000, "tid": 10, "step": 0, "a": 2, "id": 2, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 14, "ts": 20_000_000, "tid": 20, "step": 1, "a": 2, "id": 2, "reserved2": 1},
+        ]
+        all_records = op_a_records + op_b_records
+        all_jobs = {
+            1: {
+                "op_hash": 1, "disk_index": 0, "attempt": 0, "step_hash": 2435288110,
+                "submit": {"ts": 0, "id": 1},
+                "job_start": {"ts": 0, "tid": 10, "id": 1, "step": 2435288110},
+                "job_end": {"ts": 100_000_000, "tid": 10, "id": 1},
+            },
+            2: {
+                "op_hash": 2, "disk_index": 0, "attempt": 0, "step_hash": 2435288110,
+                "submit": {"ts": 0, "id": 2},
+                "job_start": {"ts": 0, "tid": 10, "id": 2, "step": 2435288110},
+                "job_end": {"ts": 60_000_000, "tid": 10, "id": 2},
+            },
+        }
+        run_data = {
+            "run-1": {
+                "attempts": {
+                    "cand_a.bin": {"key": "cand_a.bin", "bucket": "b", "attempt_to_completion_ms": 110.0, "attempted_ns": 100, "status": 200},
+                    "cand_b.bin": {"key": "cand_b.bin", "bucket": "b", "attempt_to_completion_ms": 70.0, "attempted_ns": 100, "status": 200},
+                },
+                "records": all_records,
+                "jobs": all_jobs,
+            }
+        }
+        with patch("fs_probe.op_hash", side_effect=lambda b, k: 1 if k == "cand_a.bin" else 2):
+            selected = select_automatic_operations(run_data)
+        crit2 = [s for s in selected if s["criterion"] == "operation_with_long_post_send_tail"]
+        self.assertEqual(len(crit2), 1)
+        self.assertEqual(crit2[0]["key"], "cand_b.bin")
+
+    def test_select_automatic_operations_rejects_post_quorum_job_ending_before_send(self):
+        from wait_path_v5 import select_automatic_operations
+        # Candidate job on post-send disk ends at 80 ms, but SEND_OK is at 90 ms (ends BEFORE send)
+        records = [
+            {"kind": 16, "ts": 80_000_000, "tid": 10, "step": 0, "a": 1, "id": 1, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 14, "ts": 90_000_000, "tid": 20, "step": 1, "a": 1, "id": 1, "reserved2": 1},
+        ]
+        jobs = {
+            1: {
+                "op_hash": 1, "disk_index": 0, "attempt": 0, "step_hash": 2435288110,
+                "submit": {"ts": 0, "id": 1},
+                "job_start": {"ts": 0, "tid": 10, "id": 1, "step": 2435288110},
+                "job_end": {"ts": 80_000_000, "tid": 10, "id": 1},
+            },
+        }
+        run_data = {
+            "run-1": {
+                "attempts": {
+                    "cand.bin": {"key": "cand.bin", "bucket": "b", "attempt_to_completion_ms": 110.0, "attempted_ns": 100, "status": 200},
+                },
+                "records": records,
+                "jobs": jobs,
+            }
+        }
+        with patch("fs_probe.op_hash", return_value=1):
+            selected = select_automatic_operations(run_data)
+        crit2 = [s for s in selected if s["criterion"] == "operation_with_long_post_send_tail"]
+        self.assertEqual(len(crit2), 0)
+
+    def test_select_automatic_operations_criterion_3_requires_counted_fsync_waits(self):
+        from wait_path_v5 import select_automatic_operations
+        # cand_no_fsync has counted acknowledgement but no ancestor_fsync/dst_dir_fsync
+        # cand_with_fsync has counted acknowledgement with ancestor_fsync
+        op_1_records = [
+            # disk 0 counted before quorum (quorum trigger at ts 50)
+            {"kind": 16, "ts": 40_000_000, "tid": 10, "step": 0, "a": 1, "id": 1, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 45_000_000, "tid": 20, "step": 0, "a": 1, "id": 1, "reserved2": 0 | (1 << 8) | (0 << 16) | (1 << 24), "disk_index": 0, "attempt": 0, "status": "ok", "success_before": 0, "success_after": 1, "write_quorum": 2, "quorum_satisfied": False},
+            # disk 1 quorum trigger
+            {"kind": 16, "ts": 50_000_000, "tid": 11, "step": 1, "a": 1, "id": 2, "reserved2": 0, "disk_index": 1, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 50_000_000, "tid": 20, "step": 1, "a": 1, "id": 2, "reserved2": 0 | (1 << 8) | (1 << 16) | (2 << 24), "disk_index": 1, "attempt": 0, "status": "ok", "success_before": 1, "success_after": 2, "write_quorum": 2, "quorum_satisfied": True},
+            # SEND_OK
+            {"kind": 14, "ts": 60_000_000, "tid": 20, "step": 2, "a": 1, "id": 1, "reserved2": 1},
+            # disk 2 post-send tail
+            {"kind": 16, "ts": 90_000_000, "tid": 12, "step": 2, "a": 1, "id": 3, "reserved2": 0, "disk_index": 2, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 95_000_000, "tid": 20, "step": 2, "a": 1, "id": 3, "reserved2": 0 | (1 << 8) | (2 << 16) | (3 << 24), "disk_index": 2, "attempt": 0, "status": "ok", "success_before": 2, "success_after": 3, "write_quorum": 2, "quorum_satisfied": False},
+        ]
+        # op 1 has NO fsync tag on disk 0
+        jobs_1 = {
+            1: {
+                "op_hash": 1, "disk_index": 0, "attempt": 0, "step_hash": 999999,
+                "submit": {"ts": 0, "id": 1},
+                "job_start": {"ts": 0, "tid": 10, "id": 1, "step": 999999},
+                "job_end": {"ts": 40_000_000, "tid": 10, "id": 1},
+            },
+            3: {
+                "op_hash": 1, "disk_index": 2, "attempt": 0, "step_hash": 999999,
+                "submit": {"ts": 0, "id": 3},
+                "job_start": {"ts": 0, "tid": 12, "id": 3, "step": 999999},
+                "job_end": {"ts": 90_000_000, "tid": 12, "id": 3},
+            },
+        }
+        # op 2 has ancestor_fsync on disk 0
+        op_2_records = [
+            {"kind": 16, "ts": 40_000_000, "tid": 10, "step": 0, "a": 2, "id": 10, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 45_000_000, "tid": 20, "step": 0, "a": 2, "id": 10, "reserved2": 0 | (1 << 8) | (0 << 16) | (1 << 24), "disk_index": 0, "attempt": 0, "status": "ok", "success_before": 0, "success_after": 1, "write_quorum": 2, "quorum_satisfied": False},
+            {"kind": 16, "ts": 50_000_000, "tid": 11, "step": 1, "a": 2, "id": 20, "reserved2": 0, "disk_index": 1, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 50_000_000, "tid": 20, "step": 1, "a": 2, "id": 20, "reserved2": 0 | (1 << 8) | (1 << 16) | (2 << 24), "disk_index": 1, "attempt": 0, "status": "ok", "success_before": 1, "success_after": 2, "write_quorum": 2, "quorum_satisfied": True},
+            {"kind": 14, "ts": 60_000_000, "tid": 20, "step": 2, "a": 2, "id": 10, "reserved2": 1},
+            {"kind": 16, "ts": 90_000_000, "tid": 12, "step": 2, "a": 2, "id": 30, "reserved2": 0, "disk_index": 2, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 95_000_000, "tid": 20, "step": 2, "a": 2, "id": 30, "reserved2": 0 | (1 << 8) | (2 << 16) | (3 << 24), "disk_index": 2, "attempt": 0, "status": "ok", "success_before": 2, "success_after": 3, "write_quorum": 2, "quorum_satisfied": False},
+        ]
+        jobs_2 = {
+            10: {
+                "op_hash": 2, "disk_index": 0, "attempt": 0, "step_hash": 2435288110,  # ancestor_fsync
+                "submit": {"ts": 0, "id": 10},
+                "job_start": {"ts": 0, "tid": 10, "id": 10, "step": 2435288110},
+                "job_end": {"ts": 40_000_000, "tid": 10, "id": 10},
+            },
+            30: {
+                "op_hash": 2, "disk_index": 2, "attempt": 0, "step_hash": 999999,
+                "submit": {"ts": 0, "id": 30},
+                "job_start": {"ts": 0, "tid": 12, "id": 30, "step": 999999},
+                "job_end": {"ts": 90_000_000, "tid": 12, "id": 30},
+            },
+        }
+        all_records = op_1_records + op_2_records
+        all_jobs = {**jobs_1, **jobs_2}
+        run_data = {
+            "run-1": {
+                "attempts": {
+                    "cand_no_fsync.bin": {"key": "cand_no_fsync.bin", "bucket": "b", "attempt_to_completion_ms": 120.0, "attempted_ns": 100, "status": 200},
+                    "cand_with_fsync.bin": {"key": "cand_with_fsync.bin", "bucket": "b", "attempt_to_completion_ms": 100.0, "attempted_ns": 100, "status": 200},
+                },
+                "records": all_records,
+                "jobs": all_jobs,
+            }
+        }
+        with patch("fs_probe.op_hash", side_effect=lambda b, k: 1 if k == "cand_no_fsync.bin" else 2):
+            selected = select_automatic_operations(run_data)
+        crit3 = [s for s in selected if s["criterion"] == "operation_with_post_send_tail_and_counted_waits"]
+        self.assertEqual(len(crit3), 1)
+        self.assertEqual(crit3[0]["key"], "cand_with_fsync.bin")
+
+    def test_select_automatic_operations_criterion_1_lexicographical_tie_break(self):
+        from wait_path_v5 import select_automatic_operations
+        # Both cand_b and cand_a have equal latency and attempted_ns, and long counted fsync
+        records = [
+            {"kind": 16, "ts": 40_000_000, "tid": 10, "step": 0, "a": 1, "id": 1, "reserved2": 0, "disk_index": 0, "attempt": 0, "status": "ok"},
+            {"kind": 17, "ts": 45_000_000, "tid": 20, "step": 0, "a": 1, "id": 1, "reserved2": 0 | (1 << 8) | (0 << 16) | (1 << 24), "disk_index": 0, "attempt": 0, "status": "ok", "success_before": 0, "success_after": 1, "write_quorum": 1, "quorum_satisfied": True},
+        ]
+        jobs = {
+            1: {
+                "op_hash": 1, "disk_index": 0, "attempt": 0, "step_hash": 2435288110,  # ancestor_fsync
+                "submit": {"ts": 0, "id": 1},
+                "job_start": {"ts": 0, "tid": 10, "id": 1, "step": 2435288110},
+                "job_end": {"ts": 60_000_000, "tid": 10, "id": 1},  # 60 ms >= 50 ms
+            },
+        }
+        run_data = {
+            "run-1": {
+                "attempts": {
+                    "cand_z.bin": {"key": "cand_z.bin", "bucket": "b", "attempt_to_completion_ms": 100.0, "attempted_ns": 50, "status": 200},
+                    "cand_a.bin": {"key": "cand_a.bin", "bucket": "b", "attempt_to_completion_ms": 100.0, "attempted_ns": 50, "status": 200},
+                },
+                "records": records,
+                "jobs": jobs,
+            }
+        }
+        with patch("fs_probe.op_hash", return_value=1):
+            selected = select_automatic_operations(run_data)
+        crit1 = [s for s in selected if s["criterion"] == "slow_successful_put_with_counted_long_wait"]
+        self.assertEqual(len(crit1), 1)
+        self.assertEqual(crit1[0]["key"], "cand_a.bin")
 
 
 if __name__ == "__main__":

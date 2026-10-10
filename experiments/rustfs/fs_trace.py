@@ -1310,6 +1310,9 @@ def analyze(run_dir, threshold_ms=50.0, timelines=3, probe_reference=None):
     for run_name in runs:
         dump_path = run_dir / run_name / "fs-probe.bin"
         inputs.append(input_entry("probe dump", dump_path))
+        tiers_path = run_dir / run_name / "tiers.json"
+        if tiers_path.is_file():
+            inputs.append(input_entry("client tiers", tiers_path))
         header, records = fs_probe.read_probe(dump_path)
         jobs, counters = fs_probe.group_jobs(records)
         probe_tids.update(r["tid"] for r in records)

@@ -1,5 +1,51 @@
 {
-  "schema": "rustfs-acknowledgement-dependencies/v1",
+  "schema": "rustfs-acknowledgement-dependencies/v2",
+  "schema_version": "rustfs-acknowledgement-dependencies/v2",
+  "provenance": {
+    "generator": "experiments/rustfs/wait_path_v5.py",
+    "git_commit": "cb5b9e66815f27cd0fd8b7c45d5db25da83e13cf",
+    "inputs": {
+      "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
+      "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
+      "binary/rustfs-v5": "9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58",
+      ".repro/rustfs-waitpath-v5/manifest.json": "419a83d3461d5de85fdb898528520d2547a1e3f46955391a9d257f2463593dad",
+      ".repro/rustfs-waitpath-v5/run-1/tiers.json": "c7b6779e3b5a6e956a0a30ef0f29ed96c64d38b62cd6fc2877bcd26f61078d6f",
+      ".repro/rustfs-waitpath-v5/run-1/fs-probe.bin": "8fc43163925766a1097d6fd3af432965abe0e981265fa7b61da7e774054ed5c9",
+      ".repro/rustfs-waitpath-v5/run-2/tiers.json": "736e3dd0ac1a94276564f5fc942d3b7b9562d66cbfe2a903f784c0fef9919081",
+      ".repro/rustfs-waitpath-v5/run-2/fs-probe.bin": "9a22c97a1496fe04dc2fcedb0a5ca6a3ac9f2a25006886bb0226956e3141a3a4"
+    }
+  },
+  "parameters": {
+    "selection_mode": "declared_historical_keys",
+    "selected_keys": [
+      {
+        "run": "run-1",
+        "key": "c8/221.bin",
+        "criterion": "slow_successful_put_with_counted_long_wait"
+      },
+      {
+        "run": "run-1",
+        "key": "c8/210.bin",
+        "criterion": "operation_with_long_post_send_tail"
+      },
+      {
+        "run": "run-1",
+        "key": "c8/208.bin",
+        "criterion": "operation_with_post_send_tail_and_counted_waits"
+      },
+      {
+        "run": "run-2",
+        "key": "c8/37.bin",
+        "criterion": "run2_slow_successful_put"
+      }
+    ],
+    "criteria_definitions": {
+      "slow_successful_put_with_counted_long_wait": "Successful PUT (HTTP 200, unshed) with the highest client attempt-to-completion latency where a counted acknowledgement (counted_before_quorum or quorum_triggering) includes an ancestor_fsync >= 50 ms. Tie-breaking: earliest attempted_ns, then lexicographical key.",
+      "operation_with_long_post_send_tail": "Successful PUT where a post-send or post-quorum disk tail contains an ancestor_fsync >= 50 ms completing after SEND_OK. Ranked by longest post-send tail duration, tie-breaking by earliest attempted_ns.",
+      "operation_with_post_send_tail_and_counted_waits": "Successful PUT exhibiting both counted pre-quorum fsync waits and an observed post-send tail. Tie-breaking: highest client attempt-to-completion latency, then earliest attempted_ns.",
+      "run2_slow_successful_put": "Successful PUT in run-2 with the highest client attempt-to-completion latency. Tie-breaking: earliest attempted_ns, then lexicographical key."
+    }
+  },
   "inputs": {
     "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
     "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
@@ -36,13 +82,18 @@
       "send_ts": 9175340216478,
       "quorum_trigger_disk": 0,
       "quorum_trigger_attempt": 0,
+      "evidence_status": "validated",
       "disks": [
         {
           "disk_index": 0,
           "attempt": 0,
           "classification": "quorum_triggering_acknowledgement",
+          "mutation_return_ts": 9175340207692,
+          "mutation_return_status": "ok",
           "prod_ts": 9175340207692,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175340213292,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175340213292,
           "cons_status": "ok",
           "success_before": 2,
@@ -57,6 +108,10 @@
               "start_ts": 9175246696523,
               "end_ts": 9175246704348,
               "dur_ms": 0.007825,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -66,6 +121,10 @@
               "start_ts": 9175247477854,
               "end_ts": 9175252541809,
               "dur_ms": 5.063955,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -75,6 +134,10 @@
               "start_ts": 9175247614601,
               "end_ts": 9175255406713,
               "dur_ms": 7.792112,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -84,6 +147,10 @@
               "start_ts": 9175255740361,
               "end_ts": 9175257525623,
               "dur_ms": 1.785262,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -93,6 +160,10 @@
               "start_ts": 9175257831248,
               "end_ts": 9175262350056,
               "dur_ms": 4.518808,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -102,6 +173,10 @@
               "start_ts": 9175262439605,
               "end_ts": 9175263494671,
               "dur_ms": 1.055066,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -111,6 +186,10 @@
               "start_ts": 9175266900644,
               "end_ts": 9175338779693,
               "dur_ms": 71.879049,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -120,6 +199,10 @@
               "start_ts": 9175339689486,
               "end_ts": 9175339706839,
               "dur_ms": 0.017353,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -128,8 +211,12 @@
           "disk_index": 1,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175340098306,
+          "mutation_return_status": "ok",
           "prod_ts": 9175340098306,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175340104517,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175340104517,
           "cons_status": "ok",
           "success_before": 1,
@@ -144,6 +231,10 @@
               "start_ts": 9175246809035,
               "end_ts": 9175246817050,
               "dur_ms": 0.008015,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -153,6 +244,10 @@
               "start_ts": 9175247507570,
               "end_ts": 9175252884514,
               "dur_ms": 5.376944,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -162,6 +257,10 @@
               "start_ts": 9175247625883,
               "end_ts": 9175255356619,
               "dur_ms": 7.730736,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -171,6 +270,10 @@
               "start_ts": 9175255504818,
               "end_ts": 9175255737836,
               "dur_ms": 0.233018,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -180,6 +283,10 @@
               "start_ts": 9175255947521,
               "end_ts": 9175259327485,
               "dur_ms": 3.379964,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -189,6 +296,10 @@
               "start_ts": 9175259398619,
               "end_ts": 9175262837023,
               "dur_ms": 3.438404,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -198,6 +309,10 @@
               "start_ts": 9175265809139,
               "end_ts": 9175338724008,
               "dur_ms": 72.914869,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -207,6 +322,10 @@
               "start_ts": 9175339671322,
               "end_ts": 9175339691610,
               "dur_ms": 0.020288,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -214,9 +333,13 @@
         {
           "disk_index": 2,
           "attempt": 0,
-          "classification": "post_quorum_tail",
+          "classification": "post_quorum",
+          "mutation_return_ts": 9175340300306,
+          "mutation_return_status": "ok",
           "prod_ts": 9175340300306,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175340319693,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175340319693,
           "cons_status": "ok",
           "success_before": 3,
@@ -231,6 +354,10 @@
               "start_ts": 9175246905546,
               "end_ts": 9175246917058,
               "dur_ms": 0.011512,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -240,6 +367,10 @@
               "start_ts": 9175248104945,
               "end_ts": 9175252907277,
               "dur_ms": 4.802332,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -249,6 +380,10 @@
               "start_ts": 9175248116486,
               "end_ts": 9175255419577,
               "dur_ms": 7.303091,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -258,6 +393,10 @@
               "start_ts": 9175255766420,
               "end_ts": 9175261566391,
               "dur_ms": 5.799971,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -267,6 +406,10 @@
               "start_ts": 9175261604993,
               "end_ts": 9175262970945,
               "dur_ms": 1.365952,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -276,6 +419,10 @@
               "start_ts": 9175266456749,
               "end_ts": 9175338719319,
               "dur_ms": 72.26257,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -285,6 +432,10 @@
               "start_ts": 9175339663307,
               "end_ts": 9175339686480,
               "dur_ms": 0.023173,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -294,6 +445,10 @@
               "start_ts": 9175340063180,
               "end_ts": 9175340081083,
               "dur_ms": 0.017903,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -302,8 +457,12 @@
           "disk_index": 3,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175321594415,
+          "mutation_return_status": "ok",
           "prod_ts": 9175321594415,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175321603603,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175321603603,
           "cons_status": "ok",
           "success_before": 0,
@@ -318,6 +477,10 @@
               "start_ts": 9175246593369,
               "end_ts": 9175246604590,
               "dur_ms": 0.011221,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -327,6 +490,10 @@
               "start_ts": 9175247171177,
               "end_ts": 9175252992778,
               "dur_ms": 5.821601,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -336,6 +503,10 @@
               "start_ts": 9175247542456,
               "end_ts": 9175255431389,
               "dur_ms": 7.888933,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -345,6 +516,10 @@
               "start_ts": 9175255804141,
               "end_ts": 9175262232184,
               "dur_ms": 6.428043,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -354,6 +529,10 @@
               "start_ts": 9175262496201,
               "end_ts": 9175263045476,
               "dur_ms": 0.549275,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -363,6 +542,10 @@
               "start_ts": 9175267018807,
               "end_ts": 9175316619027,
               "dur_ms": 49.60022,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -372,6 +555,10 @@
               "start_ts": 9175316648894,
               "end_ts": 9175321376886,
               "dur_ms": 4.727992,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -381,6 +568,10 @@
               "start_ts": 9175321403075,
               "end_ts": 9175321418945,
               "dur_ms": 0.01587,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -412,13 +603,18 @@
       "send_ts": 9175321524263,
       "quorum_trigger_disk": 0,
       "quorum_trigger_attempt": 0,
+      "evidence_status": "validated",
       "disks": [
         {
           "disk_index": 0,
           "attempt": 0,
           "classification": "quorum_triggering_acknowledgement",
+          "mutation_return_ts": 9175321500659,
+          "mutation_return_status": "ok",
           "prod_ts": 9175321500659,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175321516469,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175321516469,
           "cons_status": "ok",
           "success_before": 2,
@@ -433,6 +629,10 @@
               "start_ts": 9175247299228,
               "end_ts": 9175247308485,
               "dur_ms": 0.009257,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -442,6 +642,10 @@
               "start_ts": 9175248183152,
               "end_ts": 9175253107885,
               "dur_ms": 4.924733,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -451,6 +655,10 @@
               "start_ts": 9175248827465,
               "end_ts": 9175255442079,
               "dur_ms": 6.614614,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -460,6 +668,10 @@
               "start_ts": 9175255839408,
               "end_ts": 9175262135182,
               "dur_ms": 6.295774,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -469,6 +681,10 @@
               "start_ts": 9175262429957,
               "end_ts": 9175262671642,
               "dur_ms": 0.241685,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -478,6 +694,10 @@
               "start_ts": 9175265933994,
               "end_ts": 9175316308352,
               "dur_ms": 50.374358,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -487,6 +707,10 @@
               "start_ts": 9175316343799,
               "end_ts": 9175321361186,
               "dur_ms": 5.017387,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -496,6 +720,10 @@
               "start_ts": 9175321403025,
               "end_ts": 9175321418955,
               "dur_ms": 0.01593,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -504,8 +732,12 @@
           "disk_index": 1,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175321500699,
+          "mutation_return_status": "ok",
           "prod_ts": 9175321500699,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175321515186,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175321515186,
           "cons_status": "ok",
           "success_before": 1,
@@ -520,6 +752,10 @@
               "start_ts": 9175247419995,
               "end_ts": 9175247434663,
               "dur_ms": 0.014668,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -529,6 +765,10 @@
               "start_ts": 9175248107259,
               "end_ts": 9175252814282,
               "dur_ms": 4.707023,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -538,6 +778,10 @@
               "start_ts": 9175248251390,
               "end_ts": 9175255393638,
               "dur_ms": 7.142248,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -547,6 +791,10 @@
               "start_ts": 9175255732496,
               "end_ts": 9175257686015,
               "dur_ms": 1.953519,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -556,6 +804,10 @@
               "start_ts": 9175257990618,
               "end_ts": 9175262888450,
               "dur_ms": 4.897832,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -565,6 +817,10 @@
               "start_ts": 9175266089116,
               "end_ts": 9175316224414,
               "dur_ms": 50.135298,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -574,6 +830,10 @@
               "start_ts": 9175316289317,
               "end_ts": 9175321356748,
               "dur_ms": 5.067431,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -583,6 +843,10 @@
               "start_ts": 9175321395851,
               "end_ts": 9175321413214,
               "dur_ms": 0.017363,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -590,9 +854,13 @@
         {
           "disk_index": 2,
           "attempt": 0,
-          "classification": "post_quorum_tail",
+          "classification": "post_quorum",
+          "mutation_return_ts": 9175339826664,
+          "mutation_return_status": "ok",
           "prod_ts": 9175339826664,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175339833026,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175339833026,
           "cons_status": "ok",
           "success_before": 3,
@@ -607,6 +875,10 @@
               "start_ts": 9175247459279,
               "end_ts": 9175247474728,
               "dur_ms": 0.015449,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -616,6 +888,10 @@
               "start_ts": 9175248180126,
               "end_ts": 9175253078209,
               "dur_ms": 4.898083,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -625,6 +901,10 @@
               "start_ts": 9175248399770,
               "end_ts": 9175255359664,
               "dur_ms": 6.959894,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -634,6 +914,10 @@
               "start_ts": 9175255645122,
               "end_ts": 9175255837113,
               "dur_ms": 0.191991,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -643,6 +927,10 @@
               "start_ts": 9175255921202,
               "end_ts": 9175258117968,
               "dur_ms": 2.196766,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -652,6 +940,10 @@
               "start_ts": 9175258637316,
               "end_ts": 9175262920761,
               "dur_ms": 4.283445,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -661,6 +953,10 @@
               "start_ts": 9175266206598,
               "end_ts": 9175338718017,
               "dur_ms": 72.511419,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -670,6 +966,10 @@
               "start_ts": 9175339655362,
               "end_ts": 9175339683144,
               "dur_ms": 0.027782,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -678,8 +978,12 @@
           "disk_index": 3,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175317521026,
+          "mutation_return_status": "ok",
           "prod_ts": 9175317521026,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175317534471,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175317534471,
           "cons_status": "ok",
           "success_before": 0,
@@ -694,6 +998,10 @@
               "start_ts": 9175247093090,
               "end_ts": 9175247105934,
               "dur_ms": 0.012844,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -703,6 +1011,10 @@
               "start_ts": 9175248107710,
               "end_ts": 9175252609676,
               "dur_ms": 4.501966,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -712,6 +1024,10 @@
               "start_ts": 9175248186248,
               "end_ts": 9175253904985,
               "dur_ms": 5.718737,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -721,6 +1037,10 @@
               "start_ts": 9175254656801,
               "end_ts": 9175255641385,
               "dur_ms": 0.984584,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -730,6 +1050,10 @@
               "start_ts": 9175255895373,
               "end_ts": 9175257819566,
               "dur_ms": 1.924193,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -739,6 +1063,10 @@
               "start_ts": 9175258127446,
               "end_ts": 9175262848264,
               "dur_ms": 4.720818,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -748,6 +1076,10 @@
               "start_ts": 9175266085269,
               "end_ts": 9175316630840,
               "dur_ms": 50.545571,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -757,6 +1089,10 @@
               "start_ts": 9175316671526,
               "end_ts": 9175316686625,
               "dur_ms": 0.015099,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -788,13 +1124,18 @@
       "send_ts": 9175323774340,
       "quorum_trigger_disk": 3,
       "quorum_trigger_attempt": 0,
+      "evidence_status": "validated",
       "disks": [
         {
           "disk_index": 0,
           "attempt": 0,
-          "classification": "post_quorum_tail",
+          "classification": "post_quorum",
+          "mutation_return_ts": 9175340375347,
+          "mutation_return_status": "ok",
           "prod_ts": 9175340375347,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175340381860,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175340381860,
           "cons_status": "ok",
           "success_before": 3,
@@ -809,6 +1150,10 @@
               "start_ts": 9175253263518,
               "end_ts": 9175253286451,
               "dur_ms": 0.022933,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -818,6 +1163,10 @@
               "start_ts": 9175253618927,
               "end_ts": 9175259396114,
               "dur_ms": 5.777187,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -827,6 +1176,10 @@
               "start_ts": 9175253556820,
               "end_ts": 9175262822456,
               "dur_ms": 9.265636,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -836,6 +1189,10 @@
               "start_ts": 9175265750639,
               "end_ts": 9175293331049,
               "dur_ms": 27.58041,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -845,6 +1202,10 @@
               "start_ts": 9175293642606,
               "end_ts": 9175293718849,
               "dur_ms": 0.076243,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -854,6 +1215,10 @@
               "start_ts": 9175294169969,
               "end_ts": 9175338769945,
               "dur_ms": 44.599976,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -863,6 +1228,10 @@
               "start_ts": 9175339684967,
               "end_ts": 9175339695147,
               "dur_ms": 0.01018,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -872,6 +1241,10 @@
               "start_ts": 9175340116791,
               "end_ts": 9175340126659,
               "dur_ms": 0.009868,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -880,8 +1253,12 @@
           "disk_index": 1,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175323288615,
+          "mutation_return_status": "ok",
           "prod_ts": 9175323288615,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175323292984,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175323292984,
           "cons_status": "ok",
           "success_before": 1,
@@ -896,6 +1273,10 @@
               "start_ts": 9175253385036,
               "end_ts": 9175253395496,
               "dur_ms": 0.01046,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -905,6 +1286,10 @@
               "start_ts": 9175253726439,
               "end_ts": 9175259406995,
               "dur_ms": 5.680556,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -914,6 +1299,10 @@
               "start_ts": 9175253823242,
               "end_ts": 9175262802849,
               "dur_ms": 8.979607,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -923,6 +1312,10 @@
               "start_ts": 9175265738586,
               "end_ts": 9175266330751,
               "dur_ms": 0.592165,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -932,6 +1325,10 @@
               "start_ts": 9175266811527,
               "end_ts": 9175293587662,
               "dur_ms": 26.776135,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -941,6 +1338,10 @@
               "start_ts": 9175294061905,
               "end_ts": 9175321297887,
               "dur_ms": 27.235982,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -950,6 +1351,10 @@
               "start_ts": 9175321324016,
               "end_ts": 9175322851973,
               "dur_ms": 1.527957,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -959,6 +1364,10 @@
               "start_ts": 9175323066457,
               "end_ts": 9175323084361,
               "dur_ms": 0.017904,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -967,8 +1376,12 @@
           "disk_index": 2,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9175323233552,
+          "mutation_return_status": "ok",
           "prod_ts": 9175323233552,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175323241998,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175323241998,
           "cons_status": "ok",
           "success_before": 0,
@@ -983,6 +1396,10 @@
               "start_ts": 9175253468163,
               "end_ts": 9175253478252,
               "dur_ms": 0.010089,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -992,6 +1409,10 @@
               "start_ts": 9175253732110,
               "end_ts": 9175259424438,
               "dur_ms": 5.692328,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1001,6 +1422,10 @@
               "start_ts": 9175253838871,
               "end_ts": 9175262891776,
               "dur_ms": 9.052905,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1010,6 +1435,10 @@
               "start_ts": 9175266111609,
               "end_ts": 9175266941411,
               "dur_ms": 0.829802,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1019,6 +1448,10 @@
               "start_ts": 9175267279247,
               "end_ts": 9175293626796,
               "dur_ms": 26.347549,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1028,6 +1461,10 @@
               "start_ts": 9175294139471,
               "end_ts": 9175320909335,
               "dur_ms": 26.769864,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1037,6 +1474,10 @@
               "start_ts": 9175321056733,
               "end_ts": 9175322842425,
               "dur_ms": 1.785692,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1046,6 +1487,10 @@
               "start_ts": 9175322930491,
               "end_ts": 9175322956370,
               "dur_ms": 0.025879,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1054,8 +1499,12 @@
           "disk_index": 3,
           "attempt": 0,
           "classification": "quorum_triggering_acknowledgement",
+          "mutation_return_ts": 9175323756817,
+          "mutation_return_status": "ok",
           "prod_ts": 9175323756817,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9175323767787,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9175323767787,
           "cons_status": "ok",
           "success_before": 2,
@@ -1070,6 +1519,10 @@
               "start_ts": 9175253136178,
               "end_ts": 9175253145736,
               "dur_ms": 0.009558,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -1079,6 +1532,10 @@
               "start_ts": 9175253584772,
               "end_ts": 9175259213701,
               "dur_ms": 5.628929,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1088,6 +1545,10 @@
               "start_ts": 9175253525591,
               "end_ts": 9175262852743,
               "dur_ms": 9.327152,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1097,6 +1558,10 @@
               "start_ts": 9175265689965,
               "end_ts": 9175293356337,
               "dur_ms": 27.666372,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1106,6 +1571,10 @@
               "start_ts": 9175293643888,
               "end_ts": 9175293751862,
               "dur_ms": 0.107974,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1115,6 +1584,10 @@
               "start_ts": 9175294392438,
               "end_ts": 9175321108791,
               "dur_ms": 26.716353,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1124,6 +1597,10 @@
               "start_ts": 9175321185856,
               "end_ts": 9175322824061,
               "dur_ms": 1.638205,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1133,6 +1610,10 @@
               "start_ts": 9175322885366,
               "end_ts": 9175322903751,
               "dur_ms": 0.018385,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1164,13 +1645,18 @@
       "send_ts": 9180512658184,
       "quorum_trigger_disk": 0,
       "quorum_trigger_attempt": 0,
+      "evidence_status": "validated",
       "disks": [
         {
           "disk_index": 0,
           "attempt": 0,
           "classification": "quorum_triggering_acknowledgement",
+          "mutation_return_ts": 9180512638607,
+          "mutation_return_status": "ok",
           "prod_ts": 9180512638607,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9180512653755,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9180512653755,
           "cons_status": "ok",
           "success_before": 2,
@@ -1185,6 +1671,10 @@
               "start_ts": 9180454481605,
               "end_ts": 9180454492636,
               "dur_ms": 0.011031,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -1194,6 +1684,10 @@
               "start_ts": 9180455968946,
               "end_ts": 9180471367198,
               "dur_ms": 15.398252,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1203,6 +1697,10 @@
               "start_ts": 9180456020713,
               "end_ts": 9180479119094,
               "dur_ms": 23.098381,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1212,6 +1710,10 @@
               "start_ts": 9180486777253,
               "end_ts": 9180488903317,
               "dur_ms": 2.126064,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1221,6 +1723,10 @@
               "start_ts": 9180489418877,
               "end_ts": 9180489583567,
               "dur_ms": 0.16469,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1230,6 +1736,10 @@
               "start_ts": 9180489710146,
               "end_ts": 9180496654000,
               "dur_ms": 6.943854,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1239,6 +1749,10 @@
               "start_ts": 9180500939429,
               "end_ts": 9180504120128,
               "dur_ms": 3.180699,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1248,6 +1762,10 @@
               "start_ts": 9180506263513,
               "end_ts": 9180506287799,
               "dur_ms": 0.024286,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1255,9 +1773,13 @@
         {
           "disk_index": 1,
           "attempt": 0,
-          "classification": "post_quorum_tail",
+          "classification": "post_quorum",
+          "mutation_return_ts": 9180512849494,
+          "mutation_return_status": "ok",
           "prod_ts": 9180512849494,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9180512856878,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9180512856878,
           "cons_status": "ok",
           "success_before": 3,
@@ -1272,6 +1794,10 @@
               "start_ts": 9180454486985,
               "end_ts": 9180454497665,
               "dur_ms": 0.01068,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -1281,6 +1807,10 @@
               "start_ts": 9180456015794,
               "end_ts": 9180471616327,
               "dur_ms": 15.600533,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1290,6 +1820,10 @@
               "start_ts": 9180456056250,
               "end_ts": 9180481753565,
               "dur_ms": 25.697315,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1299,6 +1833,10 @@
               "start_ts": 9180486975176,
               "end_ts": 9180489921323,
               "dur_ms": 2.946147,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1308,6 +1846,10 @@
               "start_ts": 9180490404533,
               "end_ts": 9180490535971,
               "dur_ms": 0.131438,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1317,6 +1859,10 @@
               "start_ts": 9180490678669,
               "end_ts": 9180496599818,
               "dur_ms": 5.921149,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1326,6 +1872,10 @@
               "start_ts": 9180500778706,
               "end_ts": 9180504240314,
               "dur_ms": 3.461608,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1335,6 +1885,10 @@
               "start_ts": 9180506289743,
               "end_ts": 9180506301685,
               "dur_ms": 0.011942,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1343,8 +1897,12 @@
           "disk_index": 2,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9180509915670,
+          "mutation_return_status": "ok",
           "prod_ts": 9180509915670,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9180509933003,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9180509933003,
           "cons_status": "ok",
           "success_before": 1,
@@ -1359,6 +1917,10 @@
               "start_ts": 9180454570202,
               "end_ts": 9180454579690,
               "dur_ms": 0.009488,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -1368,6 +1930,10 @@
               "start_ts": 9180455586546,
               "end_ts": 9180471401573,
               "dur_ms": 15.815027,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1377,6 +1943,10 @@
               "start_ts": 9180455796090,
               "end_ts": 9180481981143,
               "dur_ms": 26.185053,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1386,6 +1956,10 @@
               "start_ts": 9180486901838,
               "end_ts": 9180490607926,
               "dur_ms": 3.706088,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1395,6 +1969,10 @@
               "start_ts": 9180490618747,
               "end_ts": 9180490860963,
               "dur_ms": 0.242216,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1404,6 +1982,10 @@
               "start_ts": 9180491200181,
               "end_ts": 9180496649381,
               "dur_ms": 5.4492,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1413,6 +1995,10 @@
               "start_ts": 9180500912709,
               "end_ts": 9180504095952,
               "dur_ms": 3.183243,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1422,6 +2008,10 @@
               "start_ts": 9180506343694,
               "end_ts": 9180506354084,
               "dur_ms": 0.01039,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1430,8 +2020,12 @@
           "disk_index": 3,
           "attempt": 0,
           "classification": "counted_before_quorum",
+          "mutation_return_ts": 9180509351558,
+          "mutation_return_status": "ok",
           "prod_ts": 9180509351558,
           "prod_status": "ok",
+          "coordinator_consumed_ts": 9180509370724,
+          "coordinator_consumed_status": "ok",
           "cons_ts": 9180509370724,
           "cons_status": "ok",
           "success_before": 0,
@@ -1446,6 +2040,10 @@
               "start_ts": 9180454260900,
               "end_ts": 9180454277240,
               "dur_ms": 0.01634,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
               "is_prerequisite": true
             },
             {
@@ -1455,6 +2053,10 @@
               "start_ts": 9180454959605,
               "end_ts": 9180456819116,
               "dur_ms": 1.859511,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
               "is_prerequisite": true
             },
             {
@@ -1464,6 +2066,10 @@
               "start_ts": 9180455011523,
               "end_ts": 9180482537821,
               "dur_ms": 27.526298,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
               "is_prerequisite": true
             },
             {
@@ -1473,6 +2079,10 @@
               "start_ts": 9180486911576,
               "end_ts": 9180489788073,
               "dur_ms": 2.876497,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_data_dir awaited before metadata rename",
               "is_prerequisite": true
             },
             {
@@ -1482,6 +2092,10 @@
               "start_ts": 9180490279257,
               "end_ts": 9180490420103,
               "dur_ms": 0.140846,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: rename_meta awaited before directory fsync",
               "is_prerequisite": true
             },
             {
@@ -1491,6 +2105,10 @@
               "start_ts": 9180490600121,
               "end_ts": 9180496677725,
               "dur_ms": 6.077604,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
               "is_prerequisite": true
             },
             {
@@ -1500,6 +2118,10 @@
               "start_ts": 9180500956691,
               "end_ts": 9180504111481,
               "dur_ms": 3.15479,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             },
             {
@@ -1509,6 +2131,10 @@
               "start_ts": 9180505559287,
               "end_ts": 9180505581950,
               "dur_ms": 0.022663,
+              "completed_before_mutation_return": true,
+              "prerequisite": "established",
+              "prerequisite_relation": "established",
+              "basis": "commit.rs: ancestor_fsync awaited before mutation return",
               "is_prerequisite": true
             }
           ]
@@ -1516,12 +2142,16 @@
       ]
     }
   ],
-  "methodology_notes": [
-    "Disk identity (0..3) represents the logical erasure fanout member, not independent physical hardware",
-    "Coordinator join loop in rename_data_owned_early_ack_with_fence owns the write_quorum invariant",
-    "write_quorum is satisfied when success_count increments to 3; subsequent results are post-quorum tails",
-    "Production time (worker thread return) and consumption time (coordinator join_next pop) are recorded separately",
-    "Observed dependency distinguishes actual execution order from counterfactual necessity (4th disk could have substituted under a different schedule)",
-    "Btrfs transaction wait_for_commit causes remain unestablished by request-path tracing alone"
+  "limitations": [
+    "Disk tasks execute in parallel on separate storage paths",
+    "Result-consumption order is an observed coordinator acknowledgement sequence, not a serial dependency chain across disks",
+    "A counted acknowledgement is not necessarily counterfactually indispensable; another disk might have substituted under another schedule",
+    "Parallel job durations across disks must not be summed into client latency",
+    "KIND_DISK_COMPLETE is mutation return immediately following the disk mutation future, before stage metrics and enclosing task return",
+    "The interval from mutation return to coordinator consumption includes any intervening task code plus result propagation through JoinSet/channels",
+    "Prerequisite relationships are established only where the pinned source path (commit.rs) demonstrably awaits that job before producing the disk mutation result",
+    "Jobs finishing after mutation return or lacking source-verified awaited paths are marked unestablished or contradictory",
+    "Earlier v4 captures identified Btrfs transaction wait paths with kernel stacks; v5 captures identified per-disk acknowledgement ordering in separate captures. No simultaneous capture has yet shown that v5 response-contributing fsyncs contain the same transaction waits",
+    "The transaction identity, releasing work, and reason for a long commit remain unresolved"
   ]
 }

@@ -1148,19 +1148,39 @@ transaction identity, and reason for slow commit remain unresolved.
 The v5 generation establishes the acknowledgement contract and links per-disk
 commit paths to their blocking jobs, measured waits, and client responses:
 
-1. **Acknowledgement Contract**: Tracing `SetDisks::rename_data_owned_early_ack_with_fence`
-   identified the coordinator join loop as the invariant owner. `results_seen` counts
-   all disk task outcomes (including errors and panics); `success_count` increments
-   strictly on successful disk mutations (`Ok(Ok(res))`). Quorum (`write_quorum = 3`)
-   is satisfied when `success_count >= 3`, which emits `SEND_OK`. Subsequent disk
-   completions are post-quorum tails.
-2. **Identity & Record Format v3**: Format version 3 (40-byte fixed records) records:
-   - `DISK` task-local context carrying `disk_index` (0-indexed logical fanout member)
-     and `attempt` across all spawn boundaries and into blocking jobs.
-   - `KIND_DISK_COMPLETE` (16): emitted on the worker thread when disk mutation returns.
-   - `KIND_QUORUM_RESULT` (17): emitted by coordinator when popping each result from
-     `tasks.join_next()`, capturing `status`, `success_before`, `success_after`,
+1. **Acknowledgement Contract & Concurrency Architecture**:
+   - Tracing `SetDisks::rename_data_owned_early_ack_with_fence` identified the coordinator
+     join loop as the invariant owner. `results_seen` counts all disk task outcomes
+     (including errors and panics); `success_count` increments strictly on successful
+     disk mutations (`Ok(Ok(res))`). Quorum (`write_quorum = 3`) is satisfied when
+     `success_count >= 3`, which emits `SEND_OK`. Subsequent disk completions are post-quorum tails.
+   - **Parallel Disk Tasks**: Disk tasks execute concurrently in parallel on separate storage paths.
+     Result-consumption order is an observed coordinator acknowledgement sequence, not a serial
+     dependency chain across disks.
+   - **Non-Additive Latency**: Because disk tasks run in parallel, durations of concurrent jobs across
+     different disks must never be summed into client latency.
+   - **Counterfactual Substitution**: A counted acknowledgement is part of the observed quorum
+     set for that execution, but is not necessarily counterfactually indispensable; another disk
+     might have substituted under another scheduling order.
+
+2. **Identity & Record Format v3 (Boundary Definitions)**:
+   - `DISK` task-local context carries `disk_index` (0-indexed logical fanout member) and `attempt`
+     across spawn boundaries and into blocking jobs.
+   - `KIND_DISK_COMPLETE` (16): **Mutation Return Boundary**. Emitted on the worker thread immediately
+     following `disk.rename_data_borrowed_with_fence_observed(...).await` in `io_primitives.rs`.
+     It marks mutation future return, not enclosing task completion or coordinator delivery.
+   - `KIND_QUORUM_RESULT` (17): **Coordinator Consumption Boundary**. Emitted by the coordinator when
+     popping each result from `tasks.join_next()`, capturing `status`, `success_before`, `success_after`,
      `quorum_satisfied`, `results_seen`, and `write_quorum`.
+   - **Propagation Interval**: The interval from mutation return (`mutation_return_ts`) to coordinator
+     consumption (`coordinator_consumed_ts`) includes intervening task code, stage metrics collection,
+     JoinSet wakeups, and channel propagation.
+   - **Source-Verified Prerequisites**: Derived strictly from `commit.rs` control flow: `dest_meta_read`,
+     `staged_meta_write`, `src_dir_sync`, `rename_data_dir`, `rename_meta`, `dst_dir_fsync`, and
+     `ancestor_fsync` are established prerequisites when completed before mutation return. Jobs
+     completing after mutation return or lacking source-verified awaited paths are marked `contradictory`
+     or `unestablished`.
+
 3. **Validation & Live Captures**:
    - Preserved `rustfs-v4` binary (`e8c4f773...`).
    - Rebuilt `rustfs-v5` (`9bda251b...`) with immutable patches `tokio-1.53.2-fs-probe-v5.patch`
@@ -1169,6 +1189,7 @@ commit paths to their blocking jobs, measured waits, and client responses:
      0 drops, format v3 validated, 212/212 quorum triggers identified).
    - Two diagnostic repetitions: `.repro/rustfs-waitpath-v5` (c8, 3 s, 1 MiB, 577 + 600 PUTs ok,
      0 drops, 0 capacity/closed rejections).
+
 4. **Reproduction & Analysis Commands**:
 
 ```sh
@@ -1186,23 +1207,43 @@ PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
   --rustfs-source .repro/rustfs-probe --fs-probe \
   --repetitions 2 --duration 3 --concurrency 8 --rates
 
-# Full probe analysis:
+# Full probe diagnostic analysis:
 python3 experiments/rustfs/fs_probe.py \
   .repro/rustfs-waitpath-v5/run-1 .repro/rustfs-waitpath-v5/run-2 \
   --output experiments/rustfs/results/fs-probe-v5-diagnostic.json
+
+# Reproducible acknowledgement dependency table (schema v2):
+python3 experiments/rustfs/wait_path_v5.py \
+  .repro/rustfs-waitpath-v5 \
+  --output experiments/rustfs/results/wait-path-v5.json
 ```
 
-5. **Findings**:
-   - `c8/221.bin` (109.23 ms client latency): Disk 3, Disk 1, and Disk 0 formed the
-     observed prerequisite chain. Disk 1 had a 72.91 ms ancestor-fsync wrapper; Disk 0
-     had a 71.88 ms ancestor-fsync wrapper that triggered quorum (success count 2 -> 3)
-     and emitted SEND_OK at `9175340216478`. Disk 2 finished 0.084 ms after send as a
-     post-quorum tail.
-   - `c8/210.bin` (89.56 ms client latency): Disk 3, Disk 1, and Disk 0 completed before
-     send; Disk 2 ran a 72.51 ms ancestor-fsync wrapper that finished +18.30 ms **after**
-     SEND_OK, demonstrating a post-response tail that did not delay client response.
+5. **Schema Migration & Verified Findings**:
+   - `results/wait-path-v5.json` implements schema `rustfs-acknowledgement-dependencies/v2`,
+     recording SHA-256 hashes of all input binaries, patches, probe dumps, and tiers, along with
+     selection criteria definitions and methodological limitations.
+   - `c8/221.bin` (109.23 ms client latency): Disk 3, Disk 1, and Disk 0 formed the observed
+     acknowledgement set before quorum. Disk 1 completed its 72.91 ms ancestor-fsync before mutation
+     return; Disk 0 completed its 71.88 ms ancestor-fsync and triggered write quorum (success count 2 -> 3)
+     at coordinator timestamp `9175340213292`, emitting SEND_OK at `9175340216478`. Disk 2 finished
+     0.084 ms after send as a post-quorum tail.
+   - `c8/210.bin` (89.56 ms client latency): Disk 3, Disk 1, and Disk 0 completed before send; Disk 2
+     ran a 72.51 ms ancestor-fsync wrapper that finished +18.30 ms **after** SEND_OK, demonstrating
+     a post-response tail that did not delay the client response.
    - `c8/208.bin` (91.51 ms client latency): Disk 0 ran a 44.60 ms fsync wrapper that finished
      +16.60 ms **after** SEND_OK as a post-response tail.
-   - Observed dependency distinguishes execution order from counterfactual necessity (under
-     another schedule, Disk 2 could have substituted). Why the underlying Btrfs transaction
-     takes ~40 ms to commit remains unresolved without kernel transaction tracing.
+   - Missing sends, missing consumption markers, and failed results are defensively classified as
+     `unestablished` or `failed_result`, and sequence continuity errors set `evidence_status: contradictory`.
+
+6. **Cross-Capture Evidence Boundary & Next Experiment**:
+   - **Boundary**: Earlier v4 captures (`.repro/rustfs-waitpath-main` and `.repro/rustfs-waitpath-targeted`)
+     identified Btrfs transaction wait paths (`btrfs_wait_for_commit`, `btrfs_commit_transaction`) with kernel
+     stacks on `rustfs-v4`. v5 captures (`.repro/rustfs-waitpath-v5`) identified per-disk acknowledgement
+     ordering and quorum satisfaction on `rustfs-v5`. These are separate captures on different binary builds;
+     no simultaneous capture has yet merged both phenomena. Attributing v5 quorum delays directly to Btrfs
+     transaction commits remains an unverified hypothesis.
+   - **Next Experiment**: Run a joint capture combining the v5 probe instrumentation
+     (`tokio-1.53.2-fs-probe-v5.patch` + `rustfs-probe-v5.patch`) with the kernel ftrace sched-switch stack
+     trigger (`prev_state & 2 && prev_comm ~ "rustfs*"`) and Btrfs transaction tracepoints
+     (`btrfs/btrfs_transaction_commit`) in a single unified run. This will directly test whether the specific
+     ancestor-fsyncs that block quorum satisfaction in v5 contain kernel Btrfs transaction commits.

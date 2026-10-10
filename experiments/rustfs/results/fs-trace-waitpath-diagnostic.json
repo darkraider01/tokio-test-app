@@ -47,11 +47,25 @@
         "sha256": "1f72857a837098d9cd97e620921da45eedd5efbb166e2496c6b8e83eb62ca55e"
       },
       {
+        "role": "client tiers",
+        "path": ".repro/rustfs-waitpath-main/run-1/tiers.json",
+        "present": true,
+        "bytes": 353202,
+        "sha256": "649ceedf301680f23f48f3fee48c7ebb338cb7f0dcc46b14ac055d84cf573249"
+      },
+      {
         "role": "probe dump",
         "path": ".repro/rustfs-waitpath-main/run-2/fs-probe.bin",
         "present": true,
         "bytes": 14847368,
         "sha256": "7152f918f78df351165b978043338a9425a8b94fa9a72ac00593df4f8e530aab"
+      },
+      {
+        "role": "client tiers",
+        "path": ".repro/rustfs-waitpath-main/run-2/tiers.json",
+        "present": true,
+        "bytes": 340772,
+        "sha256": "d382941d8bdef1e994a1957bbcab28d6b5693bb28b8522dd7f2b69e34d538bbe"
       },
       {
         "role": "probe-reference manifest",

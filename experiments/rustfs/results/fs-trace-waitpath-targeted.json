@@ -45,6 +45,13 @@
         "present": true,
         "bytes": 14096248,
         "sha256": "208a677eda5e2f2c95df327bce8a655c5fa30f4544d8a4e2677bea62fafb7131"
+      },
+      {
+        "role": "client tiers",
+        "path": ".repro/rustfs-waitpath-targeted/run-1/tiers.json",
+        "present": true,
+        "bytes": 322432,
+        "sha256": "33608bfd451e4bc92770404fbbfbb9ec064f0ff26a1ee81fe4c749fa43573a11"
       }
     ],
     "parameters": {

@@ -94,6 +94,19 @@ MAIN_POOL_TAGS = frozenset(("mkdir", "make_dir_all", "rename", "rename_no_owner"
                             "rename_data_dir", "rename_meta"))
 FSYNC_POOL_TAGS = frozenset(("src_dir_sync", "dst_dir_fsync", "ancestor_fsync"))
 
+# Pinned source path prerequisite mapping (crates/ecstore/src/disk/local/commit.rs).
+# Step tags demonstrably awaited on the mutation path before mutation return.
+SOURCE_VERIFIED_PREREQUISITES = {
+    "ancestor_fsync": "commit.rs: ancestor_fsync awaited before mutation return",
+    "dst_dir_fsync": "commit.rs: dst_dir_fsync awaited before ancestor fsync",
+    "rename_meta": "commit.rs: rename_meta awaited before directory fsync",
+    "rename_data_dir": "commit.rs: rename_data_dir awaited before metadata rename",
+    "src_dir_sync": "commit.rs: src_dir_sync awaited in shard_sync join before rename",
+    "staged_meta_write": "commit.rs: staged_meta_write awaited in tmp_meta_write join before rename",
+    "dest_meta_read": "commit.rs: dest_meta_read awaited in read_rename_destination_metadata before rename",
+}
+
+
 
 def fnv1a(data, basis, prime, bits):
     mask = (1 << bits) - 1
@@ -442,7 +455,13 @@ def reconstruct_wait(records, poll_index, wait_begin, wait_end, op):
 
 
 def reconstruct_acknowledgements(records, op, jobs=None):
-    """Reconstruct per-disk commit paths, acknowledgement counts, and quorum triggering."""
+    """Reconstruct per-disk commit paths, acknowledgement counts, and quorum triggering.
+
+    `KIND_DISK_COMPLETE` marks mutation return immediately after the disk
+    mutation future returns, before stage metrics and enclosing task completion.
+    The interval from mutation return to coordinator consumption includes any
+    intervening task code plus result propagation through JoinSet/channels.
+    """
     op_records = [r for r in records if r.get("a") == op]
     sends = [r for r in op_records if r["kind"] in (KIND_SEND_OK, KIND_SEND_ERR)]
     first_send = min(sends, key=lambda r: r["ts"]) if sends else None
@@ -460,37 +479,152 @@ def reconstruct_acknowledgements(records, op, jobs=None):
                 key = (job["disk_index"], job.get("attempt", 0))
                 disk_jobs.setdefault(key, []).append(job)
 
-    all_keys = set()
-    for r in completes + quorum_results:
-        if r.get("disk_index") is not None:
-            all_keys.add((r["disk_index"], r.get("attempt", 0)))
-    for key in disk_jobs:
-        all_keys.add(key)
+    # Group completes and quorums by (disk_index, attempt)
+    completes_by_key = {}
+    for r in completes:
+        key = (r.get("disk_index"), r.get("attempt", 0))
+        completes_by_key.setdefault(key, []).append(r)
+
+    quorums_by_key = {}
+    for r in quorum_results:
+        key = (r.get("disk_index"), r.get("attempt", 0))
+        quorums_by_key.setdefault(key, []).append(r)
+
+    all_keys = set(completes_by_key.keys()) | set(quorums_by_key.keys()) | set(disk_jobs.keys())
+
+    sequence_errors = []
+    disk_diagnostics_by_key = {}
+    for key in all_keys:
+        d_idx, att = key
+        matching_comps = completes_by_key.get(key, [])
+        matching_conss = quorums_by_key.get(key, [])
+        diags = []
+        if len(matching_comps) > 1:
+            diags.append("duplicate_mutation_return_records")
+        if len(matching_conss) > 1:
+            diags.append("duplicate_quorum_result_records")
+
+        comp = matching_comps[0] if len(matching_comps) == 1 else None
+        cons = matching_conss[0] if len(matching_conss) == 1 else None
+
+        if comp is not None and cons is not None:
+            prod_ts = comp.get("ts")
+            cons_ts = cons.get("ts")
+            prod_status = comp.get("status")
+            cons_status = cons.get("status")
+            if prod_ts is not None and cons_ts is not None and prod_ts > cons_ts:
+                sequence_errors.append(
+                    f"impossible ordering on disk {d_idx}: coordinator consumption at {cons_ts} precedes mutation return at {prod_ts}"
+                )
+                diags.append("consumption_precedes_mutation_return")
+            if prod_status is not None and cons_status is not None and prod_status != cons_status:
+                sequence_errors.append(
+                    f"status disagreement on disk {d_idx}: mutation return status '{prod_status}' != coordinator consumed '{cons_status}'"
+                )
+                diags.append("status_disagreement")
+        if diags:
+            disk_diagnostics_by_key[key] = diags
+
+    # Coordinator sequence validation
+    sorted_quorums = sorted(quorum_results, key=lambda r: r["ts"])
+    prefix_missing = False
+    if sorted_quorums:
+        first_q = sorted_quorums[0]
+        if first_q.get("results_seen", 1) > 1 or first_q.get("success_before", 0) > 0:
+            prefix_missing = True
+
+    valid_quorum_triggers = []
+    for r in sorted_quorums:
+        st = r.get("status")
+        sb = r.get("success_before")
+        sa = r.get("success_after")
+        qs = r.get("quorum_satisfied", False)
+        wq = r.get("write_quorum")
+        r_key = (r.get("disk_index"), r.get("attempt", 0))
+        r_diags = disk_diagnostics_by_key.get(r_key, [])
+
+        if sb is not None and sa is not None:
+            if st == "ok" and sa != sb + 1:
+                sequence_errors.append(f"success_count failed to increment on ok: {sb} -> {sa}")
+            elif st in ("err", "panic", "join_error") and sa != sb:
+                sequence_errors.append(f"success_count incremented on non-ok ({st}): {sb} -> {sa}")
+        if qs:
+            if st != "ok":
+                sequence_errors.append(f"quorum_satisfied true on non-ok result ({st})")
+            if wq is not None:
+                if sa is not None and sa < wq:
+                    sequence_errors.append(f"quorum_satisfied true when success_after ({sa}) < write_quorum ({wq})")
+                if sb is not None and sb >= wq:
+                    sequence_errors.append(f"quorum_satisfied true when quorum was already satisfied (success_before {sb} >= write_quorum {wq})")
+                if sa is not None and sb is not None and not (sb == wq - 1 and sa == wq):
+                    sequence_errors.append(f"quorum_satisfied true without crossing write_quorum threshold: {sb} -> {sa} (quorum {wq})")
+
+        is_threshold_crossing = (
+            st == "ok"
+            and qs
+            and (wq is None or (sb is not None and sa is not None and sb == wq - 1 and sa == wq))
+            and "consumption_precedes_mutation_return" not in r_diags
+            and "status_disagreement" not in r_diags
+            and "duplicate_mutation_return_records" not in r_diags
+            and "duplicate_quorum_result_records" not in r_diags
+        )
+        if is_threshold_crossing:
+            valid_quorum_triggers.append(r)
+
+    for i in range(len(sorted_quorums) - 1):
+        cur_sa = sorted_quorums[i].get("success_after")
+        nxt_sb = sorted_quorums[i + 1].get("success_before")
+        if cur_sa is not None and nxt_sb is not None and cur_sa != nxt_sb:
+            sequence_errors.append(f"consecutive count mismatch: {cur_sa} != {nxt_sb}")
+
+    all_qs_records = [r for r in sorted_quorums if r.get("quorum_satisfied", False)]
+    if len(all_qs_records) > len(valid_quorum_triggers):
+        sequence_errors.append("quorum_satisfied flag present on non-threshold-crossing record")
+    if len(valid_quorum_triggers) > 1:
+        sequence_errors.append(f"multiple valid quorum triggers recorded ({len(valid_quorum_triggers)})")
+
+    if first_send and first_send.get("kind") == KIND_SEND_OK:
+        for r in sorted_quorums:
+            if r["ts"] > send_ts and r.get("quorum_satisfied", False):
+                sequence_errors.append(f"quorum trigger at {r['ts']} observed after SEND_OK at {send_ts}")
+
+    # Validate mutation-return -> consumption ordering, status agreement, and threshold crossing before assigning quorum attribution.
+    if not sequence_errors and len(valid_quorum_triggers) == 1:
+        quorum_trigger = valid_quorum_triggers[0]
+        quorum_ts = quorum_trigger["ts"]
+        quorum_trigger_key = (
+            (quorum_trigger["disk_index"], quorum_trigger.get("attempt", 0))
+            if quorum_trigger.get("disk_index") is not None
+            else None
+        )
+    else:
+        quorum_trigger = None
+        quorum_ts = None
+        quorum_trigger_key = None
+
+    if first_send and first_send.get("kind") == KIND_SEND_OK and quorum_ts is not None:
+        if send_ts < quorum_ts:
+            sequence_errors.append(f"SEND_OK timestamp {send_ts} precedes quorum trigger {quorum_ts}")
+            quorum_trigger = None
+            quorum_ts = None
+            quorum_trigger_key = None
+
+    def sort_key(k):
+        d_idx, att = k
+        return (d_idx is None, d_idx if d_idx is not None else -1, att)
 
     disks = []
-    quorum_trigger_key = None
-
-    for key in sorted(all_keys):
+    for key in sorted(all_keys, key=sort_key):
         d_idx, att = key
-        comp = next((r for r in completes if r.get("disk_index") == d_idx and r.get("attempt", 0) == att), None)
-        cons = next((r for r in quorum_results if r.get("disk_index") == d_idx and r.get("attempt", 0) == att), None)
+        matching_comps = completes_by_key.get(key, [])
+        matching_conss = quorums_by_key.get(key, [])
+        has_dup_comp = len(matching_comps) > 1
+        has_dup_cons = len(matching_conss) > 1
 
-        associated_jobs = []
-        for j in sorted(disk_jobs.get(key, []), key=lambda j: j.get("submit", {}).get("ts", 0)):
-            sub = j.get("submit")
-            start = j.get("job_start")
-            end = j.get("job_end")
-            tag = tag_names.get(j.get("step_hash"), "unknown")
-            dur = _millis(end["ts"] - start["ts"]) if start and end else None
-            associated_jobs.append({
-                "job_id": (sub or {}).get("id") or (start or {}).get("id"),
-                "step_tag": tag,
-                "submit_ts": sub["ts"] if sub else None,
-                "start_ts": start["ts"] if start else None,
-                "end_ts": end["ts"] if end else None,
-                "dur_ms": dur,
-                "is_prerequisite": (comp is not None and end is not None and end["ts"] <= comp["ts"])
-            })
+        comp = matching_comps[0] if len(matching_comps) == 1 else None
+        cons = matching_conss[0] if len(matching_conss) == 1 else None
+
+        disk_diagnostics = disk_diagnostics_by_key.get(key, [])
 
         prod_ts = comp["ts"] if comp else None
         prod_status = comp.get("status") if comp else None
@@ -499,37 +633,110 @@ def reconstruct_acknowledgements(records, op, jobs=None):
         success_before = cons.get("success_before") if cons else None
         success_after = cons.get("success_after") if cons else None
         quorum_satisfied = cons.get("quorum_satisfied", False) if cons else False
+        write_quorum = cons.get("write_quorum") if cons else None
 
-        if quorum_satisfied:
-            quorum_trigger_key = key
-            classification = "quorum_triggering_acknowledgement"
-        elif cons_status == "ok":
-            if send_ts is not None and cons_ts is not None and cons_ts <= send_ts:
-                classification = "counted_before_quorum"
+        associated_jobs = []
+        for j in sorted(disk_jobs.get(key, []), key=lambda j: j.get("submit", {}).get("ts", 0)):
+            sub = j.get("submit")
+            start = j.get("job_start")
+            end = j.get("job_end")
+            tag = tag_names.get(j.get("step_hash"), "unknown")
+            dur = _millis(end["ts"] - start["ts"]) if start and end else None
+
+            completed_before_mutation_return = (
+                (end["ts"] <= prod_ts) if (prod_ts is not None and end is not None) else None
+            )
+
+            if tag in SOURCE_VERIFIED_PREREQUISITES:
+                if completed_before_mutation_return is True:
+                    prerequisite = "established"
+                    basis = SOURCE_VERIFIED_PREREQUISITES[tag]
+                elif completed_before_mutation_return is False:
+                    prerequisite = "contradictory"
+                    basis = (
+                        f"Ordering contradiction: job completed at {end['ts']} after "
+                        f"mutation return at {prod_ts}"
+                    )
+                else:
+                    prerequisite = "unestablished"
+                    basis = "Unestablished: missing job end or mutation-return boundary"
             else:
-                classification = "post_quorum_tail"
-        elif cons_status in ("err", "panic", "join_error"):
+                prerequisite = "unestablished"
+                if tag == "unknown" or not tag:
+                    basis = "Unestablished: untagged or unknown job not verified on awaited mutation path"
+                else:
+                    basis = f"Unestablished: step tag '{tag}' not verified on awaited mutation path"
+
+            associated_jobs.append({
+                "job_id": (sub or {}).get("id") or (start or {}).get("id"),
+                "step_tag": tag,
+                "submit_ts": sub["ts"] if sub else None,
+                "start_ts": start["ts"] if start else None,
+                "end_ts": end["ts"] if end else None,
+                "dur_ms": dur,
+                "completed_before_mutation_return": completed_before_mutation_return,
+                "prerequisite": prerequisite,
+                "prerequisite_relation": prerequisite,
+                "basis": basis,
+                "is_prerequisite": (prerequisite == "established"),
+            })
+
+        is_this_disk_quorum_trigger = (
+            quorum_trigger_key is not None
+            and key == quorum_trigger_key
+            and not sequence_errors
+            and not disk_diagnostics
+        )
+
+        if disk_diagnostics or has_dup_comp or has_dup_cons or sequence_errors:
+            classification = "ambiguous"
+        elif cons_status in ("err", "panic", "join_error") or prod_status in ("err", "panic"):
             classification = "failed_result"
+        elif is_this_disk_quorum_trigger:
+            classification = "quorum_triggering_acknowledgement"
+        elif cons is not None and cons_status == "ok":
+            if quorum_ts is not None:
+                if cons_ts <= quorum_ts:
+                    classification = "counted_before_quorum"
+                else:
+                    classification = "post_quorum"
+            elif send_ts is not None and cons_ts > send_ts:
+                classification = "post_send"
+            else:
+                classification = "unestablished"
         elif comp is not None:
-            if send_ts is not None and prod_ts is not None and prod_ts <= send_ts:
+            if send_ts is not None:
+                if prod_ts <= send_ts:
+                    classification = (
+                        "completed_before_quorum_unconsumed"
+                        if (quorum_ts is not None and prod_ts <= quorum_ts)
+                        else "completed_before_send_unconsumed"
+                    )
+                else:
+                    classification = "post_send"
+            elif quorum_ts is not None and prod_ts <= quorum_ts:
                 classification = "completed_before_quorum_unconsumed"
             else:
-                classification = "post_quorum_tail"
+                classification = "unestablished"
         else:
             classification = "unestablished"
 
         missing = []
         if comp is None:
-            missing.append("prod_boundary")
+            missing.extend(["mutation_return_boundary", "prod_boundary"])
         if cons is None:
             missing.append("cons_boundary")
 
-        disks.append({
+        disk_entry = {
             "disk_index": d_idx,
             "attempt": att,
             "classification": classification,
+            "mutation_return_ts": prod_ts,
+            "mutation_return_status": prod_status,
             "prod_ts": prod_ts,
             "prod_status": prod_status,
+            "coordinator_consumed_ts": cons_ts,
+            "coordinator_consumed_status": cons_status,
             "cons_ts": cons_ts,
             "cons_status": cons_status,
             "success_before": success_before,
@@ -537,7 +744,18 @@ def reconstruct_acknowledgements(records, op, jobs=None):
             "quorum_satisfied": quorum_satisfied,
             "missing": missing,
             "jobs": associated_jobs,
-        })
+        }
+        if disk_diagnostics:
+            disk_entry["diagnostics"] = disk_diagnostics
+        disks.append(disk_entry)
+
+    evidence_status = "validated"
+    if sequence_errors:
+        evidence_status = "contradictory"
+    elif any(d.get("diagnostics") for d in disks):
+        evidence_status = "ambiguous"
+    elif prefix_missing:
+        evidence_status = "partial_prefix"
 
     return {
         "op_hash": op,
@@ -545,6 +763,8 @@ def reconstruct_acknowledgements(records, op, jobs=None):
         "send_ts": send_ts,
         "quorum_trigger_disk": quorum_trigger_key[0] if quorum_trigger_key else None,
         "quorum_trigger_attempt": quorum_trigger_key[1] if quorum_trigger_key else None,
+        "evidence_status": evidence_status,
+        "validation_errors": sequence_errors,
         "disks": disks,
     }
 
@@ -813,6 +1033,9 @@ def analyze_run(root):
             "Poll containment resolves the poll by OS thread id; a record outside every Dial9 poll is reported as missing",
             "Recording stops at ring capacity; total_seen beyond capacity is reported as dropped_records",
             "Probe records only appear for operations whose context reached a probe site; untagged work is reported as OP_NONE",
+            "Disk completion (KIND_DISK_COMPLETE) marks mutation return immediately following the disk mutation future, before stage metrics and enclosing task completion; intervening time before coordinator consumption includes task metrics and channel propagation",
+            "Prerequisite relationships are established only for source-verified awaited steps on the pinned mutation path (commit.rs); timing order alone does not prove dependency",
+            "Coordinator result consumption order is an observed acknowledgement sequence across disks executing in parallel, not a serial dependency chain",
         ],
     }
 

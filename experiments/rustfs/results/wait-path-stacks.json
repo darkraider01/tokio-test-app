@@ -1,10 +1,205 @@
 {
   "schema": "rustfs-wait-path/v1",
+  "provenance": {
+    "diagnostic_path": "experiments/rustfs/results/fs-trace-waitpath-diagnostic.json",
+    "diagnostic_sha256": "43e9eb7f9a23da307c7c01f31a055e5265a5874171204de2e6493a68cfa5ddbd",
+    "run_dir": ".repro/rustfs-waitpath-main",
+    "original_diagnostic_validation": {
+      "clock": {
+        "trace_clock": "local global counter uptime perf [mono] mono_raw boot tai x86-tsc",
+        "trace_clock_selected": "mono",
+        "probe_clock_ids": [
+          1
+        ],
+        "probe_clock": "CLOCK_MONOTONIC",
+        "probe_clock_source": "probe dump header clock_id written by fs_probe.rs (now_ns -> clock_gettime(CLOCK_MONOTONIC), header stores libc::CLOCK_MONOTONIC as u32)",
+        "timestamp_fraction_digits": [
+          6
+        ],
+        "timestamp_resolution_us": 1,
+        "compatibility": {
+          "status": "validated",
+          "reason": "selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain"
+        },
+        "direct_subtraction": {
+          "status": "validated",
+          "reason": "compatibility validated: selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain | alignment validated: 28852/28852 paired sync wrappers contain their expected syscall-enter; earliest enter -0.306 us is within the 1 us timestamp tolerance; worst per-run match rate 1.0000"
+        }
+      },
+      "loss": {
+        "entries_written_equal": true,
+        "overrun_total": 0,
+        "dropped_total": 0,
+        "error_log_empty": true,
+        "probe_dropped_records": {
+          "run-1": 0,
+          "run-2": 0
+        },
+        "probe_rejected_after_close": {
+          "run-1": 0,
+          "run-2": 0
+        }
+      }
+    },
+    "input_verification": {
+      "status": "verified",
+      "verified_matches": [
+        {
+          "role": "ftrace raw capture",
+          "path": ".repro/rustfs-waitpath-main/trace.raw",
+          "sha256": "5b8f53536f62205e0897ee7b88439b28866d1c3f78c0e5b5398979c72315d50e",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "probe dump (run-1)",
+          "path": ".repro/rustfs-waitpath-main/run-1/fs-probe.bin",
+          "sha256": "1f72857a837098d9cd97e620921da45eedd5efbb166e2496c6b8e83eb62ca55e",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "client tiers (run-1)",
+          "path": ".repro/rustfs-waitpath-main/run-1/tiers.json",
+          "sha256": "649ceedf301680f23f48f3fee48c7ebb338cb7f0dcc46b14ac055d84cf573249",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "probe dump (run-2)",
+          "path": ".repro/rustfs-waitpath-main/run-2/fs-probe.bin",
+          "sha256": "7152f918f78df351165b978043338a9425a8b94fa9a72ac00593df4f8e530aab",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "client tiers (run-2)",
+          "path": ".repro/rustfs-waitpath-main/run-2/tiers.json",
+          "sha256": "d382941d8bdef1e994a1957bbcab28d6b5693bb28b8522dd7f2b69e34d538bbe",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "manifest.json",
+          "path": ".repro/rustfs-waitpath-main/manifest.json",
+          "sha256": "e14feaf16561f80f0415a6fe54d121231e9329fc1a3aacab11332709e57f74a3",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        }
+      ],
+      "newly_hashed_auxiliary_inputs": [
+        {
+          "role": "measurement.json",
+          "path": ".repro/rustfs-waitpath-main/measurement.json",
+          "sha256": "2945efe55474e5f71ee5799dbc96208bbc421b8208456a8d5d77e01dbb942802",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "sched-switch-trigger",
+          "path": ".repro/rustfs-waitpath-main/sched-switch-trigger",
+          "sha256": "e1f6526d7c6e78afbfef01169e97e414cf3cdeaea1eb0fefbcd64234583284cf",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "sched-switch-format",
+          "path": ".repro/rustfs-waitpath-main/sched-switch-format",
+          "sha256": "c30af7900c3c333fd79189aba950dd16fe507083219e922095ce0db9aa074f5a",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "dirty-pages-format",
+          "path": ".repro/rustfs-waitpath-main/dirty-pages-format",
+          "sha256": "cfb5040e22002b3332bc0506e3b2a912646c4b4fddbba3bec7161d1ca6a09f5e",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        }
+      ],
+      "verified_inputs": [
+        {
+          "role": "ftrace raw capture",
+          "path": ".repro/rustfs-waitpath-main/trace.raw",
+          "sha256": "5b8f53536f62205e0897ee7b88439b28866d1c3f78c0e5b5398979c72315d50e",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "probe dump (run-1)",
+          "path": ".repro/rustfs-waitpath-main/run-1/fs-probe.bin",
+          "sha256": "1f72857a837098d9cd97e620921da45eedd5efbb166e2496c6b8e83eb62ca55e",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "client tiers (run-1)",
+          "path": ".repro/rustfs-waitpath-main/run-1/tiers.json",
+          "sha256": "649ceedf301680f23f48f3fee48c7ebb338cb7f0dcc46b14ac055d84cf573249",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "probe dump (run-2)",
+          "path": ".repro/rustfs-waitpath-main/run-2/fs-probe.bin",
+          "sha256": "7152f918f78df351165b978043338a9425a8b94fa9a72ac00593df4f8e530aab",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "client tiers (run-2)",
+          "path": ".repro/rustfs-waitpath-main/run-2/tiers.json",
+          "sha256": "d382941d8bdef1e994a1957bbcab28d6b5693bb28b8522dd7f2b69e34d538bbe",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "manifest.json",
+          "path": ".repro/rustfs-waitpath-main/manifest.json",
+          "sha256": "e14feaf16561f80f0415a6fe54d121231e9329fc1a3aacab11332709e57f74a3",
+          "matches_diagnostic": true,
+          "status": "verified_match"
+        },
+        {
+          "role": "measurement.json",
+          "path": ".repro/rustfs-waitpath-main/measurement.json",
+          "sha256": "2945efe55474e5f71ee5799dbc96208bbc421b8208456a8d5d77e01dbb942802",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "sched-switch-trigger",
+          "path": ".repro/rustfs-waitpath-main/sched-switch-trigger",
+          "sha256": "e1f6526d7c6e78afbfef01169e97e414cf3cdeaea1eb0fefbcd64234583284cf",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "sched-switch-format",
+          "path": ".repro/rustfs-waitpath-main/sched-switch-format",
+          "sha256": "c30af7900c3c333fd79189aba950dd16fe507083219e922095ce0db9aa074f5a",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        },
+        {
+          "role": "dirty-pages-format",
+          "path": ".repro/rustfs-waitpath-main/dirty-pages-format",
+          "sha256": "cfb5040e22002b3332bc0506e3b2a912646c4b4fddbba3bec7161d1ca6a09f5e",
+          "matches_diagnostic": false,
+          "status": "newly_hashed_unrecorded"
+        }
+      ],
+      "missing_optional_inputs": []
+    }
+  },
   "inputs": {
     ".repro/rustfs-waitpath-main/trace.raw": "5b8f53536f62205e0897ee7b88439b28866d1c3f78c0e5b5398979c72315d50e",
-    "experiments/rustfs/results/fs-trace-waitpath-diagnostic.json": "5c67404240ef8fa78e0cc8f91a661c90a64123cc2079878d6857636724dc7f57",
+    "experiments/rustfs/results/fs-trace-waitpath-diagnostic.json": "43e9eb7f9a23da307c7c01f31a055e5265a5874171204de2e6493a68cfa5ddbd",
     ".repro/rustfs-waitpath-main/run-1/tiers.json": "649ceedf301680f23f48f3fee48c7ebb338cb7f0dcc46b14ac055d84cf573249",
     ".repro/rustfs-waitpath-main/run-2/tiers.json": "d382941d8bdef1e994a1957bbcab28d6b5693bb28b8522dd7f2b69e34d538bbe",
+    ".repro/rustfs-waitpath-main/run-1/fs-probe.bin": "1f72857a837098d9cd97e620921da45eedd5efbb166e2496c6b8e83eb62ca55e",
+    ".repro/rustfs-waitpath-main/run-2/fs-probe.bin": "7152f918f78df351165b978043338a9425a8b94fa9a72ac00593df4f8e530aab",
+    ".repro/rustfs-waitpath-main/manifest.json": "e14feaf16561f80f0415a6fe54d121231e9329fc1a3aacab11332709e57f74a3",
     ".repro/rustfs-waitpath-main/measurement.json": "2945efe55474e5f71ee5799dbc96208bbc421b8208456a8d5d77e01dbb942802",
     ".repro/rustfs-waitpath-main/sched-switch-trigger": "e1f6526d7c6e78afbfef01169e97e414cf3cdeaea1eb0fefbcd64234583284cf",
     ".repro/rustfs-waitpath-main/sched-switch-format": "c30af7900c3c333fd79189aba950dd16fe507083219e922095ce0db9aa074f5a",
@@ -65,6 +260,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -120,6 +325,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -175,6 +390,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -230,6 +455,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -285,6 +520,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -340,6 +585,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -395,6 +650,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -450,6 +715,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -505,6 +780,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -560,6 +845,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -615,6 +910,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -670,6 +975,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -725,6 +1040,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -780,6 +1105,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -835,6 +1170,16 @@
         "scheduled_to_completion_ms": 180.15752
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 1134959349228613421,
+        "send_kind": "send_ok",
+        "send_ts": 31828375972163,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -890,6 +1235,16 @@
         "scheduled_to_completion_ms": 180.15752
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 1134959349228613421,
+        "send_kind": "send_ok",
+        "send_ts": 31828375972163,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -945,6 +1300,16 @@
         "scheduled_to_completion_ms": 173.458135
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4639332215626721759,
+        "send_kind": "send_ok",
+        "send_ts": 31828376181948,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1000,6 +1365,16 @@
         "scheduled_to_completion_ms": 173.458135
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4639332215626721759,
+        "send_kind": "send_ok",
+        "send_ts": 31828376181948,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1055,6 +1430,16 @@
         "scheduled_to_completion_ms": 173.458135
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4639332215626721759,
+        "send_kind": "send_ok",
+        "send_ts": 31828376181948,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1110,6 +1495,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1165,6 +1560,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1220,6 +1625,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1275,6 +1690,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1330,6 +1755,16 @@
         "scheduled_to_completion_ms": 173.458135
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4639332215626721759,
+        "send_kind": "send_ok",
+        "send_ts": 31828376181948,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1385,6 +1820,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1440,6 +1885,16 @@
         "scheduled_to_completion_ms": 60.999812
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2126546884038721571,
+        "send_kind": "send_ok",
+        "send_ts": 31826428038245,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1495,6 +1950,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1550,6 +2015,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1605,6 +2080,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1660,6 +2145,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1715,6 +2210,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1770,6 +2275,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1825,6 +2340,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1880,6 +2405,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1935,6 +2470,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -1990,6 +2535,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2045,6 +2600,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2100,6 +2665,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2155,6 +2730,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2210,6 +2795,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2265,6 +2860,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2320,6 +2925,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2375,6 +2990,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2430,6 +3055,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2485,6 +3120,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2540,6 +3185,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2595,6 +3250,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2650,6 +3315,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2705,6 +3380,16 @@
         "scheduled_to_completion_ms": 172.457303
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 18141637413015165201,
+        "send_kind": "send_ok",
+        "send_ts": 31826541591257,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2760,6 +3445,16 @@
         "scheduled_to_completion_ms": 174.652753
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 6702434012922939950,
+        "send_kind": "send_ok",
+        "send_ts": 31826541386853,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2815,6 +3510,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2870,6 +3575,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2925,6 +3640,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -2980,6 +3705,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3035,6 +3770,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3090,6 +3835,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3145,6 +3900,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3200,6 +3965,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3255,6 +4030,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3310,6 +4095,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3365,6 +4160,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3420,6 +4225,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3475,6 +4290,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3530,6 +4355,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3585,6 +4420,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3640,6 +4485,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3695,6 +4550,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3750,6 +4615,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3805,6 +4680,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3860,6 +4745,16 @@
         "scheduled_to_completion_ms": 169.272269
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 14238539466226559860,
+        "send_kind": "send_ok",
+        "send_ts": 31826541667391,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3915,6 +4810,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -3970,6 +4875,16 @@
         "scheduled_to_completion_ms": 167.263059
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 10536133453352873365,
+        "send_kind": "send_ok",
+        "send_ts": 31826542191186,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4025,6 +4940,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4080,6 +5005,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4135,6 +5070,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4190,6 +5135,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4245,6 +5200,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4300,6 +5265,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4355,6 +5330,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4410,6 +5395,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4465,6 +5460,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4520,6 +5525,16 @@
         "scheduled_to_completion_ms": 167.401429
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2112167554679943233,
+        "send_kind": "send_ok",
+        "send_ts": 31826543856429,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4575,6 +5590,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4630,6 +5655,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4685,6 +5720,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4740,6 +5785,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4795,6 +5850,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4850,6 +5915,16 @@
         "scheduled_to_completion_ms": 157.902317
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15694587330349230925,
+        "send_kind": "send_ok",
+        "send_ts": 31826541082380,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4905,6 +5980,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -4960,6 +6045,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5015,6 +6110,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5070,6 +6175,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5125,6 +6240,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5180,6 +6305,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5235,6 +6370,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5290,6 +6435,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5345,6 +6500,16 @@
         "scheduled_to_completion_ms": 135.826651
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13306744050747128961,
+        "send_kind": "send_ok",
+        "send_ts": 31828347851103,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5400,6 +6565,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5455,6 +6630,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5510,6 +6695,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5565,6 +6760,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5620,6 +6825,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5675,6 +6890,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5730,6 +6955,16 @@
         "scheduled_to_completion_ms": 130.560823
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13213376107413385952,
+        "send_kind": "send_ok",
+        "send_ts": 31828346476737,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5785,6 +7020,16 @@
         "scheduled_to_completion_ms": 137.034623
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11493374171982480139,
+        "send_kind": "send_ok",
+        "send_ts": 31828346732989,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5840,6 +7085,16 @@
         "scheduled_to_completion_ms": 114.467694
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4802612509200460502,
+        "send_kind": "send_ok",
+        "send_ts": 31826542349103,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5895,6 +7150,16 @@
         "scheduled_to_completion_ms": 171.924289
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2654991821331356987,
+        "send_kind": "send_ok",
+        "send_ts": 31826538306717,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -5950,6 +7215,16 @@
         "scheduled_to_completion_ms": 171.924289
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2654991821331356987,
+        "send_kind": "send_ok",
+        "send_ts": 31826538306717,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6005,6 +7280,16 @@
         "scheduled_to_completion_ms": 171.924289
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2654991821331356987,
+        "send_kind": "send_ok",
+        "send_ts": 31826538306717,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6060,6 +7345,16 @@
         "scheduled_to_completion_ms": 171.924289
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2654991821331356987,
+        "send_kind": "send_ok",
+        "send_ts": 31826538306717,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6115,6 +7410,16 @@
         "scheduled_to_completion_ms": 171.924289
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 2654991821331356987,
+        "send_kind": "send_ok",
+        "send_ts": 31826538306717,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6170,6 +7475,16 @@
         "scheduled_to_completion_ms": 126.72199
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 5722223079159155363,
+        "send_kind": "send_ok",
+        "send_ts": 31836041110839,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6225,6 +7540,16 @@
         "scheduled_to_completion_ms": 126.72199
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 5722223079159155363,
+        "send_kind": "send_ok",
+        "send_ts": 31836041110839,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6280,6 +7605,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6335,6 +7670,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6390,6 +7735,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6445,6 +7800,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6500,6 +7865,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6555,6 +7930,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6610,6 +7995,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6665,6 +8060,16 @@
         "scheduled_to_completion_ms": 124.182071
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 3290569534426047377,
+        "send_kind": "send_ok",
+        "send_ts": 31836043855193,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6720,6 +8125,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6775,6 +8190,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6830,6 +8255,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6885,6 +8320,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6940,6 +8385,16 @@
         "scheduled_to_completion_ms": 171.077636
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11050343869108188172,
+        "send_kind": "send_ok",
+        "send_ts": 31838262634682,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -6995,6 +8450,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7050,6 +8515,16 @@
         "scheduled_to_completion_ms": 216.52696
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 5420772578176881961,
+        "send_kind": "send_ok",
+        "send_ts": 31838255032779,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7105,6 +8580,16 @@
         "scheduled_to_completion_ms": 222.850257
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 662332800739289350,
+        "send_kind": "send_ok",
+        "send_ts": 31838255024995,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7160,6 +8645,16 @@
         "scheduled_to_completion_ms": 222.850257
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 662332800739289350,
+        "send_kind": "send_ok",
+        "send_ts": 31838255024995,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7215,6 +8710,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7270,6 +8775,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7325,6 +8840,16 @@
         "scheduled_to_completion_ms": 122.338452
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 17370716031271123161,
+        "send_kind": "send_ok",
+        "send_ts": 31838263367591,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7380,6 +8905,16 @@
         "scheduled_to_completion_ms": 228.651603
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13677226667464735083,
+        "send_kind": "send_ok",
+        "send_ts": 31838259930955,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7435,6 +8970,16 @@
         "scheduled_to_completion_ms": 216.52696
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 5420772578176881961,
+        "send_kind": "send_ok",
+        "send_ts": 31838255032779,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7490,6 +9035,16 @@
         "scheduled_to_completion_ms": 173.894907
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 4808890747634128839,
+        "send_kind": "send_ok",
+        "send_ts": 31838263350610,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7545,6 +9100,16 @@
         "scheduled_to_completion_ms": 228.651603
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 13677226667464735083,
+        "send_kind": "send_ok",
+        "send_ts": 31838259930955,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7600,6 +9165,16 @@
         "scheduled_to_completion_ms": 134.828482
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 9632020411730350045,
+        "send_kind": "send_ok",
+        "send_ts": 31838262839458,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7655,6 +9230,16 @@
         "scheduled_to_completion_ms": 171.077636
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 11050343869108188172,
+        "send_kind": "send_ok",
+        "send_ts": 31838262634682,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7710,6 +9295,16 @@
         "scheduled_to_completion_ms": 175.983927
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15291961851730946870,
+        "send_kind": "send_ok",
+        "send_ts": 31838260193149,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7765,6 +9360,16 @@
         "scheduled_to_completion_ms": 175.983927
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 15291961851730946870,
+        "send_kind": "send_ok",
+        "send_ts": 31838260193149,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7820,6 +9425,16 @@
         "scheduled_to_completion_ms": 222.850257
       },
       "switch_out_stacks": [],
+      "acknowledgements": {
+        "op_hash": 662332800739289350,
+        "send_kind": "send_ok",
+        "send_ts": 31838255024995,
+        "quorum_trigger_disk": null,
+        "quorum_trigger_attempt": null,
+        "evidence_status": "validated",
+        "validation_errors": [],
+        "disks": []
+      },
       "missing": [
         "switch_out_stack"
       ]
@@ -7832,6 +9447,7 @@
     "Nested wrappers may share a stack; rows are observations, not additive time",
     "The final blocked segment can end at the wrapper boundary if wake is unobserved",
     "Operation hashes link unique workload object keys; they are not disk identifiers",
-    "Response-criticality remains unestablished without the disk acknowledgement dependency"
+    "Response-criticality remains unestablished without the disk acknowledgement dependency",
+    "Input verification confirms file byte hashes match diagnostic records; it does not eliminate cross-clock perturbation from tracing triggers"
   ]
 }
