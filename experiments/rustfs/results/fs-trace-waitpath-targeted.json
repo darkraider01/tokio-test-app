@@ -1,0 +1,1962 @@
+{
+  "schema": "fs-trace-diagnostic/v3",
+  "generated_by": "experiments/rustfs/fs_trace.py",
+  "provenance": {
+    "run_dir": ".repro/rustfs-waitpath-targeted",
+    "inputs": [
+      {
+        "role": "ftrace raw capture",
+        "path": ".repro/rustfs-waitpath-targeted/trace.raw",
+        "present": true,
+        "bytes": 372075459,
+        "sha256": "b8d5625892e8722cc081cc20b411f10da24b561a31aaf02a95ee312ede2503e5"
+      },
+      {
+        "role": "trace settings",
+        "path": ".repro/rustfs-waitpath-targeted/trace.settings",
+        "present": true,
+        "bytes": 1179,
+        "sha256": "7c6864556e286453732cccc71f3c58bae0024dbbfdfc50ac19aa22b3cd3d88de"
+      },
+      {
+        "role": "trace stats",
+        "path": ".repro/rustfs-waitpath-targeted/trace.stats",
+        "present": true,
+        "bytes": 2485,
+        "sha256": "948fcbe8fb4afbd82b11b4335484ac3be4d493d49e70639220ea62e5f00284bb"
+      },
+      {
+        "role": "trace error log",
+        "path": ".repro/rustfs-waitpath-targeted/trace.error_log",
+        "present": true,
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "role": "capture manifest",
+        "path": ".repro/rustfs-waitpath-targeted/manifest.json",
+        "present": true,
+        "bytes": 3175,
+        "sha256": "5c61b230209a8161d35ddd1526ef1b29873be9b47124960a354eece796a34f42"
+      },
+      {
+        "role": "probe dump",
+        "path": ".repro/rustfs-waitpath-targeted/run-1/fs-probe.bin",
+        "present": true,
+        "bytes": 14096248,
+        "sha256": "208a677eda5e2f2c95df327bce8a655c5fa30f4544d8a4e2677bea62fafb7131"
+      }
+    ],
+    "parameters": {
+      "long_wrapper_threshold_ms": 50.0,
+      "timelines_per_run": 3,
+      "timeline_selection": "the N longest wrappers per repetition, ordered by duration (0 disables text timelines)",
+      "probe_reference": null,
+      "selection_counts": {
+        "long_wrappers_by_run": {
+          "run-1": 6
+        },
+        "long_wrappers_total": 6,
+        "paired_calls_by_run": {
+          "run-1": 36140
+        },
+        "alignment_samples": 13440
+      },
+      "clock_validation_thresholds": {
+        "compatible_trace_clocks": [
+          "mono"
+        ],
+        "min_alignment_samples": 30,
+        "min_match_rate": 0.95,
+        "note": "alignment tolerance is derived from the observed timestamp precision and reported under quality.alignment"
+      }
+    },
+    "manifest": {
+      "binary_sha256": "e8c4f77375f7055825139900c408b5d1bdbc5e4d90e724db0f5671f7a3e95f3e",
+      "rustfs_commit": "6b1554003ebf8f2037ffb7da9c9b906527e758da",
+      "repetitions": 1,
+      "generation_seconds_per_tier": 3.0,
+      "payload_bytes": 1048576,
+      "workers": 2,
+      "fs_probe_enabled": true
+    },
+    "binary": {
+      "declared_path": "/home/brandybuck/Code/tokio-test-app/.repro/rustfs-probe/target-v4/release/rustfs",
+      "declared_sha256": "e8c4f77375f7055825139900c408b5d1bdbc5e4d90e724db0f5671f7a3e95f3e",
+      "declared_sha256_source": "capture manifest, written at capture time",
+      "file_sha256": "e8c4f77375f7055825139900c408b5d1bdbc5e4d90e724db0f5671f7a3e95f3e",
+      "file_bytes": 259888344,
+      "matches_declared": true,
+      "verification": "independently hashed during this analysis by reading the declared path; this verifies the file on disk now, not that trace.raw was produced by this exact binary"
+    },
+    "probe_reference_inputs": null,
+    "trace": {
+      "path": ".repro/rustfs-waitpath-targeted/trace.raw",
+      "sha256": "b8d5625892e8722cc081cc20b411f10da24b561a31aaf02a95ee312ede2503e5",
+      "bytes": 372075459,
+      "settings": {
+        "collected_at": "2026-10-10T03:49:22+05:30",
+        "instance": "rustfs-waitpath",
+        "instance_dir": "/sys/kernel/tracing/instances/rustfs-waitpath",
+        "instance_owned": "yes",
+        "tracefs": "/sys/kernel/tracing",
+        "trace_clock": "local global counter uptime perf [mono] mono_raw boot tai x86-tsc",
+        "tracing_on": "0",
+        "buffer_size_kb": "32771",
+        "overwrite": "0",
+        "current_tracer": "nop",
+        "kernel": "6.19.10-300.fc44.x86_64",
+        "tracefs_tools": "none (raw ftrace via shell)",
+        "events": [
+          "sched/sched_switch enable=1* filter=prev_comm ~ \"rustfs*\" || next_comm ~ \"rustfs*\"",
+          "sched/sched_waking enable=1 filter=comm ~ \"rustfs*\"",
+          "sched/sched_wakeup enable=1 filter=comm ~ \"rustfs*\"",
+          "syscalls/sys_enter_fsync enable=1 filter=none",
+          "syscalls/sys_exit_fsync enable=1 filter=none",
+          "syscalls/sys_enter_fdatasync enable=1 filter=none",
+          "syscalls/sys_exit_fdatasync enable=1 filter=none",
+          "btrfs/btrfs_transaction_commit enable=1 filter=none",
+          "btrfs/btrfs_finish_ordered_extent enable=1 filter=none",
+          "btrfs/btrfs_reserve_ticket enable=1 filter=none",
+          "btrfs/btrfs_tree_lock enable=1 filter=none",
+          "writeback/folio_wait_writeback enable=1 filter=none",
+          "block/block_bio_queue enable=1 filter=dev == 271581184",
+          "block/block_rq_issue enable=1 filter=dev == 271581184",
+          "block/block_rq_complete enable=1 filter=dev == 271581184"
+        ]
+      },
+      "stats": {
+        "cpus": 12,
+        "entries_total": 1940418,
+        "overrun_total": 0,
+        "dropped_total": 0,
+        "bytes_total": 139514248
+      },
+      "error_log_bytes": 0,
+      "error_log_excerpt": []
+    }
+  },
+  "quality": {
+    "clock": {
+      "trace_clock": "local global counter uptime perf [mono] mono_raw boot tai x86-tsc",
+      "trace_clock_selected": "mono",
+      "probe_clock_ids": [
+        1
+      ],
+      "probe_clock": "CLOCK_MONOTONIC",
+      "probe_clock_source": "probe dump header clock_id written by fs_probe.rs (now_ns -> clock_gettime(CLOCK_MONOTONIC), header stores libc::CLOCK_MONOTONIC as u32)",
+      "timestamp_fraction_digits": [
+        6
+      ],
+      "timestamp_resolution_us": 1,
+      "compatibility": {
+        "status": "validated",
+        "reason": "selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain"
+      },
+      "direct_subtraction": {
+        "status": "validated",
+        "reason": "compatibility validated: selected trace clock 'mono' and probe dump clock_id=1 are both CLOCK_MONOTONIC (fs_probe.rs now_ns() -> clock_gettime): same clock domain | alignment validated: 13440/13440 paired sync wrappers contain their expected syscall-enter; earliest enter -0.285 us is within the 1 us timestamp tolerance; worst per-run match rate 1.0000"
+      }
+    },
+    "trace_parse": {
+      "lines": 1940418,
+      "bad_lines": 0,
+      "bad_line_samples": [],
+      "event_counts": {
+        "block_bio_queue": 30866,
+        "block_rq_issue": 39261,
+        "block_rq_complete": 40753,
+        "btrfs_tree_lock": 594991,
+        "sched_switch": 382345,
+        "sched_waking": 206134,
+        "kernel_stack": 101080,
+        "sched_wakeup": 206134,
+        "sys_fdatasync_enter": 4579,
+        "sys_fdatasync_exit": 4579,
+        "sys_fsync_enter": 9064,
+        "sys_fsync_exit": 9064,
+        "btrfs_transaction_commit": 3,
+        "folio_wait_writeback": 29294,
+        "btrfs_finish_ordered_extent": 282271
+      },
+      "foreign_syscall_lines": 70,
+      "rustfs_comms": [
+        "rustfs",
+        "rustfs-fsync",
+        "rustfs-worker"
+      ],
+      "header_entries": [
+        1940418,
+        1940418
+      ],
+      "equal_ts_ties": 29064,
+      "equal_ts_causal_repairs": 7616,
+      "equal_ts_ambiguous": 3511,
+      "equal_ts_unresolved": 7233
+    },
+    "loss": {
+      "entries_written_equal": true,
+      "overrun_total": 0,
+      "dropped_total": 0,
+      "error_log_empty": true,
+      "probe_dropped_records": {
+        "run-1": 0
+      },
+      "probe_rejected_after_close": {
+        "run-1": 0
+      }
+    },
+    "coverage": [
+      {
+        "run": "run-1",
+        "probe_tids": 88,
+        "probe_tids_in_trace": 88,
+        "trace_covers_probe_markers": true
+      }
+    ],
+    "alignment": {
+      "status": "validated",
+      "reason": "13440/13440 paired sync wrappers contain their expected syscall-enter; earliest enter -0.285 us is within the 1 us timestamp tolerance; worst per-run match rate 1.0000",
+      "tolerance_us": 1,
+      "tolerance_basis": "one timestamp quantization step (1 us at 6-digit fractions): an enter may follow its own start marker by arbitrary user-space time, so only the negative direction is bounded; the +-2 us matching window is a search slack, not proof of clock compatibility",
+      "min_samples_required": 30,
+      "min_match_rate_required": 0.95,
+      "paired_sync_calls": 13440,
+      "matched_with_syscall_enter": 13440,
+      "match_rate": 1.0,
+      "enter_offset_us": {
+        "min": -0.285,
+        "p50": 0.528,
+        "max": 476.502
+      },
+      "per_run": {
+        "run-1": {
+          "paired_sync_calls": 13440,
+          "matched_with_syscall_enter": 13440,
+          "match_rate": 1.0,
+          "enter_offset_us": {
+            "min": -0.285,
+            "max": 476.502
+          }
+        }
+      }
+    },
+    "unknown_state_ns_total": 0,
+    "reconciliation_max_abs_diff_ms": 0.0
+  },
+  "cross_clock_analysis": {
+    "status": "reported",
+    "withheld": []
+  },
+  "accounting": {
+    "long_wrapper_threshold_ms": 50.0,
+    "definitions": {
+      "wrapper_observation": "one marker-delimited call-wrapper interval (start marker to end marker); observations may be nested inside another wrapper on the same thread, so the count is a count of observations, not of independent syscalls or waits",
+      "per_tag_totals": "per-tag sums across observations; explicitly overlapping across tags and across nested wrappers (shared thread time is double-counted) \u2014 for composition inspection only",
+      "non_overlapping_union": "union of wrapper regions merged only within one repetition and one executor TID; never merged across TIDs or across repetitions; the summed thread-time is per-thread wall time inside wrapper regions \u2014 neither client latency nor elapsed experiment time",
+      "syscall_region_union": "union of the traced syscall windows belonging to long wrappers, per repetition and TID (a narrower coverage than the wrapper-region union)"
+    },
+    "wrapper_observations": {
+      "run-1": 6,
+      "total": 6,
+      "note": "marker-delimited wrapper observations, not independent syscalls or waits"
+    },
+    "per_tag": {
+      "sub_dir_sync": {
+        "observations": 6,
+        "observations_by_run": {
+          "run-1": 6
+        },
+        "duration_sum_ms": 468.464686,
+        "zones_states_ms": {
+          "post-exit|running": 0.018296,
+          "pre-entry|running": 0.001515,
+          "syscall|blocked:D": 368.387,
+          "syscall|runnable": 2.229,
+          "syscall|running": 97.405875,
+          "syscall|wakeup_transition": 0.423
+        },
+        "overlapping_across_tags": true
+      }
+    },
+    "nesting_and_overlap": {
+      "nested": {},
+      "partial_overlaps": {}
+    },
+    "cross_clock_analysis": "reported",
+    "non_overlapping": {
+      "by_run": {
+        "run-1": {
+          "wrapper_regions": {
+            "tids": 6,
+            "regions": 6,
+            "thread_time_ms": 468.464686,
+            "states_ms": {
+              "blocked:D": 368.387,
+              "runnable": 2.229,
+              "running": 97.425686,
+              "wakeup_transition": 0.423
+            }
+          },
+          "syscall_regions": {
+            "tids": 6,
+            "regions": 6,
+            "thread_time_ms": 468.444875,
+            "states_ms": {
+              "blocked:D": 368.387,
+              "runnable": 2.229,
+              "running": 97.405875,
+              "wakeup_transition": 0.423
+            }
+          }
+        }
+      },
+      "wrapper_thread_time_sum_ms": 468.464686,
+      "syscall_thread_time_sum_ms": 468.444875,
+      "sum_note": "arithmetic sum of the per-repetition unions; repetitions are reported separately and never merged into one interval"
+    }
+  },
+  "syscall_mapping": {
+    "derived_from_capture": {
+      "sub_dir_sync": "fsync",
+      "sub_fdatasync": "fdatasync",
+      "sub_fsync_files": "fdatasync"
+    },
+    "votes": {
+      "sub_dir_sync": {
+        "observed": {
+          "fsync": 9064
+        },
+        "empty_windows": 0
+      },
+      "sub_fdatasync": {
+        "observed": {
+          "fdatasync": 2188
+        },
+        "empty_windows": 0
+      },
+      "sub_fsync_files": {
+        "observed": {
+          "fdatasync": 2188
+        },
+        "empty_windows": 0
+      }
+    }
+  },
+  "kernel_wait": {
+    "status": "analyzed",
+    "event_totals": {
+      "block_bio_queue": 30866,
+      "block_rq_issue": 39261,
+      "block_rq_complete": 40753,
+      "btrfs_tree_lock": 594991,
+      "btrfs_transaction_commit": 3,
+      "folio_wait_writeback": 29294,
+      "btrfs_finish_ordered_extent": 282271
+    },
+    "capture_filter": {
+      "block_event_filter_lines": [
+        "block/block_bio_queue enable=1 filter=dev == 271581184",
+        "block/block_rq_issue enable=1 filter=dev == 271581184",
+        "block/block_rq_complete enable=1 filter=dev == 271581184"
+      ],
+      "note": "block events were filtered to the volume's device at capture time (the filter lines are collected from trace.settings); btrfs/writeback events carry no comm filter, so background activity on the same filesystem appears in the totals"
+    },
+    "correlation_rules": {
+      "evidence_levels": {
+        "temporal_overlap": "event timestamp inside the wrapper window or a blocked segment; reported as event_counts and proximity_summary only, with no relationship claimed (under dense device activity any wake edge is within the threshold of some completion \u2014 such proximity is counted as dense, not causal)",
+        "shared_device_temporal": "block event on the volume device overlapping the window \u2014 device busy, not wait attribution",
+        "demonstrable_dependency": "the wrapper thread's own writeback-wait event (folio_wait_writeback with this tid) inside its own blocked segment, allowing folio_pre_segment_us for the tracepoint that fires just before the switch-out (waiter and folio named). Establishes that the task entered that wait path; proximity to the switch-out does not prove that this wait accounts for the full following blocked segment duration, which remains inferred",
+        "isolated_temporal_candidate": "isolation rule: at most one event of that completion class inside the segment, within wake_edge_threshold_us before the wake edge. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is CPU execution context at wake time, not proof of release"
+      },
+      "wake_edge_threshold_us": 1000.0,
+      "folio_pre_segment_us": 200.0,
+      "completion_events": [
+        "btrfs_finish_ordered_extent",
+        "block_rq_complete",
+        "btrfs_transaction_commit"
+      ],
+      "waker_comm_semantics": "waker_comm is the comm of the task current on the CPU when the wake fired: for workqueue/process-context wakes that is the logical waker, for irq-context wakes it is an unrelated task that happened to be running (observed: desktop apps and <idle> as waker_comm) \u2014 an observed fact, not a causal attribution",
+      "selection": "the 3 longest wrappers per repetition, ordered by duration",
+      "no_response_criticality": "none of these levels establishes response-criticality: a job's temporal association with a filesystem or block event does not show that the event was required before the response"
+    },
+    "wrappers": [
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 481923,
+        "dur_ms": 78.653267,
+        "w0_ns": 32114477755125,
+        "w1_ns": 32114556408392,
+        "job_task_id": 36366,
+        "events_in_window": 23523,
+        "event_counts": {
+          "block_bio_queue": 863,
+          "btrfs_tree_lock": 16685,
+          "block_rq_issue": 979,
+          "block_rq_complete": 1003,
+          "folio_wait_writeback": 380,
+          "btrfs_finish_ordered_extent": 3612,
+          "btrfs_transaction_commit": 1
+        },
+        "phase_summary": {
+          "blocked_segments": 10,
+          "blocked_total_ms": 77.941,
+          "top_segments": [
+            {
+              "start_offset_ms": 38.576875,
+              "dur_ms": 40.063,
+              "rq_completions_during": 397,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 1.816875,
+              "dur_ms": 23.883,
+              "rq_completions_during": 10,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 25.719875,
+              "dur_ms": 12.837,
+              "rq_completions_during": 567,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 0.778875,
+              "dur_ms": 1.019,
+              "rq_completions_during": 3,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 0.431875,
+              "dur_ms": 0.076,
+              "rq_completions_during": 15,
+              "waker_comm": "rustfs-fsync"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-fsync": 6,
+            "rustfs-worker": 4
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 10,
+          "dense_completion_edges": 5,
+          "isolated_completion_edges": 0,
+          "no_completion_within_threshold_edges": 5,
+          "nearest_completion_us": {
+            "p50": 26.0,
+            "max": 915.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.920875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.922875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.923875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.924875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.924875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.925875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.925875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.925875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.926875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.926875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.927875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.927875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.928875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.929875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.929875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.929875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.930875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.930875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.931875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.931875,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          }
+        ],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [],
+        "no_diagnostic_events_in_window": false
+      },
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 481954,
+        "dur_ms": 78.63838,
+        "w0_ns": 32114477775634,
+        "w1_ns": 32114556414014,
+        "job_task_id": 36367,
+        "events_in_window": 23520,
+        "event_counts": {
+          "btrfs_tree_lock": 16684,
+          "block_bio_queue": 861,
+          "block_rq_issue": 979,
+          "block_rq_complete": 1003,
+          "folio_wait_writeback": 380,
+          "btrfs_finish_ordered_extent": 3612,
+          "btrfs_transaction_commit": 1
+        },
+        "phase_summary": {
+          "blocked_segments": 59,
+          "blocked_total_ms": 55.642,
+          "top_segments": [
+            {
+              "start_offset_ms": 38.550366,
+              "dur_ms": 40.071,
+              "rq_completions_during": 397,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 24.862366,
+              "dur_ms": 13.677,
+              "rq_completions_during": 567,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 4.537366,
+              "dur_ms": 0.171,
+              "rq_completions_during": 1,
+              "waker_comm": "kworker/u48:8"
+            },
+            {
+              "start_offset_ms": 5.389366,
+              "dur_ms": 0.165,
+              "rq_completions_during": 1,
+              "waker_comm": "kworker/u48:8"
+            },
+            {
+              "start_offset_ms": 3.294366,
+              "dur_ms": 0.159,
+              "rq_completions_during": 1,
+              "waker_comm": "rustfs-fsync"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-worker": 3,
+            "rustfs-fsync": 20,
+            "<idle>": 28,
+            "kworker/u48:8": 8
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 59,
+          "dense_completion_edges": 2,
+          "isolated_completion_edges": 10,
+          "no_completion_within_threshold_edges": 47,
+          "nearest_completion_us": {
+            "p50": 45.0,
+            "max": 221.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.900366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.902366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.903366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.904366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.904366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.905366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.905366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.905366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.906366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.906366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.907366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.907366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.908366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.909366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.909366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.909366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.910366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.910366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.911366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.911366,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          }
+        ],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 3.385366,
+            "wake_edge_offset_ms": 3.453366,
+            "distance_us": 68.0,
+            "segment_dur_ms": 0.159,
+            "waker_comm": "rustfs-fsync",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "268091200",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 4.043366,
+            "wake_edge_offset_ms": 4.084366,
+            "distance_us": 41.0,
+            "segment_dur_ms": 0.12,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "268091232",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 4.690366,
+            "wake_edge_offset_ms": 4.708366,
+            "distance_us": 18.0,
+            "segment_dur_ms": 0.171,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "267948544",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 4.905366,
+            "wake_edge_offset_ms": 4.943366,
+            "distance_us": 38.0,
+            "segment_dur_ms": 0.124,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "269227904",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 5.149366,
+            "wake_edge_offset_ms": 5.202366,
+            "distance_us": 53.0,
+            "segment_dur_ms": 0.153,
+            "waker_comm": "rustfs-fsync",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "269203840",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 5.493366,
+            "wake_edge_offset_ms": 5.554366,
+            "distance_us": 61.0,
+            "segment_dur_ms": 0.165,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "267650976",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 5.881366,
+            "wake_edge_offset_ms": 5.923366,
+            "distance_us": 42.0,
+            "segment_dur_ms": 0.138,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "267772640",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 6.087366,
+            "wake_edge_offset_ms": 6.135366,
+            "distance_us": 48.0,
+            "segment_dur_ms": 0.117,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "7012192",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 6.344366,
+            "wake_edge_offset_ms": 6.389366,
+            "distance_us": 45.0,
+            "segment_dur_ms": 0.121,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "269172640",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          },
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 24.764366,
+            "wake_edge_offset_ms": 24.808366,
+            "distance_us": 44.0,
+            "segment_dur_ms": 0.106,
+            "waker_comm": "kworker/u48:8",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "RM",
+              "sector": "84230272",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          }
+        ],
+        "no_diagnostic_events_in_window": false
+      },
+      {
+        "run": "run-1",
+        "tag": "sub_dir_sync",
+        "tid": 481971,
+        "dur_ms": 78.63313,
+        "w0_ns": 32114477780984,
+        "w1_ns": 32114556414114,
+        "job_task_id": 36368,
+        "events_in_window": 23520,
+        "event_counts": {
+          "btrfs_tree_lock": 16684,
+          "block_bio_queue": 861,
+          "block_rq_issue": 979,
+          "block_rq_complete": 1003,
+          "folio_wait_writeback": 380,
+          "btrfs_finish_ordered_extent": 3612,
+          "btrfs_transaction_commit": 1
+        },
+        "phase_summary": {
+          "blocked_segments": 9,
+          "blocked_total_ms": 77.992,
+          "top_segments": [
+            {
+              "start_offset_ms": 38.542016,
+              "dur_ms": 40.078,
+              "rq_completions_during": 397,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 1.782016,
+              "dur_ms": 23.895,
+              "rq_completions_during": 10,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 25.697016,
+              "dur_ms": 12.833,
+              "rq_completions_during": 567,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 0.667016,
+              "dur_ms": 1.089,
+              "rq_completions_during": 3,
+              "waker_comm": "rustfs-fsync"
+            },
+            {
+              "start_offset_ms": 0.436016,
+              "dur_ms": 0.051,
+              "rq_completions_during": 11,
+              "waker_comm": "rustfs-fsync"
+            }
+          ],
+          "wakes_by_comm": {
+            "rustfs-worker": 2,
+            "rustfs-fsync": 6,
+            "<idle>": 1
+          }
+        },
+        "proximity_summary": {
+          "wake_edges": 9,
+          "dense_completion_edges": 5,
+          "isolated_completion_edges": 1,
+          "no_completion_within_threshold_edges": 3,
+          "nearest_completion_us": {
+            "p50": 10.0,
+            "max": 918.0
+          },
+          "note": "dense edges (>= 2 completions during the segment) cannot single out a cause by proximity and are reported here instead of as isolated_temporal_candidate"
+        },
+        "fs_events_in_window": [
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.895016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.897016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.898016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.899016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.899016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.900016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.900016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.900016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.901016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.901016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.902016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.902016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.903016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.904016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.904016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.904016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.905016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.905016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.906016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          },
+          {
+            "event": "btrfs_finish_ordered_extent",
+            "offset_ms": 27.906016,
+            "tid": 461097,
+            "identity": {
+              "fsid": "6320451e-6e11-4cbb-83ce-db232864bb96",
+              "ino": "4935731",
+              "root": "257",
+              "uptodate": "1"
+            }
+          }
+        ],
+        "shared_device_events": {
+          "devices": [
+            "259,0"
+          ],
+          "level": "shared_device_temporal",
+          "note": "block events on these devices overlap the window: the device was busy, not that this wait was for these requests"
+        },
+        "evidence": [
+          {
+            "level": "isolated_temporal_candidate",
+            "event": "block_rq_complete",
+            "offset_ms": 0.525016,
+            "wake_edge_offset_ms": 0.531016,
+            "distance_us": 6.0,
+            "segment_dur_ms": 0.007,
+            "waker_comm": "<idle>",
+            "identity": {
+              "dev": "259,0",
+              "rwbs": "WSM",
+              "sector": "269994656",
+              "count": "32"
+            },
+            "basis": "isolation rule: this is the only event of its class inside the segment and occurred within wake_edge_threshold_us of the wake. Selected by temporal proximity and sparsity; no dependency match to the blocked task was established. A single candidate among captured events does not exclude untraced causes, and waker_comm is execution context on the CPU, not necessarily the logical producer or releasing subsystem."
+          }
+        ],
+        "no_diagnostic_events_in_window": false
+      }
+    ],
+    "outside_long_wrappers": 993916
+  },
+  "runs": [
+    {
+      "run": "run-1",
+      "probe_records": 352404,
+      "probe_dropped": 0,
+      "probe_rejected_closed": 0,
+      "probe_counters": {
+        "duplicate_boundaries": 0,
+        "non_blocking_join_ready": 17950,
+        "orphan_sub_markers": 0
+      },
+      "paired_calls": 36140,
+      "long_wrappers": [
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481923,
+          "dur_ms": 78.653267,
+          "w0_ns": 32114477755125,
+          "w1_ns": 32114556408392,
+          "enter_ns": 32114477755000,
+          "exit_ns": 32114556405000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": -0.000125,
+              "dur_ms": 78.65,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.003392,
+            "syscall|blocked:D": 77.941,
+            "syscall|runnable": 0.157,
+            "syscall|running": 0.514875,
+            "syscall|wakeup_transition": 0.037
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36366,
+            "op_hash": 12002429008536121096,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481923,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12002429008536121096,
+            "commit_wait": {
+              "begin_ns": 32114457720570,
+              "end_ns": 32114559981246,
+              "begin_offset_ms": -20.034555,
+              "end_offset_ms": 82.226121
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114559978581,
+              "offset_ms": 82.223456,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481954,
+          "dur_ms": 78.63838,
+          "w0_ns": 32114477775634,
+          "w1_ns": 32114556414014,
+          "enter_ns": 32114477776000,
+          "exit_ns": 32114556411000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000366,
+              "dur_ms": 78.635,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.003014,
+            "pre-entry|running": 0.000366,
+            "syscall|blocked:D": 55.642,
+            "syscall|runnable": 0.269,
+            "syscall|running": 22.56,
+            "syscall|wakeup_transition": 0.164
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36367,
+            "op_hash": 12002429008536121096,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481954,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12002429008536121096,
+            "commit_wait": {
+              "begin_ns": 32114457720570,
+              "end_ns": 32114559981246,
+              "begin_offset_ms": -20.055064,
+              "end_offset_ms": 82.205612
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114559978581,
+              "offset_ms": 82.202947,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481971,
+          "dur_ms": 78.63313,
+          "w0_ns": 32114477780984,
+          "w1_ns": 32114556414114,
+          "enter_ns": 32114477781000,
+          "exit_ns": 32114556411000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 1.6e-05,
+              "dur_ms": 78.63,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.003114,
+            "pre-entry|running": 1.6e-05,
+            "syscall|blocked:D": 77.992,
+            "syscall|runnable": 0.058,
+            "syscall|running": 0.54,
+            "syscall|wakeup_transition": 0.04
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36368,
+            "op_hash": 7217165370229253232,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481971,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 7217165370229253232,
+            "commit_wait": {
+              "begin_ns": 32114454356791,
+              "end_ns": 32114503924304,
+              "begin_offset_ms": -23.424193,
+              "end_offset_ms": 26.14332
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114503918603,
+              "offset_ms": 26.137619,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481967,
+          "dur_ms": 77.961376,
+          "w0_ns": 32114478454762,
+          "w1_ns": 32114556416138,
+          "enter_ns": 32114478455000,
+          "exit_ns": 32114556414000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000238,
+              "dur_ms": 77.959,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002138,
+            "pre-entry|running": 0.000238,
+            "syscall|blocked:D": 77.755,
+            "syscall|runnable": 0.026,
+            "syscall|running": 0.143,
+            "syscall|wakeup_transition": 0.035
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36370,
+            "op_hash": 12002429008536121096,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481967,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 12002429008536121096,
+            "commit_wait": {
+              "begin_ns": 32114457720570,
+              "end_ns": 32114559981246,
+              "begin_offset_ms": -20.734192,
+              "end_offset_ms": 81.526484
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114559978581,
+              "offset_ms": 81.523819,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481929,
+          "dur_ms": 77.487254,
+          "w0_ns": 32114478921550,
+          "w1_ns": 32114556408804,
+          "enter_ns": 32114478922000,
+          "exit_ns": 32114556405000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.00045,
+              "dur_ms": 77.483,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.003804,
+            "pre-entry|running": 0.00045,
+            "syscall|blocked:D": 55.469,
+            "syscall|runnable": 0.229,
+            "syscall|running": 21.654,
+            "syscall|wakeup_transition": 0.131
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36369,
+            "op_hash": 4815960524404122012,
+            "step_tag": "ancestor_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481929,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 4815960524404122012,
+            "commit_wait": {
+              "begin_ns": 32114457553676,
+              "end_ns": 32114520963453,
+              "begin_offset_ms": -21.367874,
+              "end_offset_ms": 42.041903
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114520956210,
+              "offset_ms": 42.03466,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        },
+        {
+          "run": "run-1",
+          "tag": "sub_dir_sync",
+          "tid": 481951,
+          "dur_ms": 77.091279,
+          "w0_ns": 32114479317555,
+          "w1_ns": 32114556408834,
+          "enter_ns": 32114479318000,
+          "exit_ns": 32114556406000,
+          "syscall_windows": [
+            {
+              "enter_offset_ms": 0.000445,
+              "dur_ms": 77.088,
+              "name": "fsync",
+              "open": false
+            }
+          ],
+          "zones_states_ms": {
+            "post-exit|running": 0.002834,
+            "pre-entry|running": 0.000445,
+            "syscall|blocked:D": 23.588,
+            "syscall|runnable": 1.49,
+            "syscall|running": 51.994,
+            "syscall|wakeup_transition": 0.016
+          },
+          "unknown_ms": 0.0,
+          "reconciliation_diff_ms": 0.0,
+          "quality": [],
+          "identity": {
+            "run": "run-1",
+            "job_task_id": 36384,
+            "op_hash": 17399711587290292713,
+            "step_tag": "dst_dir_fsync",
+            "tag": "sub_dir_sync",
+            "occurrence": 0,
+            "occurrences_for_tag": 1,
+            "executor_tid": 481951,
+            "submit_tid": 481890
+          },
+          "operation_link": {
+            "association": "job_submit_record",
+            "op_hash": 17399711587290292713,
+            "commit_wait": {
+              "begin_ns": 32114468062399,
+              "end_ns": 32114524109192,
+              "begin_offset_ms": -11.255156,
+              "end_offset_ms": 44.791637
+            },
+            "overlaps_commit_wait": true,
+            "send": {
+              "kind": "send_ok",
+              "ts": 32114524102369,
+              "offset_ms": 44.784814,
+              "results_seen": 3,
+              "write_quorum": 3,
+              "disk_count": 4,
+              "missing": []
+            },
+            "required_before_response": "not_established"
+          },
+          "overlap": {
+            "same_tid_contained_in": [],
+            "same_tid_contains": [],
+            "same_tid_partial_overlaps": []
+          }
+        }
+      ],
+      "long_wrapper_count": 6,
+      "clusters": [
+        {
+          "n_members": 6,
+          "enter_spread_ms": 1.563,
+          "exit_spread_ms": 0.009,
+          "exit_groups": [
+            {
+              "n": 6,
+              "spread_ms": 0.009
+            }
+          ],
+          "members": [
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481923,
+              "dur_ms": 78.653267,
+              "enter_offset_ms": 0.0,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481954,
+              "dur_ms": 78.63838,
+              "enter_offset_ms": 0.021,
+              "exit_offset_ms": 0.006
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481971,
+              "dur_ms": 78.63313,
+              "enter_offset_ms": 0.026,
+              "exit_offset_ms": 0.006
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481967,
+              "dur_ms": 77.961376,
+              "enter_offset_ms": 0.7,
+              "exit_offset_ms": 0.009
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481929,
+              "dur_ms": 77.487254,
+              "enter_offset_ms": 1.167,
+              "exit_offset_ms": 0.0
+            },
+            {
+              "tag": "sub_dir_sync",
+              "tid": 481951,
+              "dur_ms": 77.091279,
+              "enter_offset_ms": 1.563,
+              "exit_offset_ms": 0.001
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "sched events are comm-filtered to rustfs* threads; foreign threads appear only as the other side of a rustfs switch",
+    "syscall events are unfiltered in the capture; analysis restricts them to probe tids and counts foreign lines",
+    "unknown_* state spans are reported as unknown, never as zero",
+    "runnable time starts at sched_wakeup (task made runnable); the sched_waking -> sched_wakeup interval is the separate wakeup_transition state, counted as neither runnable nor blocked time, and a sched_waking with no observed sched_wakeup before the next event or window edge is unknown_wake_incomplete",
+    "sched_wakeup_new (a thread's first activation) is not captured, so such an initial switch-in appears as unknown_no_wake",
+    "equal-timestamp ties (1 us trace precision) within one thread are ordered by scheduler admissibility over the recorded line order: each CPU's recorded sequence is a hard constraint (only the earliest unplaced event of a CPU may be placed next, so observable order is never reversed); causally impossible recorded orders are repaired (counted in quality.trace_parse.equal_ts_causal_repairs); cross-CPU ties between different event kinds are genuinely ambiguous \u2014 they use the causal default out -> waking -> wakeup -> in and are counted as equal_ts_ambiguous rather than presented as observed order; equal_ts_unresolved counts ties where causality conflicts with the recorded per-CPU sequences (recorded order kept and uncertainty reported rather than reordering observable events)",
+    "wrapper observations may be nested or overlapping on one thread; per-tag and all-wrapper duration sums double-count shared time and are neither independent syscalls nor elapsed time \u2014 use accounting.non_overlapping for thread-time",
+    "thread-time totals are per-thread wall time inside wrapper regions: neither client latency nor elapsed experiment time, and repetitions are never merged into one interval",
+    "scheduler 'running' is scheduled residency: interrupt activity may occur while the task remains current, so it is not exact task CPU execution",
+    "exact tiling (reconciliation) is an accounting consistency check, not independent proof that every state classification is correct",
+    "zero recorded trace loss is a capture-quality finding, not proof of causal attribution",
+    "kernel D-state inside fsync/fdatasync locates blocked time within the syscall; it does not identify journal, writeback, lock, or device causes",
+    "op_hash is an FNV-1a hash of bucket+key and does not resolve to a client object name here; a job associated with an operation or overlapping its commit wait is not thereby response-critical, and a quorum snapshot (results_seen / write_quorum / disk_count) does not identify which disk or job supplied a required acknowledgement",
+    "diagnostic btrfs/writeback events are not comm-filtered: background activity on the same filesystem appears in their totals; block events are capture-filtered to the volume's device (kernel_wait.capture_filter)",
+    "kernel_wait evidence classes separate temporal overlap, shared-device activity, a same-task writeback wait, and proximity of a wake edge to a completion event; only the same-task wait names its object, proximity is never proof, and none of them identifies a single cause for the wait or establishes response-criticality"
+  ],
+  "timelines": [
+    "timelines/run-1-sub_dir_sync-tid481923-job36366-occ0-w32114477755125.txt",
+    "timelines/run-1-sub_dir_sync-tid481954-job36367-occ0-w32114477775634.txt",
+    "timelines/run-1-sub_dir_sync-tid481971-job36368-occ0-w32114477780984.txt"
+  ]
+}

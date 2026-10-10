@@ -806,3 +806,20 @@ The §10.2 unresolved item — *which kernel wait the `D` state represents* — 
    A lightweight signal when `worker_to_notify` decides not to wake a worker because another worker is already searching, allowing telemetry systems to differentiate intentional scheduler coalescing from resource starvation.
 4. **Queue Placement Metadata:**
    Exposing whether a task was placed on a worker-local queue, the LIFO slot, or the global injection queue within `TaskMeta`.
+
+### Follow-up: request-linked Btrfs transaction wait paths
+
+The separately bounded switch-out-stack measurement is documented in the
+RustFS README, with results in `wait-path-targeted-stacks.json`. Six
+request-linked directory-sync wrappers reproduced at 77–79 ms; five have
+approximately 40 ms D segments in Btrfs `wait_for_commit`. Stacks also
+identify transaction admission waits through `wait_current_trans`. This
+establishes an encountered transaction wait path for these samples, rather
+than inferring it from completion proximity. It does not establish why the
+transaction progressed slowly or identify the transaction/releasing entity.
+For one request, approximately 52.5 ms of its long wrapper occurs after
+SEND_OK and cannot block the response. Other matched jobs finish before
+send, but the required disk-acknowledgement dependencies remain unmeasured.
+The earlier two-repetition trace lacked stack coverage of its long linked
+wrappers because the trigger was exhausted; this failed coverage result is
+preserved. No performance fix follows from these captures alone.

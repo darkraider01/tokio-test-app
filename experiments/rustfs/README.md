@@ -1069,3 +1069,76 @@ not outputs of the revised harness.
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s experiments/rustfs -v
 ```
+
+### Request-linked switch-out stacks (2026-10-10)
+
+The reviewed evidence corrections were committed and pushed as `8c52d03`.
+The next measurement used the existing v4 binary, one 1-second c8 smoke,
+two traced repetitions of c1+c8 (3 seconds per tier), and one probe-only
+reference. A separate, explicitly approved 3-second c8 repetition followed
+because the first run exhausted its stack trigger before the long requests.
+No binary rebuild or storage-behavior change was made.
+
+The owned `rustfs-waitpath` instance used the existing event set plus
+`writeback/balance_dirty_pages` and this sched-switch trigger:
+
+```text
+stacktrace:30000 if prev_state & 2 && prev_comm ~ "rustfs*"
+```
+
+The targeted repetition requested `stacktrace:100000` with the same filter.
+Requested counts are not treated as exact hard ceilings: 30,321 and 101,080
+stack events were recorded. The raw traces, event formats, installed trigger,
+executed scripts, logs, and supplemental measurement metadata are preserved
+under `.repro/rustfs-waitpath-main/` and `.repro/rustfs-waitpath-targeted/`.
+Trace collection stopped recording, removed the trigger, and disabled the
+owned instance; it was then destroyed without force. The default instance
+was not used by these commands.
+
+```sh
+# Reproduction commands; this session generated ordinary JSON under /tmp
+# first, then installed it at the result paths shown here:
+python3 experiments/rustfs/fs_trace.py .repro/rustfs-waitpath-main \
+  --timelines 3 --probe-reference .repro/rustfs-waitpath-probeonly \
+  --output experiments/rustfs/results/fs-trace-waitpath-diagnostic.json
+python3 experiments/rustfs/wait_path.py .repro/rustfs-waitpath-main \
+  experiments/rustfs/results/fs-trace-waitpath-diagnostic.json \
+  --output experiments/rustfs/results/wait-path-stacks.json
+python3 experiments/rustfs/wait_path.py .repro/rustfs-waitpath-targeted \
+  experiments/rustfs/results/fs-trace-waitpath-targeted.json \
+  --output experiments/rustfs/results/wait-path-targeted-stacks.json
+```
+
+The main trace had 150 long-wrapper observations, 142 operation-linked;
+none of those selected wrappers had a captured stack. Stack recording ended
+at monotonic 31825.211249 s, before the first linked long wrapper at
+31826.421623215 s. This missing coverage is retained, not filled in.
+
+The targeted run succeeded on all 542 PUTs and yielded six operation-linked
+directory-sync wrappers of 77.091–78.653 ms. All six have matched switch-out
+stacks. Five contain approximately 40 ms D segments whose stacks include
+`wait_for_commit` under `btrfs_wait_for_commit` or `btrfs_commit_transaction`.
+Some also show approximately 24 ms in `wait_current_trans` through
+`start_transaction` and `btrfs_attach_transaction_barrier`.
+[Linux v6.19 transaction source](https://github.com/torvalds/linux/blob/v6.19/fs/btrfs/transaction.c)
+shows these paths waiting for transaction progress/completion. This localizes
+the wait path for these samples; it does not explain why the transaction
+needed that time or identify the transaction object/releasing work.
+
+For `c8/247.bin` (122.860 ms client attempt), jobs 36366/36367/36370 have
+77.961–78.653 ms ancestor-fsync wrappers, with 40.063–40.078 ms transaction
+wait segments. All finish before SEND_OK. Association and ordering do not
+identify which disk acknowledgements were required by the 3-of-4 quorum.
+In contrast, job 36368 for `c8/258.bin` has a 78.633 ms wrapper but SEND_OK
+occurs 26.138 ms after its start: approximately 52.496 ms lies after send
+and cannot have blocked that response. Its client attempt was 65.331 ms.
+
+Both diagnostic traces report zero probe drops, post-close rejections,
+kernel trace overruns/drops, and parser errors, with validated clock
+alignment. No balance_dirty_pages event was recorded. That is a negative
+observation in these short traced windows, not proof that throttling can
+never contribute. Stack-trigger overhead perturbs timings. A stack is joined
+only to one D segment beginning at most 50 microseconds before it; unmatched
+stacks remain unassigned. Scheduled residency and nested observations retain
+the ordinary analyzer's limitations. The response-critical disk dependency,
+transaction identity, and reason for slow commit remain unresolved.

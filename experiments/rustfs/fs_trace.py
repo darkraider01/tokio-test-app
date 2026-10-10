@@ -368,8 +368,13 @@ def parse_trace(path):
         # on-cpu), popped by analyze alongside diag_events.
         "wakes": {},
     }
+    pending_stack = None
     with path.open() as fh:
         for line in fh:
+            if line.startswith(" => ") and pending_stack is not None:
+                pending_stack["frames"].append(line.strip()[3:].strip())
+                continue
+            pending_stack = None
             if line.startswith("#"):
                 hm = re.search(r"entries-in-buffer/entries-written:\s*(\d+)/(\d+)",
                                line)
@@ -393,6 +398,13 @@ def parse_trace(path):
             if m.group("prefix").startswith("rustfs"):
                 stats["rustfs_comms"].add(m.group("prefix"))
             rest = m["rest"]
+            if rest == "<stack trace>":
+                pending_stack = {"tid": tid, "ts": ts,
+                                 "cpu": int(m["cpu"]), "frames": []}
+                stats.setdefault("stack_traces", []).append(pending_stack)
+                stats["event_counts"]["kernel_stack"] = (
+                    stats["event_counts"].get("kernel_stack", 0) + 1)
+                continue
             sm = SYSCALL_RE.match(rest)
             if sm:
                 phase = "exit" if "->" in rest else "enter"

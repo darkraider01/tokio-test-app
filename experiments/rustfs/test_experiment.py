@@ -2750,5 +2750,29 @@ class FtraceScriptTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
 
+class WaitPathTests(unittest.TestCase):
+    def test_stack_frames_attach_only_to_a_stack_event(self):
+        from fs_trace import parse_trace
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "trace.raw"
+            path.write_text("rustfs-fsync-42 [001] d..2. 1.000001: <stack trace>\n"
+                            " => schedule\n => io_schedule\n"
+                            "rustfs-fsync-42 [001] d..2. 1.000002: sys_fsync -> 0x0\n")
+            _, _, stats = parse_trace(path)
+            self.assertEqual(stats["bad_lines"], 0)
+            self.assertEqual(stats["stack_traces"][0]["frames"], ["schedule", "io_schedule"])
+            self.assertEqual(stats["stack_traces"][0]["tid"], 42)
+
+    def test_stack_match_rejects_older_or_nonblocked_segments(self):
+        from wait_path import match_stack
+        stack = {"ts": 100_000}
+        self.assertEqual(match_stack(stack, [("blocked:D", 99_000, 200_000)]),
+                         (99_000, 200_000))
+        self.assertIsNone(match_stack(stack, [("blocked:D", 1_000, 200_000)]))
+        self.assertIsNone(match_stack(stack, [("running", 99_000, 200_000)]))
+        self.assertIsNone(match_stack(stack, [("blocked:D", 99_000, 200_000),
+                                             ("blocked:D", 98_000, 200_000)]))
+
+
 if __name__ == "__main__":
     unittest.main()
