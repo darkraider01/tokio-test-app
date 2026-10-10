@@ -832,16 +832,6 @@ with kernel ftrace sched-switch stack sampling in the same live run. Full detail
 documented in `experiments/rustfs/README.md`, with results in `fs-trace-waitpath-v5-joint.json`,
 `wait-path-v5-joint-stacks.json`, and `wait-path-v5-joint.json`.
 
-In this capture, all 568 PUTs completed HTTP 200 without losses or dropped probe records.
-For a representative slow successful PUT (`c8/82.bin`, client latency 85.97 ms), Disk 0's
-`dst_dir_fsync` job was a source-established prerequisite that triggered write quorum
-(success count 2 -> 3) and contained an observed Btrfs transaction commit wait path
-(`wait_for_commit` under `btrfs_commit_transaction`, blocked for 27.41 ms) inside the
-same live capture. Disk 3 was also counted before quorum and contained a matching 27.42 ms
-transaction commit wait, while Disk 2 completed before the stall (+44.60 ms) and Disk 1
-completed as a post-quorum tail after SEND_OK (+85.21 ms).
+In this capture, all 560 client tier PUTs completed HTTP 200 without losses or dropped probe records (560 c8 requests in tiers.json, matching measurement.json; 584 probe send records including warmup). For a representative slow successful PUT (`c8/82.bin`, client latency 85.97 ms), Disk 0's `dst_dir_fsync` job was a source-established prerequisite that triggered write quorum (success count 2 -> 3). A 27.41 ms blocked segment began with a sampled `wait_for_commit` stack under `btrfs_commit_transaction` inside the same live capture. Disk 3 was also counted before quorum and its 27.42 ms blocked segment began with a matching `wait_for_commit` stack, while Disk 2 completed before the stall (+44.60 ms) and Disk 1 completed as a post-quorum tail after SEND_OK (+85.21 ms).
 
-This establishes that an encountered Btrfs transaction wait path delayed the specific
-filesystem prerequisite on the disk that produced write quorum for that request. It does
-not establish transaction identity, the releasing entity, or why the commit required 27 ms,
-nor does it prove all slow requests share this cause.
+This establishes that an encountered Btrfs transaction wait path delayed the specific filesystem prerequisite on the disk that produced write quorum for that request. It establishes the encountered path at the switch-out, not continuous residence in that function throughout the sleep. It does not establish transaction identity, the releasing entity, or why the commit required 27 ms, nor does it prove all slow requests share this cause.

@@ -1266,8 +1266,11 @@ with dedicated kernel ftrace sched-switch stack sampling.
      individual request.
 
 2. **Capture Parameters & Quality Gates**:
-   - Workload: 1 MiB objects, 1 run, c1 1s (8 attempts) + c8 3s (560 attempts) = 568 total PUTs;
-     568/568 completed HTTP 200 (0 client failures, 0 shed).
+   - Workload: 1 MiB objects, single tier c8 for 3s (`--concurrency 8 --duration 3 --rates`), recording
+     exactly 560 client requests in `run-1/tiers.json` (all HTTP 200, 0 failed, 0 shed), matching
+     `measurement.json` (`"tiers": ["c8"]`). An earlier summary draft stated 568 attempts by mistakenly
+     including a hypothetical 8-attempt c1 tier from multi-tier templates; the recorded capture contains
+     strictly the 560 c8 requests plus 5 warmup PUTs and background tasks in the probe dump (584 send records).
    - Server binary: `9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58`.
    - Patches: `tokio-1.53.2-fs-probe-v5.patch` (`ccf4619e...`), `rustfs-probe-v5.patch` (`1fc129b1...`).
    - Dedicated tracefs instance: `rustfs-v5-joint` (32 MiB/CPU ring buffer, isolated from system tracer).
@@ -1288,21 +1291,24 @@ with dedicated kernel ftrace sched-switch stack sampling.
      - **Disk 2**: Completed first. Mutation return at +44.604 ms, coordinator consumption at +44.613 ms (`success_count`: 0 -> 1, `counted_before_quorum`). Completed before the fsync stall cluster (no stacks).
      - **Disk 3**: Mutation return at +84.813 ms, coordinator consumption at +84.821 ms (`success_count`: 1 -> 2, `counted_before_quorum`).
        - Job 15320 (`dst_dir_fsync`, 29.434 ms, start +51.188 ms, end +80.622 ms, `prerequisite: established`):
-         Switches out at +53.158 ms, blocked for **27.422 ms** in `wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`.
+         Switches out at +53.158 ms. A 27.422 ms blocked segment began with a sampled `wait_for_commit` stack
+         (`wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`).
      - **Disk 0**: Mutation return at +84.913 ms, coordinator consumption at +84.917 ms (`success_count`: 2 -> 3 = `write_quorum`) -> **`quorum_triggering_acknowledgement`**!
        - Job 15327 (`dst_dir_fsync`, 28.692 ms, start +51.996 ms, end +80.687 ms, `prerequisite: established`):
-         Switches out at +53.167 ms on executor TID `298985`, blocked for **27.408 ms** in `wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`.
+         Switches out at +53.167 ms on executor TID `298985`. A 27.408 ms blocked segment began with a sampled
+         `wait_for_commit` stack (`wait_for_commit` -> `btrfs_commit_transaction` -> `btrfs_sync_file` -> `do_fsync`).
          Also captured: `wait_log_commit` under `btrfs_sync_log` (blocked 0.094 ms).
      - **SEND_OK**: Emitted by coordinator at +84.920 ms (timestamp 39072678814703; `results_seen=3`, `write_quorum=3`).
      - **Disk 1**: Mutation return at +85.206 ms (+0.286 ms after SEND), coordinator consumption at +85.213 ms (`success_count`: 3 -> 4, **`post_quorum`** tail).
        - Job 15319 (`dst_dir_fsync`, 29.431 ms, start +51.169 ms, end +80.600 ms):
-         Switches out at +53.169 ms, blocked for **27.403 ms** in `wait_for_commit` -> `btrfs_commit_transaction`.
+         Switches out at +53.169 ms. A 27.403 ms blocked segment began with a sampled `wait_for_commit` stack.
      - Client completion: +85.971 ms (timestamp 39072679865730).
 
 4. **Attribution Boundaries (A through E)**:
    - **A. Source-established fsync prerequisites on counted disks**:
      Disk 0 Job 15327 (28.69 ms, prereq established via `commit.rs`) and Disk 3 Job 15320 (29.43 ms, prereq established).
-     Both disks contributed to write quorum and both fsyncs spent ~27.4 ms blocked in Btrfs transaction commits.
+     Both disks contributed to write quorum; for each, a 27.4 ms blocked segment began with a sampled `wait_for_commit` stack.
+     The stack establishes the encountered path at the switch-out, not continuous residence in that function throughout the sleep.
    - **B. Counted disks without stack coverage**:
      Disk 2 completed before the synchronized fsync stall cluster at +44.60 ms, providing a counted acknowledgement without stack events.
    - **C. Unconsumed or post-quorum results**:
@@ -1318,6 +1324,8 @@ with dedicated kernel ftrace sched-switch stack sampling.
 
 ```sh
 # Execute joint capture (requires root for tracefs instance):
+# Note: joint_v5_capture.sh defaults to --concurrency 8 (560 c8 PUTs) matching the recorded run;
+# pass --concurrency 1 8 if running the multi-tier template.
 bash experiments/rustfs/joint_v5_capture.sh
 
 # Generate trace diagnostic with quality gates (threshold 25 ms):

@@ -3354,7 +3354,7 @@ class WaitPathTests(unittest.TestCase):
             self.skipTest("waitpath-v5-joint repro capture missing")
         summary = summarize_waitpath_v5(run_dir)
         self.assertEqual(summary["schema_version"], "rustfs-acknowledgement-dependencies/v2")
-        self.assertEqual(summary["parameters"]["selection_mode"], "declared_joint_keys")
+        self.assertEqual(summary["parameters"]["selection_mode"], "stack_verified_declared_keys")
         self.assertIn(".repro/rustfs-waitpath-v5-joint/trace.raw", summary["inputs"])
         self.assertEqual(len(summary["representative_operations"]), 3)
         op0 = summary["representative_operations"][0]
@@ -3362,6 +3362,7 @@ class WaitPathTests(unittest.TestCase):
         self.assertEqual(op0["quorum_trigger_disk"], 0)
         self.assertEqual(op0["send_kind"], "send_ok")
         self.assertEqual(op0["evidence_status"], "validated")
+        self.assertEqual(op0["stack_validation"]["status"], "verified")
 
     def test_verify_inputs_rejects_missing_probe_hash_in_provenance(self):
         from wait_path import verify_inputs

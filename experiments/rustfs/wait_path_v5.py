@@ -47,16 +47,17 @@ CRITERIA_DEFINITIONS = {
         "Tie-breaking: earliest attempted_ns, then lexicographical key."
     ),
     "slow_successful_put_with_counted_fsync_and_stack": (
-        "Successful PUT (HTTP 200, unshed) with a validated quorum sequence where a counted acknowledgement "
-        "(counted_before_quorum or quorum_triggering) contains an fsync wrapper with a matching kernel switch-out stack."
+        "Manually selected successful PUT (HTTP 200, unshed) verified against the correlated stack artifact "
+        "to have a validated quorum sequence where a counted acknowledgement (Disk 0 quorum trigger) "
+        "contains an fsync wrapper with a sampled wait_for_commit stack."
     ),
     "slowest_put_with_stack_covered_fsync": (
-        "Successful PUT (HTTP 200, unshed) with the highest client attempt-to-completion latency in the capture "
-        "having counted fsync wrappers with matching kernel switch-out stacks."
+        "Manually selected slowest successful PUT (HTTP 200, unshed) verified against the correlated stack artifact "
+        "to have counted fsync wrappers with matching kernel switch-out stacks."
     ),
     "counted_and_tail_fsyncs_with_stacks": (
-        "Successful PUT exhibiting both counted pre-quorum fsync waits with matching stacks and an observed post-send, "
-        "post-client-completion tail."
+        "Manually selected successful PUT verified against the correlated stack artifact exhibiting both "
+        "counted pre-quorum fsync waits with matching stacks and an observed post-send, post-client-completion tail."
     ),
 }
 
@@ -69,7 +70,7 @@ LIMITATIONS = [
     "The interval from mutation return to coordinator consumption includes any intervening task code plus result propagation through JoinSet/channels",
     "Prerequisite relationships are established only where the pinned source path (commit.rs) demonstrably awaits that job before producing the disk mutation result",
     "Jobs finishing after mutation return or lacking source-verified awaited paths are marked unestablished or contradictory",
-    "Earlier v4 captures identified Btrfs transaction wait paths with kernel stacks; v5 captures identified per-disk acknowledgement ordering in separate captures. No simultaneous capture has yet shown that v5 response-contributing fsyncs contain the same transaction waits",
+    "A sampled switch-out stack establishes the encountered wait path at the switch-out, not continuous residence in that function throughout the sleep",
     "The transaction identity, releasing work, and reason for a long commit remain unresolved",
 ]
 
@@ -237,9 +238,33 @@ def select_automatic_operations(run_data):
     return selected
 
 
-def generate_summary(run_dir, declared_operations=None, automatic=False):
+def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_path=None):
     run_dir = Path(run_dir)
+    repo_root = find_repo_root(run_dir)
     input_hashes = collect_input_hashes(run_dir)
+
+    # Check and bind correlated stack artifact if provided or discoverable
+    resolved_stacks = None
+    if stacks_path:
+        resolved_stacks = Path(stacks_path)
+    else:
+        candidates = [
+            run_dir / "wait-path-v5-joint-stacks.json",
+            repo_root / "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
+        ]
+        for c in candidates:
+            if c.is_file():
+                resolved_stacks = c
+                break
+
+    stacks_data = None
+    if resolved_stacks and resolved_stacks.is_file():
+        rel = str(resolved_stacks.relative_to(repo_root)) if resolved_stacks.is_relative_to(repo_root) else str(resolved_stacks)
+        input_hashes[rel] = sha256_file(resolved_stacks)
+        try:
+            stacks_data = json.loads(resolved_stacks.read_text())
+        except Exception:
+            stacks_data = None
 
     run_data = {}
     for run_subdir in sorted(run_dir.glob("run-*")):
@@ -269,10 +294,10 @@ def generate_summary(run_dir, declared_operations=None, automatic=False):
         selection_mode = "automatic_criteria"
     elif declared_operations:
         spec = declared_operations
-        selection_mode = "declared_keys"
+        selection_mode = "declared_manual_keys"
     elif "run-2" not in run_data:
         spec = DEFAULT_JOINT_OPERATIONS
-        selection_mode = "declared_joint_keys"
+        selection_mode = "stack_verified_declared_keys" if stacks_data else "declared_manual_keys"
     else:
         spec = DEFAULT_HISTORICAL_OPERATIONS
         selection_mode = "declared_historical_keys"
@@ -294,7 +319,7 @@ def generate_summary(run_dir, declared_operations=None, automatic=False):
         ack = fs_probe.reconstruct_acknowledgements(data["records"], op, data["jobs"])
 
         client_attempt = {k: v for k, v in req.items() if k != "bucket"}
-        operations.append({
+        op_entry = {
             "run": run_name,
             "criterion": criterion,
             "key": key,
@@ -306,7 +331,27 @@ def generate_summary(run_dir, declared_operations=None, automatic=False):
             "quorum_trigger_attempt": ack["quorum_trigger_attempt"],
             "evidence_status": ack.get("evidence_status", "validated"),
             "disks": ack["disks"],
-        })
+        }
+        if stacks_data:
+            matched_wrappers = [
+                w for w in stacks_data.get("request_linked_wrappers", [])
+                if w.get("client_attempt", {}).get("key") == key
+            ]
+            total_stacks = sum(len(w.get("switch_out_stacks", [])) for w in matched_wrappers)
+            commit_stacks = 0
+            for w in matched_wrappers:
+                for s in w.get("switch_out_stacks", []):
+                    frames = s.get("frames", [])
+                    if any("wait_for_commit" in f or "btrfs_commit_transaction" in f for f in frames):
+                        commit_stacks += 1
+            op_entry["stack_validation"] = {
+                "status": "verified" if total_stacks > 0 else "unverified",
+                "artifact": str(resolved_stacks.relative_to(repo_root)) if resolved_stacks.is_relative_to(repo_root) else str(resolved_stacks),
+                "request_linked_wrappers": len(matched_wrappers),
+                "total_switch_out_stacks": total_stacks,
+                "btrfs_transaction_commit_stacks": commit_stacks,
+            }
+        operations.append(op_entry)
 
     git_commit = None
     repo_root = find_repo_root(run_dir)
@@ -345,6 +390,7 @@ def main():
     parser.add_argument("--output", type=Path, help="output JSON path")
     parser.add_argument("--auto", action="store_true", help="select representative operations automatically using criteria")
     parser.add_argument("--keys", nargs="+", help="explicit object keys in run:key:criterion format")
+    parser.add_argument("--stacks", type=Path, help="path to correlated stack artifact to validate stack coverage")
     args = parser.parse_args()
 
     declared = None
@@ -359,7 +405,7 @@ def main():
             else:
                 declared.append({"run": "run-1", "key": parts[0], "criterion": "declared_key"})
 
-    result = generate_summary(args.run_dir, declared_operations=declared, automatic=args.auto)
+    result = generate_summary(args.run_dir, declared_operations=declared, automatic=args.auto, stacks_path=args.stacks)
     text = json.dumps(result, indent=2) + "\n"
     if args.output:
         args.output.write_text(text)

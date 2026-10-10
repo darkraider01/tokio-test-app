@@ -3,7 +3,7 @@
   "schema_version": "rustfs-acknowledgement-dependencies/v2",
   "provenance": {
     "generator": "experiments/rustfs/wait_path_v5.py",
-    "git_commit": "3e4fb45c7c32e84390793ed5acc1e7dd121b7036",
+    "git_commit": "d1165eb0dd35478c1f292f14a035348963208d8a",
     "inputs": {
       "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
       "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
@@ -12,11 +12,12 @@
       ".repro/rustfs-waitpath-v5-joint/trace.raw": "db4ba273434a1e67e576385f777afc480172132e0c3ce4e789e5a8e4b8ae27ae",
       ".repro/rustfs-waitpath-v5-joint/measurement.json": "a326d18f4015b2f1d04f097fb9860911dd9f9d7eed24aecea2cda6823a91ffbc",
       ".repro/rustfs-waitpath-v5-joint/run-1/tiers.json": "37d4444e35c3fb03f3c2bd1d7447732a4570b88d534c6368a4b6e739c3fd7bf1",
-      ".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin": "9574d13873b43cc639f24001979a6d8beddf0713e672fad533594c1d9aecb957"
+      ".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin": "9574d13873b43cc639f24001979a6d8beddf0713e672fad533594c1d9aecb957",
+      "experiments/rustfs/results/wait-path-v5-joint-stacks.json": "8f37e6ef41074bbcdfc8daf5bfdfe43ffd872d15436043c867ed5715f6a2b6e3"
     }
   },
   "parameters": {
-    "selection_mode": "declared_joint_keys",
+    "selection_mode": "stack_verified_declared_keys",
     "selected_keys": [
       {
         "run": "run-1",
@@ -39,9 +40,9 @@
       "operation_with_long_post_send_tail": "Successful PUT where a post-send or post-quorum disk tail contains an ancestor_fsync >= 50 ms completing after SEND_OK. Ranked by longest post-send tail duration, tie-breaking by earliest attempted_ns.",
       "operation_with_post_send_tail_and_counted_waits": "Successful PUT exhibiting both counted pre-quorum fsync waits and an observed post-send tail. Tie-breaking: highest client attempt-to-completion latency, then earliest attempted_ns.",
       "run2_slow_successful_put": "Successful PUT in run-2 with the highest client attempt-to-completion latency. Tie-breaking: earliest attempted_ns, then lexicographical key.",
-      "slow_successful_put_with_counted_fsync_and_stack": "Successful PUT (HTTP 200, unshed) with a validated quorum sequence where a counted acknowledgement (counted_before_quorum or quorum_triggering) contains an fsync wrapper with a matching kernel switch-out stack.",
-      "slowest_put_with_stack_covered_fsync": "Successful PUT (HTTP 200, unshed) with the highest client attempt-to-completion latency in the capture having counted fsync wrappers with matching kernel switch-out stacks.",
-      "counted_and_tail_fsyncs_with_stacks": "Successful PUT exhibiting both counted pre-quorum fsync waits with matching stacks and an observed post-send, post-client-completion tail."
+      "slow_successful_put_with_counted_fsync_and_stack": "Manually selected successful PUT (HTTP 200, unshed) verified against the correlated stack artifact to have a validated quorum sequence where a counted acknowledgement (Disk 0 quorum trigger) contains an fsync wrapper with a sampled wait_for_commit stack.",
+      "slowest_put_with_stack_covered_fsync": "Manually selected slowest successful PUT (HTTP 200, unshed) verified against the correlated stack artifact to have counted fsync wrappers with matching kernel switch-out stacks.",
+      "counted_and_tail_fsyncs_with_stacks": "Manually selected successful PUT verified against the correlated stack artifact exhibiting both counted pre-quorum fsync waits with matching stacks and an observed post-send, post-client-completion tail."
     }
   },
   "inputs": {
@@ -52,7 +53,8 @@
     ".repro/rustfs-waitpath-v5-joint/trace.raw": "db4ba273434a1e67e576385f777afc480172132e0c3ce4e789e5a8e4b8ae27ae",
     ".repro/rustfs-waitpath-v5-joint/measurement.json": "a326d18f4015b2f1d04f097fb9860911dd9f9d7eed24aecea2cda6823a91ffbc",
     ".repro/rustfs-waitpath-v5-joint/run-1/tiers.json": "37d4444e35c3fb03f3c2bd1d7447732a4570b88d534c6368a4b6e739c3fd7bf1",
-    ".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin": "9574d13873b43cc639f24001979a6d8beddf0713e672fad533594c1d9aecb957"
+    ".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin": "9574d13873b43cc639f24001979a6d8beddf0713e672fad533594c1d9aecb957",
+    "experiments/rustfs/results/wait-path-v5-joint-stacks.json": "8f37e6ef41074bbcdfc8daf5bfdfe43ffd872d15436043c867ed5715f6a2b6e3"
   },
   "representative_operations": [
     {
@@ -574,7 +576,14 @@
             }
           ]
         }
-      ]
+      ],
+      "stack_validation": {
+        "status": "verified",
+        "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
+        "request_linked_wrappers": 3,
+        "total_switch_out_stacks": 27,
+        "btrfs_transaction_commit_stacks": 3
+      }
     },
     {
       "run": "run-1",
@@ -1095,7 +1104,14 @@
             }
           ]
         }
-      ]
+      ],
+      "stack_validation": {
+        "status": "verified",
+        "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
+        "request_linked_wrappers": 4,
+        "total_switch_out_stacks": 79,
+        "btrfs_transaction_commit_stacks": 0
+      }
     },
     {
       "run": "run-1",
@@ -1616,7 +1632,14 @@
             }
           ]
         }
-      ]
+      ],
+      "stack_validation": {
+        "status": "verified",
+        "artifact": "experiments/rustfs/results/wait-path-v5-joint-stacks.json",
+        "request_linked_wrappers": 4,
+        "total_switch_out_stacks": 46,
+        "btrfs_transaction_commit_stacks": 5
+      }
     }
   ],
   "limitations": [
@@ -1628,7 +1651,7 @@
     "The interval from mutation return to coordinator consumption includes any intervening task code plus result propagation through JoinSet/channels",
     "Prerequisite relationships are established only where the pinned source path (commit.rs) demonstrably awaits that job before producing the disk mutation result",
     "Jobs finishing after mutation return or lacking source-verified awaited paths are marked unestablished or contradictory",
-    "Earlier v4 captures identified Btrfs transaction wait paths with kernel stacks; v5 captures identified per-disk acknowledgement ordering in separate captures. No simultaneous capture has yet shown that v5 response-contributing fsyncs contain the same transaction waits",
+    "A sampled switch-out stack establishes the encountered wait path at the switch-out, not continuous residence in that function throughout the sleep",
     "The transaction identity, releasing work, and reason for a long commit remain unresolved"
   ]
 }
