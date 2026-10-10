@@ -1,0 +1,1527 @@
+{
+  "schema": "rustfs-acknowledgement-dependencies/v1",
+  "inputs": {
+    "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
+    "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
+    "binary/rustfs-v5": "9bda251bc6ef00afd0647a470e271db622937b088ffa42f28a2d548927b93a58",
+    ".repro/rustfs-waitpath-v5/manifest.json": "419a83d3461d5de85fdb898528520d2547a1e3f46955391a9d257f2463593dad",
+    ".repro/rustfs-waitpath-v5/run-1/tiers.json": "c7b6779e3b5a6e956a0a30ef0f29ed96c64d38b62cd6fc2877bcd26f61078d6f",
+    ".repro/rustfs-waitpath-v5/run-1/fs-probe.bin": "8fc43163925766a1097d6fd3af432965abe0e981265fa7b61da7e774054ed5c9",
+    ".repro/rustfs-waitpath-v5/run-2/tiers.json": "736e3dd0ac1a94276564f5fc942d3b7b9562d66cbfe2a903f784c0fef9919081",
+    ".repro/rustfs-waitpath-v5/run-2/fs-probe.bin": "9a22c97a1496fe04dc2fcedb0a5ca6a3ac9f2a25006886bb0226956e3141a3a4"
+  },
+  "representative_operations": [
+    {
+      "run": "run-1",
+      "criterion": "slow_successful_put_with_counted_long_wait",
+      "key": "c8/221.bin",
+      "op_hash": 2506738889896071228,
+      "client_attempt": {
+        "key": "c8/221.bin",
+        "scheduled_ns": 9175232473613,
+        "attempted_ns": 9175232474034,
+        "attempted_realtime_ns": 1791624791636950721,
+        "launch_lateness_ms": 0.000421,
+        "status": 200,
+        "server_request_id": "8d639ae2-4000-4286-8cee-e37e046ed454",
+        "total_ms": 108.924951,
+        "write_ms": 0.569642,
+        "response_headers_wait_ms": 107.61785,
+        "response_wait_ms": 107.623491,
+        "completed_ns": 9175341704089,
+        "attempt_to_completion_ms": 109.230055,
+        "scheduled_to_completion_ms": 109.230476
+      },
+      "send_kind": "send_ok",
+      "send_ts": 9175340216478,
+      "quorum_trigger_disk": 0,
+      "quorum_trigger_attempt": 0,
+      "disks": [
+        {
+          "disk_index": 0,
+          "attempt": 0,
+          "classification": "quorum_triggering_acknowledgement",
+          "prod_ts": 9175340207692,
+          "prod_status": "ok",
+          "cons_ts": 9175340213292,
+          "cons_status": "ok",
+          "success_before": 2,
+          "success_after": 3,
+          "quorum_satisfied": true,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31295,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175246685953,
+              "start_ts": 9175246696523,
+              "end_ts": 9175246704348,
+              "dur_ms": 0.007825,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31316,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247472103,
+              "start_ts": 9175247477854,
+              "end_ts": 9175252541809,
+              "dur_ms": 5.063955,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31317,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175247477523,
+              "start_ts": 9175247614601,
+              "end_ts": 9175255406713,
+              "dur_ms": 7.792112,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31484,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255480492,
+              "start_ts": 9175255740361,
+              "end_ts": 9175257525623,
+              "dur_ms": 1.785262,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31563,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175257785382,
+              "start_ts": 9175257831248,
+              "end_ts": 9175262350056,
+              "dur_ms": 4.518808,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31691,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175262361949,
+              "start_ts": 9175262439605,
+              "end_ts": 9175263494671,
+              "dur_ms": 1.055066,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31711,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175266443524,
+              "start_ts": 9175266900644,
+              "end_ts": 9175338779693,
+              "dur_ms": 71.879049,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32295,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175339671993,
+              "start_ts": 9175339689486,
+              "end_ts": 9175339706839,
+              "dur_ms": 0.017353,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 1,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175340098306,
+          "prod_status": "ok",
+          "cons_ts": 9175340104517,
+          "cons_status": "ok",
+          "success_before": 1,
+          "success_after": 2,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31296,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175246800238,
+              "start_ts": 9175246809035,
+              "end_ts": 9175246817050,
+              "dur_ms": 0.008015,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31318,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247494044,
+              "start_ts": 9175247507570,
+              "end_ts": 9175252884514,
+              "dur_ms": 5.376944,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31319,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175247497361,
+              "start_ts": 9175247625883,
+              "end_ts": 9175255356619,
+              "dur_ms": 7.730736,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31481,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255451918,
+              "start_ts": 9175255504818,
+              "end_ts": 9175255737836,
+              "dur_ms": 0.233018,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31493,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175255881777,
+              "start_ts": 9175255947521,
+              "end_ts": 9175259327485,
+              "dur_ms": 3.379964,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31638,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175259383591,
+              "start_ts": 9175259398619,
+              "end_ts": 9175262837023,
+              "dur_ms": 3.438404,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31702,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175265740520,
+              "start_ts": 9175265809139,
+              "end_ts": 9175338724008,
+              "dur_ms": 72.914869,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32293,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175339657275,
+              "start_ts": 9175339671322,
+              "end_ts": 9175339691610,
+              "dur_ms": 0.020288,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 2,
+          "attempt": 0,
+          "classification": "post_quorum_tail",
+          "prod_ts": 9175340300306,
+          "prod_status": "ok",
+          "cons_ts": 9175340319693,
+          "cons_status": "ok",
+          "success_before": 3,
+          "success_after": 4,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31297,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175246894085,
+              "start_ts": 9175246905546,
+              "end_ts": 9175246917058,
+              "dur_ms": 0.011512,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31324,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247547836,
+              "start_ts": 9175248104945,
+              "end_ts": 9175252907277,
+              "dur_ms": 4.802332,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31325,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175247554118,
+              "start_ts": 9175248116486,
+              "end_ts": 9175255419577,
+              "dur_ms": 7.303091,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31488,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255750610,
+              "start_ts": 9175255766420,
+              "end_ts": 9175261566391,
+              "dur_ms": 5.799971,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31683,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175261593181,
+              "start_ts": 9175261604993,
+              "end_ts": 9175262970945,
+              "dur_ms": 1.365952,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31710,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175266182001,
+              "start_ts": 9175266456749,
+              "end_ts": 9175338719319,
+              "dur_ms": 72.26257,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32292,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175339650452,
+              "start_ts": 9175339663307,
+              "end_ts": 9175339686480,
+              "dur_ms": 0.023173,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32314,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175340050967,
+              "start_ts": 9175340063180,
+              "end_ts": 9175340081083,
+              "dur_ms": 0.017903,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 3,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175321594415,
+          "prod_status": "ok",
+          "cons_ts": 9175321603603,
+          "cons_status": "ok",
+          "success_before": 0,
+          "success_after": 1,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31294,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175246584482,
+              "start_ts": 9175246593369,
+              "end_ts": 9175246604590,
+              "dur_ms": 0.011221,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31307,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247132424,
+              "start_ts": 9175247171177,
+              "end_ts": 9175252992778,
+              "dur_ms": 5.821601,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31308,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175247140829,
+              "start_ts": 9175247542456,
+              "end_ts": 9175255431389,
+              "dur_ms": 7.888933,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31489,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255756892,
+              "start_ts": 9175255804141,
+              "end_ts": 9175262232184,
+              "dur_ms": 6.428043,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31690,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175262352621,
+              "start_ts": 9175262496201,
+              "end_ts": 9175263045476,
+              "dur_ms": 0.549275,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31715,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175266776871,
+              "start_ts": 9175267018807,
+              "end_ts": 9175316619027,
+              "dur_ms": 49.60022,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31983,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175316637562,
+              "start_ts": 9175316648894,
+              "end_ts": 9175321376886,
+              "dur_ms": 4.727992,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31990,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175321388858,
+              "start_ts": 9175321403075,
+              "end_ts": 9175321418945,
+              "dur_ms": 0.01587,
+              "is_prerequisite": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "run-1",
+      "criterion": "operation_with_long_post_send_tail",
+      "key": "c8/210.bin",
+      "op_hash": 9229396243927207860,
+      "client_attempt": {
+        "key": "c8/210.bin",
+        "scheduled_ns": 9175232840444,
+        "attempted_ns": 9175232840744,
+        "attempted_realtime_ns": 1791624791637316048,
+        "launch_lateness_ms": 0.0003,
+        "status": 200,
+        "server_request_id": "fc28f781-616e-489d-bcf6-63e1a07b33e4",
+        "total_ms": 89.521206,
+        "write_ms": 0.418608,
+        "response_headers_wait_ms": 88.431725,
+        "response_wait_ms": 88.443888,
+        "completed_ns": 9175322404390,
+        "attempt_to_completion_ms": 89.563646,
+        "scheduled_to_completion_ms": 89.563946
+      },
+      "send_kind": "send_ok",
+      "send_ts": 9175321524263,
+      "quorum_trigger_disk": 0,
+      "quorum_trigger_attempt": 0,
+      "disks": [
+        {
+          "disk_index": 0,
+          "attempt": 0,
+          "classification": "quorum_triggering_acknowledgement",
+          "prod_ts": 9175321500659,
+          "prod_status": "ok",
+          "cons_ts": 9175321516469,
+          "cons_status": "ok",
+          "success_before": 2,
+          "success_after": 3,
+          "quorum_satisfied": true,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31311,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175247250125,
+              "start_ts": 9175247299228,
+              "end_ts": 9175247308485,
+              "dur_ms": 0.009257,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31330,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247601046,
+              "start_ts": 9175248183152,
+              "end_ts": 9175253107885,
+              "dur_ms": 4.924733,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31334,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175248163054,
+              "start_ts": 9175248827465,
+              "end_ts": 9175255442079,
+              "dur_ms": 6.614614,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31490,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255767121,
+              "start_ts": 9175255839408,
+              "end_ts": 9175262135182,
+              "dur_ms": 6.295774,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31689,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175262343815,
+              "start_ts": 9175262429957,
+              "end_ts": 9175262671642,
+              "dur_ms": 0.241685,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31699,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175265685066,
+              "start_ts": 9175265933994,
+              "end_ts": 9175316308352,
+              "dur_ms": 50.374358,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31982,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175316328771,
+              "start_ts": 9175316343799,
+              "end_ts": 9175321361186,
+              "dur_ms": 5.017387,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31989,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175321383368,
+              "start_ts": 9175321403025,
+              "end_ts": 9175321418955,
+              "dur_ms": 0.01593,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 1,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175321500699,
+          "prod_status": "ok",
+          "cons_ts": 9175321515186,
+          "cons_status": "ok",
+          "success_before": 1,
+          "success_after": 2,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31313,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175247343822,
+              "start_ts": 9175247419995,
+              "end_ts": 9175247434663,
+              "dur_ms": 0.014668,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31329,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247600866,
+              "start_ts": 9175248107259,
+              "end_ts": 9175252814282,
+              "dur_ms": 4.707023,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31331,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175248099494,
+              "start_ts": 9175248251390,
+              "end_ts": 9175255393638,
+              "dur_ms": 7.142248,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31483,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255471054,
+              "start_ts": 9175255732496,
+              "end_ts": 9175257686015,
+              "dur_ms": 1.953519,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31564,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175257796462,
+              "start_ts": 9175257990618,
+              "end_ts": 9175262888450,
+              "dur_ms": 4.897832,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31707,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175266033602,
+              "start_ts": 9175266089116,
+              "end_ts": 9175316224414,
+              "dur_ms": 50.135298,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31981,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175316276492,
+              "start_ts": 9175316289317,
+              "end_ts": 9175321356748,
+              "dur_ms": 5.067431,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31988,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175321382256,
+              "start_ts": 9175321395851,
+              "end_ts": 9175321413214,
+              "dur_ms": 0.017363,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 2,
+          "attempt": 0,
+          "classification": "post_quorum_tail",
+          "prod_ts": 9175339826664,
+          "prod_status": "ok",
+          "cons_ts": 9175339833026,
+          "cons_status": "ok",
+          "success_before": 3,
+          "success_after": 4,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31315,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175247443790,
+              "start_ts": 9175247459279,
+              "end_ts": 9175247474728,
+              "dur_ms": 0.015449,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31332,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175248132286,
+              "start_ts": 9175248180126,
+              "end_ts": 9175253078209,
+              "dur_ms": 4.898083,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31333,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175248141083,
+              "start_ts": 9175248399770,
+              "end_ts": 9175255359664,
+              "dur_ms": 6.959894,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31482,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175255461907,
+              "start_ts": 9175255645122,
+              "end_ts": 9175255837113,
+              "dur_ms": 0.191991,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31492,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175255879353,
+              "start_ts": 9175255921202,
+              "end_ts": 9175258117968,
+              "dur_ms": 2.196766,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31600,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175258624662,
+              "start_ts": 9175258637316,
+              "end_ts": 9175262920761,
+              "dur_ms": 4.283445,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31709,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175266059240,
+              "start_ts": 9175266206598,
+              "end_ts": 9175338718017,
+              "dur_ms": 72.511419,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32291,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175339643690,
+              "start_ts": 9175339655362,
+              "end_ts": 9175339683144,
+              "dur_ms": 0.027782,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 3,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175317521026,
+          "prod_status": "ok",
+          "cons_ts": 9175317534471,
+          "cons_status": "ok",
+          "success_before": 0,
+          "success_after": 1,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31303,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175247082129,
+              "start_ts": 9175247093090,
+              "end_ts": 9175247105934,
+              "dur_ms": 0.012844,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31326,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175247570719,
+              "start_ts": 9175248107710,
+              "end_ts": 9175252609676,
+              "dur_ms": 4.501966,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31327,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175247577001,
+              "start_ts": 9175248186248,
+              "end_ts": 9175253904985,
+              "dur_ms": 5.718737,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31467,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175254623248,
+              "start_ts": 9175254656801,
+              "end_ts": 9175255641385,
+              "dur_ms": 0.984584,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31491,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175255864946,
+              "start_ts": 9175255895373,
+              "end_ts": 9175257819566,
+              "dur_ms": 1.924193,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31570,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175257845795,
+              "start_ts": 9175258127446,
+              "end_ts": 9175262848264,
+              "dur_ms": 4.720818,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31703,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175265759075,
+              "start_ts": 9175266085269,
+              "end_ts": 9175316630840,
+              "dur_ms": 50.545571,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31984,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175316649916,
+              "start_ts": 9175316671526,
+              "end_ts": 9175316686625,
+              "dur_ms": 0.015099,
+              "is_prerequisite": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "run-1",
+      "criterion": "operation_with_post_send_tail_and_counted_waits",
+      "key": "c8/208.bin",
+      "op_hash": 3869161025694086525,
+      "client_attempt": {
+        "key": "c8/208.bin",
+        "scheduled_ns": 9175233296763,
+        "attempted_ns": 9175233297013,
+        "attempted_realtime_ns": 1791624791637772318,
+        "launch_lateness_ms": 0.00025,
+        "status": 200,
+        "server_request_id": "747ce1af-522d-4dc3-bd46-cfbbe7ffb9af",
+        "total_ms": 91.465847,
+        "write_ms": 0.516913,
+        "response_headers_wait_ms": 90.231604,
+        "response_wait_ms": 90.248255,
+        "completed_ns": 9175324811192,
+        "attempt_to_completion_ms": 91.514179,
+        "scheduled_to_completion_ms": 91.514429
+      },
+      "send_kind": "send_ok",
+      "send_ts": 9175323774340,
+      "quorum_trigger_disk": 3,
+      "quorum_trigger_attempt": 0,
+      "disks": [
+        {
+          "disk_index": 0,
+          "attempt": 0,
+          "classification": "post_quorum_tail",
+          "prod_ts": 9175340375347,
+          "prod_status": "ok",
+          "cons_ts": 9175340381860,
+          "cons_status": "ok",
+          "success_before": 3,
+          "success_after": 4,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31429,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175253253549,
+              "start_ts": 9175253263518,
+              "end_ts": 9175253286451,
+              "dur_ms": 0.022933,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31437,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175253535961,
+              "start_ts": 9175253618927,
+              "end_ts": 9175259396114,
+              "dur_ms": 5.777187,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31438,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175253541671,
+              "start_ts": 9175253556820,
+              "end_ts": 9175262822456,
+              "dur_ms": 9.265636,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31701,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175265716555,
+              "start_ts": 9175265750639,
+              "end_ts": 9175293331049,
+              "dur_ms": 27.58041,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31812,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175293519474,
+              "start_ts": 9175293642606,
+              "end_ts": 9175293718849,
+              "dur_ms": 0.076243,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31827,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175294014466,
+              "start_ts": 9175294169969,
+              "end_ts": 9175338769945,
+              "dur_ms": 44.599976,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32294,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175339663427,
+              "start_ts": 9175339684967,
+              "end_ts": 9175339695147,
+              "dur_ms": 0.01018,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32315,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175340106692,
+              "start_ts": 9175340116791,
+              "end_ts": 9175340126659,
+              "dur_ms": 0.009868,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 1,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175323288615,
+          "prod_status": "ok",
+          "cons_ts": 9175323292984,
+          "cons_status": "ok",
+          "success_before": 1,
+          "success_after": 2,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31430,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175253356483,
+              "start_ts": 9175253385036,
+              "end_ts": 9175253395496,
+              "dur_ms": 0.01046,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31439,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175253549907,
+              "start_ts": 9175253726439,
+              "end_ts": 9175259406995,
+              "dur_ms": 5.680556,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31440,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175253574393,
+              "start_ts": 9175253823242,
+              "end_ts": 9175262802849,
+              "dur_ms": 8.979607,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31700,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175265702949,
+              "start_ts": 9175265738586,
+              "end_ts": 9175266330751,
+              "dur_ms": 0.592165,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31717,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175266790607,
+              "start_ts": 9175266811527,
+              "end_ts": 9175293587662,
+              "dur_ms": 26.776135,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31817,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175293712167,
+              "start_ts": 9175294061905,
+              "end_ts": 9175321297887,
+              "dur_ms": 27.235982,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31987,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175321314679,
+              "start_ts": 9175321324016,
+              "end_ts": 9175322851973,
+              "dur_ms": 1.527957,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32017,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175323056458,
+              "start_ts": 9175323066457,
+              "end_ts": 9175323084361,
+              "dur_ms": 0.017904,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 2,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9175323233552,
+          "prod_status": "ok",
+          "cons_ts": 9175323241998,
+          "cons_status": "ok",
+          "success_before": 0,
+          "success_after": 1,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31431,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175253458655,
+              "start_ts": 9175253468163,
+              "end_ts": 9175253478252,
+              "dur_ms": 0.010089,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31441,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175253590453,
+              "start_ts": 9175253732110,
+              "end_ts": 9175259424438,
+              "dur_ms": 5.692328,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31443,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175253698937,
+              "start_ts": 9175253838871,
+              "end_ts": 9175262891776,
+              "dur_ms": 9.052905,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31708,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175266047979,
+              "start_ts": 9175266111609,
+              "end_ts": 9175266941411,
+              "dur_ms": 0.829802,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31728,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175267218814,
+              "start_ts": 9175267279247,
+              "end_ts": 9175293626796,
+              "dur_ms": 26.347549,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31818,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175293721514,
+              "start_ts": 9175294139471,
+              "end_ts": 9175320909335,
+              "dur_ms": 26.769864,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31985,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175320957336,
+              "start_ts": 9175321056733,
+              "end_ts": 9175322842425,
+              "dur_ms": 1.785692,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32009,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175322919791,
+              "start_ts": 9175322930491,
+              "end_ts": 9175322956370,
+              "dur_ms": 0.025879,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 3,
+          "attempt": 0,
+          "classification": "quorum_triggering_acknowledgement",
+          "prod_ts": 9175323756817,
+          "prod_status": "ok",
+          "cons_ts": 9175323767787,
+          "cons_status": "ok",
+          "success_before": 2,
+          "success_after": 3,
+          "quorum_satisfied": true,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 31425,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9175253123544,
+              "start_ts": 9175253136178,
+              "end_ts": 9175253145736,
+              "dur_ms": 0.009558,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31435,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9175253514400,
+              "start_ts": 9175253584772,
+              "end_ts": 9175259213701,
+              "dur_ms": 5.628929,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31436,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9175253522014,
+              "start_ts": 9175253525591,
+              "end_ts": 9175262852743,
+              "dur_ms": 9.327152,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31698,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9175265668094,
+              "start_ts": 9175265689965,
+              "end_ts": 9175293356337,
+              "dur_ms": 27.666372,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31813,
+              "step_tag": "rename_meta",
+              "submit_ts": 9175293530755,
+              "start_ts": 9175293643888,
+              "end_ts": 9175293751862,
+              "dur_ms": 0.107974,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31837,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9175294335611,
+              "start_ts": 9175294392438,
+              "end_ts": 9175321108791,
+              "dur_ms": 26.716353,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 31986,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175321126244,
+              "start_ts": 9175321185856,
+              "end_ts": 9175322824061,
+              "dur_ms": 1.638205,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 32002,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9175322875938,
+              "start_ts": 9175322885366,
+              "end_ts": 9175322903751,
+              "dur_ms": 0.018385,
+              "is_prerequisite": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "run-2",
+      "criterion": "run2_slow_successful_put",
+      "key": "c8/37.bin",
+      "op_hash": 3169863955359640985,
+      "client_attempt": {
+        "key": "c8/37.bin",
+        "scheduled_ns": 9180411080437,
+        "attempted_ns": 9180411081398,
+        "attempted_realtime_ns": 1791624796815557264,
+        "launch_lateness_ms": 0.000961,
+        "status": 200,
+        "server_request_id": "8234a8b6-e6b9-44fc-aab1-fd203dd557b4",
+        "total_ms": 105.091083,
+        "write_ms": 4.696472,
+        "response_headers_wait_ms": 99.478856,
+        "response_wait_ms": 99.499034,
+        "completed_ns": 9180518455069,
+        "attempt_to_completion_ms": 107.373671,
+        "scheduled_to_completion_ms": 107.374632
+      },
+      "send_kind": "send_ok",
+      "send_ts": 9180512658184,
+      "quorum_trigger_disk": 0,
+      "quorum_trigger_attempt": 0,
+      "disks": [
+        {
+          "disk_index": 0,
+          "attempt": 0,
+          "classification": "quorum_triggering_acknowledgement",
+          "prod_ts": 9180512638607,
+          "prod_status": "ok",
+          "cons_ts": 9180512653755,
+          "cons_status": "ok",
+          "success_before": 2,
+          "success_after": 3,
+          "quorum_satisfied": true,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 7848,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9180454389842,
+              "start_ts": 9180454481605,
+              "end_ts": 9180454492636,
+              "dur_ms": 0.011031,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7868,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9180455896970,
+              "start_ts": 9180455968946,
+              "end_ts": 9180471367198,
+              "dur_ms": 15.398252,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7869,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9180455910496,
+              "start_ts": 9180456020713,
+              "end_ts": 9180479119094,
+              "dur_ms": 23.098381,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8110,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9180486630307,
+              "start_ts": 9180486777253,
+              "end_ts": 9180488903317,
+              "dur_ms": 2.126064,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8153,
+              "step_tag": "rename_meta",
+              "submit_ts": 9180489388270,
+              "start_ts": 9180489418877,
+              "end_ts": 9180489583567,
+              "dur_ms": 0.16469,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8166,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9180489696771,
+              "start_ts": 9180489710146,
+              "end_ts": 9180496654000,
+              "dur_ms": 6.943854,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8376,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180500655675,
+              "start_ts": 9180500939429,
+              "end_ts": 9180504120128,
+              "dur_ms": 3.180699,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8507,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180504663731,
+              "start_ts": 9180506263513,
+              "end_ts": 9180506287799,
+              "dur_ms": 0.024286,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 1,
+          "attempt": 0,
+          "classification": "post_quorum_tail",
+          "prod_ts": 9180512849494,
+          "prod_status": "ok",
+          "cons_ts": 9180512856878,
+          "cons_status": "ok",
+          "success_before": 3,
+          "success_after": 4,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 7849,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9180454473139,
+              "start_ts": 9180454486985,
+              "end_ts": 9180454497665,
+              "dur_ms": 0.01068,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7870,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9180455953487,
+              "start_ts": 9180456015794,
+              "end_ts": 9180471616327,
+              "dur_ms": 15.600533,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7871,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9180455957274,
+              "start_ts": 9180456056250,
+              "end_ts": 9180481753565,
+              "dur_ms": 25.697315,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8120,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9180486902409,
+              "start_ts": 9180486975176,
+              "end_ts": 9180489921323,
+              "dur_ms": 2.946147,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8187,
+              "step_tag": "rename_meta",
+              "submit_ts": 9180490262726,
+              "start_ts": 9180490404533,
+              "end_ts": 9180490535971,
+              "dur_ms": 0.131438,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8214,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9180490551540,
+              "start_ts": 9180490678669,
+              "end_ts": 9180496599818,
+              "dur_ms": 5.921149,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8371,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180500571646,
+              "start_ts": 9180500778706,
+              "end_ts": 9180504240314,
+              "dur_ms": 3.461608,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8511,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180504932177,
+              "start_ts": 9180506289743,
+              "end_ts": 9180506301685,
+              "dur_ms": 0.011942,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 2,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9180509915670,
+          "prod_status": "ok",
+          "cons_ts": 9180509933003,
+          "cons_status": "ok",
+          "success_before": 1,
+          "success_after": 2,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 7850,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9180454557819,
+              "start_ts": 9180454570202,
+              "end_ts": 9180454579690,
+              "dur_ms": 0.009488,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7864,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9180455553544,
+              "start_ts": 9180455586546,
+              "end_ts": 9180471401573,
+              "dur_ms": 15.815027,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7865,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9180455563833,
+              "start_ts": 9180455796090,
+              "end_ts": 9180481981143,
+              "dur_ms": 26.185053,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8118,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9180486871421,
+              "start_ts": 9180486901838,
+              "end_ts": 9180490607926,
+              "dur_ms": 3.706088,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8220,
+              "step_tag": "rename_meta",
+              "submit_ts": 9180490612665,
+              "start_ts": 9180490618747,
+              "end_ts": 9180490860963,
+              "dur_ms": 0.242216,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8247,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9180491174463,
+              "start_ts": 9180491200181,
+              "end_ts": 9180496649381,
+              "dur_ms": 5.4492,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8375,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180500639705,
+              "start_ts": 9180500912709,
+              "end_ts": 9180504095952,
+              "dur_ms": 3.183243,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8503,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180504119056,
+              "start_ts": 9180506343694,
+              "end_ts": 9180506354084,
+              "dur_ms": 0.01039,
+              "is_prerequisite": true
+            }
+          ]
+        },
+        {
+          "disk_index": 3,
+          "attempt": 0,
+          "classification": "counted_before_quorum",
+          "prod_ts": 9180509351558,
+          "prod_status": "ok",
+          "cons_ts": 9180509370724,
+          "cons_status": "ok",
+          "success_before": 0,
+          "success_after": 1,
+          "quorum_satisfied": false,
+          "missing": [],
+          "jobs": [
+            {
+              "job_id": 7845,
+              "step_tag": "dest_meta_read",
+              "submit_ts": 9180454216576,
+              "start_ts": 9180454260900,
+              "end_ts": 9180454277240,
+              "dur_ms": 0.01634,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7861,
+              "step_tag": "staged_meta_write",
+              "submit_ts": 9180454945078,
+              "start_ts": 9180454959605,
+              "end_ts": 9180456819116,
+              "dur_ms": 1.859511,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 7862,
+              "step_tag": "src_dir_sync",
+              "submit_ts": 9180454955307,
+              "start_ts": 9180455011523,
+              "end_ts": 9180482537821,
+              "dur_ms": 27.526298,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8119,
+              "step_tag": "rename_data_dir",
+              "submit_ts": 9180486893011,
+              "start_ts": 9180486911576,
+              "end_ts": 9180489788073,
+              "dur_ms": 2.876497,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8186,
+              "step_tag": "rename_meta",
+              "submit_ts": 9180490241787,
+              "start_ts": 9180490279257,
+              "end_ts": 9180490420103,
+              "dur_ms": 0.140846,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8208,
+              "step_tag": "dst_dir_fsync",
+              "submit_ts": 9180490516304,
+              "start_ts": 9180490600121,
+              "end_ts": 9180496677725,
+              "dur_ms": 6.077604,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8380,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180500705869,
+              "start_ts": 9180500956691,
+              "end_ts": 9180504111481,
+              "dur_ms": 3.15479,
+              "is_prerequisite": true
+            },
+            {
+              "job_id": 8505,
+              "step_tag": "ancestor_fsync",
+              "submit_ts": 9180504345342,
+              "start_ts": 9180505559287,
+              "end_ts": 9180505581950,
+              "dur_ms": 0.022663,
+              "is_prerequisite": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "methodology_notes": [
+    "Disk identity (0..3) represents the logical erasure fanout member, not independent physical hardware",
+    "Coordinator join loop in rename_data_owned_early_ack_with_fence owns the write_quorum invariant",
+    "write_quorum is satisfied when success_count increments to 3; subsequent results are post-quorum tails",
+    "Production time (worker thread return) and consumption time (coordinator join_next pop) are recorded separately",
+    "Observed dependency distinguishes actual execution order from counterfactual necessity (4th disk could have substituted under a different schedule)",
+    "Btrfs transaction wait_for_commit causes remain unestablished by request-path tracing alone"
+  ]
+}

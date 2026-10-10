@@ -1142,3 +1142,67 @@ only to one D segment beginning at most 50 microseconds before it; unmatched
 stacks remain unassigned. Scheduled residency and nested observations retain
 the ordinary analyzer's limitations. The response-critical disk dependency,
 transaction identity, and reason for slow commit remain unresolved.
+
+### Per-disk acknowledgement attribution and quorum reconstruction (2026-10-10)
+
+The v5 generation establishes the acknowledgement contract and links per-disk
+commit paths to their blocking jobs, measured waits, and client responses:
+
+1. **Acknowledgement Contract**: Tracing `SetDisks::rename_data_owned_early_ack_with_fence`
+   identified the coordinator join loop as the invariant owner. `results_seen` counts
+   all disk task outcomes (including errors and panics); `success_count` increments
+   strictly on successful disk mutations (`Ok(Ok(res))`). Quorum (`write_quorum = 3`)
+   is satisfied when `success_count >= 3`, which emits `SEND_OK`. Subsequent disk
+   completions are post-quorum tails.
+2. **Identity & Record Format v3**: Format version 3 (40-byte fixed records) records:
+   - `DISK` task-local context carrying `disk_index` (0-indexed logical fanout member)
+     and `attempt` across all spawn boundaries and into blocking jobs.
+   - `KIND_DISK_COMPLETE` (16): emitted on the worker thread when disk mutation returns.
+   - `KIND_QUORUM_RESULT` (17): emitted by coordinator when popping each result from
+     `tasks.join_next()`, capturing `status`, `success_before`, `success_after`,
+     `quorum_satisfied`, `results_seen`, and `write_quorum`.
+3. **Validation & Live Captures**:
+   - Preserved `rustfs-v4` binary (`e8c4f773...`).
+   - Rebuilt `rustfs-v5` (`9bda251b...`) with immutable patches `tokio-1.53.2-fs-probe-v5.patch`
+     (`ccf4619e...`) and `rustfs-probe-v5.patch` (`1fc129b1...`).
+   - One smoke repetition: `.repro/rustfs-fsprobe-smoke-v5` (c8, 1 s, 1 MiB, 189 PUTs ok,
+     0 drops, format v3 validated, 212/212 quorum triggers identified).
+   - Two diagnostic repetitions: `.repro/rustfs-waitpath-v5` (c8, 3 s, 1 MiB, 577 + 600 PUTs ok,
+     0 drops, 0 capacity/closed rejections).
+4. **Reproduction & Analysis Commands**:
+
+```sh
+# Smoke run (1 rep x c8 x 1 s):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-fsprobe-smoke-v5 \
+  --binary .repro/rustfs-probe/target-v5/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 1 --duration 1 --concurrency 8 --rates
+
+# Diagnostic capture (2 reps x c8 x 3 s):
+PYTHONDONTWRITEBYTECODE=1 python3 experiments/rustfs/run.py \
+  --output .repro/rustfs-waitpath-v5 \
+  --binary .repro/rustfs-probe/target-v5/release/rustfs \
+  --rustfs-source .repro/rustfs-probe --fs-probe \
+  --repetitions 2 --duration 3 --concurrency 8 --rates
+
+# Full probe analysis:
+python3 experiments/rustfs/fs_probe.py \
+  .repro/rustfs-waitpath-v5/run-1 .repro/rustfs-waitpath-v5/run-2 \
+  --output experiments/rustfs/results/fs-probe-v5-diagnostic.json
+```
+
+5. **Findings**:
+   - `c8/221.bin` (109.23 ms client latency): Disk 3, Disk 1, and Disk 0 formed the
+     observed prerequisite chain. Disk 1 had a 72.91 ms ancestor-fsync wrapper; Disk 0
+     had a 71.88 ms ancestor-fsync wrapper that triggered quorum (success count 2 -> 3)
+     and emitted SEND_OK at `9175340216478`. Disk 2 finished 0.084 ms after send as a
+     post-quorum tail.
+   - `c8/210.bin` (89.56 ms client latency): Disk 3, Disk 1, and Disk 0 completed before
+     send; Disk 2 ran a 72.51 ms ancestor-fsync wrapper that finished +18.30 ms **after**
+     SEND_OK, demonstrating a post-response tail that did not delay client response.
+   - `c8/208.bin` (91.51 ms client latency): Disk 0 ran a 44.60 ms fsync wrapper that finished
+     +16.60 ms **after** SEND_OK as a post-response tail.
+   - Observed dependency distinguishes execution order from counterfactual necessity (under
+     another schedule, Disk 2 could have substituted). Why the underlying Btrfs transaction
+     takes ~40 ms to commit remains unresolved without kernel transaction tracing.
