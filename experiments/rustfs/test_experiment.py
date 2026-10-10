@@ -3442,6 +3442,88 @@ class WaitPathTests(unittest.TestCase):
             self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
             self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
 
+        # 7. Incomplete provenance (only measurement.json present)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            meas_hash = real_data.get("inputs", {}).get(".repro/rustfs-waitpath-v5-joint/measurement.json")
+            fab = json.loads(json.dumps(real_data))
+            del fab["provenance"]
+            fab["inputs"] = {".repro/rustfs-waitpath-v5-joint/measurement.json": meas_hash}
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+            self.assertIn("missing_required_capture_hash", summary["representative_operations"][0]["stack_validation"]["reason"])
+
+        # 8. Swapped repetition inputs (declared run-2 probe instead of selected run-1)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            del fab["provenance"]
+            probe_hash = fab["inputs"].pop(".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin")
+            fab["inputs"][".repro/rustfs-waitpath-v5-joint/run-2/fs-probe.bin"] = probe_hash
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+            self.assertIn("missing_required_capture_hash_for_run-1/fs-probe.bin", summary["representative_operations"][0]["stack_validation"]["reason"])
+
+        # 9. Swapped repetition hash (run-1 probe hash replaced with swapped/corrupted hash)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            del fab["provenance"]
+            fab["inputs"][".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin"] = "1" * 64
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+            self.assertIn("capture_hash_mismatch", summary["representative_operations"][0]["stack_validation"]["reason"])
+
+        # 10. Missing trace.raw in provenance
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_path = Path(tmp_dir) / "fake-stacks.json"
+            fab = json.loads(json.dumps(real_data))
+            del fab["provenance"]
+            del fab["inputs"][".repro/rustfs-waitpath-v5-joint/trace.raw"]
+            fake_path.write_text(json.dumps(fab))
+            summary = generate_summary(run_dir, stacks_path=fake_path)
+            self.assertEqual(summary["parameters"]["selection_mode"], "declared_manual_keys")
+            self.assertEqual(summary["representative_operations"][0]["stack_validation"]["status"], "unverified")
+            self.assertIn("missing_required_capture_hash_for_trace.raw", summary["representative_operations"][0]["stack_validation"]["reason"])
+
+    def test_validate_capture_hashes_direct(self):
+        from wait_path_v5 import validate_capture_hashes, collect_input_hashes
+        repo_root = Path(__file__).resolve().parents[2]
+        run_dir = repo_root / ".repro" / "rustfs-waitpath-v5-joint"
+        if not run_dir.is_dir():
+            self.skipTest("waitpath-v5-joint repro capture missing")
+        input_hashes = collect_input_hashes(run_dir)
+        stacks_file = repo_root / "experiments/rustfs/results/wait-path-v5-joint-stacks.json"
+        if not stacks_file.is_file():
+            self.skipTest("wait-path-v5-joint-stacks.json missing")
+        real_data = json.loads(stacks_file.read_text())
+
+        # Success with complete provenance
+        ok, reason = validate_capture_hashes(real_data, run_dir, input_hashes, selected_runs=["run-1"])
+        self.assertTrue(ok)
+        self.assertEqual(reason, "hashes_verified")
+
+        # Incomplete provenance (only measurement.json)
+        meas_hash = real_data.get("inputs", {}).get(".repro/rustfs-waitpath-v5-joint/measurement.json")
+        ok, reason = validate_capture_hashes({"inputs": {".repro/rustfs-waitpath-v5-joint/measurement.json": meas_hash}}, run_dir, input_hashes, selected_runs=["run-1"])
+        self.assertFalse(ok)
+        self.assertEqual(reason, "missing_required_capture_hash_for_trace.raw")
+
+        # Swapped repetition inputs (run-2 instead of run-1)
+        swapped = json.loads(json.dumps(real_data))
+        del swapped["provenance"]
+        h = swapped["inputs"].pop(".repro/rustfs-waitpath-v5-joint/run-1/fs-probe.bin")
+        swapped["inputs"][".repro/rustfs-waitpath-v5-joint/run-2/fs-probe.bin"] = h
+        ok, reason = validate_capture_hashes(swapped, run_dir, input_hashes, selected_runs=["run-1"])
+        self.assertFalse(ok)
+        self.assertEqual(reason, "missing_required_capture_hash_for_run-1/fs-probe.bin")
+
     def test_joint_v5_capture_script_structure(self):
         repo_root = Path(__file__).resolve().parents[2]
         script_path = repo_root / "experiments/rustfs/joint_v5_capture.sh"

@@ -246,10 +246,36 @@ BTRFS_WAIT_FRAMES = (
 )
 
 
-def validate_capture_hashes(stacks_data, run_dir, input_hashes):
-    """Validate that the stack artifact includes provenance and matching capture hashes."""
+def normalize_rel_to_run_dir(p_str, run_dir, repo_root):
+    """Normalize a path to be relative to run_dir while preserving run subdirectories."""
+    p = Path(p_str)
+    if p.is_absolute():
+        try:
+            return str(p.relative_to(run_dir.resolve()))
+        except ValueError:
+            pass
+    abs_p = (repo_root / p).resolve()
+    try:
+        return str(abs_p.relative_to(run_dir.resolve()))
+    except ValueError:
+        pass
+    parts = p.parts
+    if run_dir.name in parts:
+        idx = parts.index(run_dir.name)
+        if idx + 1 < len(parts):
+            return str(Path(*parts[idx + 1:]))
+    return str(p)
+
+
+def validate_capture_hashes(stacks_data, run_dir, input_hashes, selected_runs=None):
+    """Validate that the stack artifact includes matching hashes for trace.raw
+    and the selected run's probe dump and tiers.json using run-specific identities.
+    """
     if not isinstance(stacks_data, dict):
         return False, "stacks_data_not_dict"
+
+    run_dir = Path(run_dir)
+    repo_root = find_repo_root(run_dir)
 
     declared_items = []
     if isinstance(stacks_data.get("inputs"), dict):
@@ -269,18 +295,41 @@ def validate_capture_hashes(stacks_data, run_dir, input_hashes):
     if not declared_items:
         return False, "missing_provenance_or_inputs"
 
-    matches = 0
+    declared_by_rel = {}
     for decl_path, decl_hash in declared_items:
-        decl_fname = Path(decl_path).name
-        for rel_path, actual_hash in input_hashes.items():
-            if decl_path == rel_path or decl_fname == Path(rel_path).name:
-                if decl_hash != actual_hash:
-                    return False, f"capture_hash_mismatch_for_{decl_fname}"
-                matches += 1
-                break
+        norm = normalize_rel_to_run_dir(decl_path, run_dir, repo_root)
+        if norm in declared_by_rel:
+            if declared_by_rel[norm] != decl_hash:
+                return False, f"conflicting_declared_hashes_for_{norm}"
+        else:
+            declared_by_rel[norm] = decl_hash
 
-    if matches == 0:
-        return False, "no_capture_inputs_matched"
+    if not selected_runs:
+        selected_runs = [d.name for d in sorted(run_dir.glob("run-*")) if d.is_dir()]
+
+    required_files = []
+    if (run_dir / "trace.raw").is_file():
+        required_files.append("trace.raw")
+    for r in selected_runs:
+        if (run_dir / r / "fs-probe.bin").is_file():
+            required_files.append(f"{r}/fs-probe.bin")
+        if (run_dir / r / "tiers.json").is_file():
+            required_files.append(f"{r}/tiers.json")
+
+    for req in required_files:
+        if req not in declared_by_rel:
+            return False, f"missing_required_capture_hash_for_{req}"
+
+    for norm, decl_hash in declared_by_rel.items():
+        disk_p = run_dir / norm
+        if disk_p.is_file():
+            actual_h = sha256_file(disk_p)
+            if decl_hash != actual_h:
+                return False, f"capture_hash_mismatch_for_{norm}"
+        elif (repo_root / norm).is_file():
+            actual_h = sha256_file(repo_root / norm)
+            if decl_hash != actual_h:
+                return False, f"capture_hash_mismatch_for_{norm}"
 
     return True, "hashes_verified"
 
@@ -426,11 +475,6 @@ def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_
         except Exception:
             stacks_data = None
 
-    capture_hashes_valid = False
-    capture_hash_reason = "no_stack_artifact"
-    if stacks_data:
-        capture_hashes_valid, capture_hash_reason = validate_capture_hashes(stacks_data, run_dir, input_hashes)
-
     run_data = {}
     for run_subdir in sorted(run_dir.glob("run-*")):
         run_name = run_subdir.name
@@ -462,6 +506,15 @@ def generate_summary(run_dir, declared_operations=None, automatic=False, stacks_
         spec = DEFAULT_JOINT_OPERATIONS
     else:
         spec = DEFAULT_HISTORICAL_OPERATIONS
+
+    selected_runs = sorted(list(set(item["run"] for item in spec)))
+
+    capture_hashes_valid = False
+    capture_hash_reason = "no_stack_artifact"
+    if stacks_data:
+        capture_hashes_valid, capture_hash_reason = validate_capture_hashes(
+            stacks_data, run_dir, input_hashes, selected_runs=selected_runs
+        )
 
     operations = []
     for item in spec:

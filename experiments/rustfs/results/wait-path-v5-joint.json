@@ -3,7 +3,7 @@
   "schema_version": "rustfs-acknowledgement-dependencies/v2",
   "provenance": {
     "generator": "experiments/rustfs/wait_path_v5.py",
-    "git_commit": "a94bc7c11795f473fa69762f09560a4e2dcade4a",
+    "git_commit": "a3f608a17221769971954a619f598b31a77e810f",
     "inputs": {
       "patches/tokio-1.53.2-fs-probe-v5.patch": "ccf4619ec21ea5cb5cba0b9c59d06f743b3ae996e69fd0f588ad8426314749a9",
       "patches/rustfs-probe-v5.patch": "1fc129b1d8d83bbe2c7386a0df176a0a4c4306e914ae77dd644c2411f0588836",
