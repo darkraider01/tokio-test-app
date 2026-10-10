@@ -4,6 +4,9 @@ Controlled reproduction and experimental validation harness for investigating To
 
 ## Documentation
 
+Start with the [final investigation synthesis](./investigation_synthesis.md) for
+the combined findings, evidence limits, and possible Tokio/Dial9 follow-ups.
+
 The complete technical report, architectural trace, empirical timelines, distributions, and boundary classifications are documented in:
 - [`dial9_tokio_observability_gap.md`](./dial9_tokio_observability_gap.md)
 - The local RustFS PUT experiment, its measurement limits, and reproduction
