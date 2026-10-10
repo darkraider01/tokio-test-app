@@ -1,0 +1,779 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index e3eda47..96445ff 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -12679,8 +12679,6 @@ dependencies = [
+ [[package]]
+ name = "tokio"
+ version = "1.53.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
+ dependencies = [
+  "bytes",
+  "libc",
+diff --git a/Cargo.toml b/Cargo.toml
+index dc105b5..6ddad64 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -420,3 +420,10 @@ inherits = "release"
+ inherits = "release"
+ debug = true
+ strip = "none"
++
++# Diagnostic-only: replace registry Tokio 1.53.2 with an identical local copy
++# carrying the `rustfs_fs_probe` blocking-pool instrumentation. Used solely by
++# the probe experiment (experiments/rustfs/README.md); the control checkout
++# does not patch Tokio.
++[patch.crates-io]
++tokio = { path = "../tokio-blocking-probe" }
+diff --git a/crates/ecstore/src/disk/disk_store.rs b/crates/ecstore/src/disk/disk_store.rs
+index 0e057ea..2d254e3 100644
+--- a/crates/ecstore/src/disk/disk_store.rs
++++ b/crates/ecstore/src/disk/disk_store.rs
+@@ -287,12 +287,19 @@ where
+     if external_guard.is_none() {
+         return operation().await;
+     }
+-    tokio::spawn(async move {
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::propagate_op(async move {
+         let _external_guard = external_guard;
+         operation().await
+-    })
+-    .await
+-    .map_err(|_| Error::other("owned mutation task failed"))?
++    });
++    #[cfg(not(rustfs_fs_probe))]
++    let future = async move {
++        let _external_guard = external_guard;
++        operation().await
++    };
++    tokio::spawn(future)
++        .await
++        .map_err(|_| Error::other("owned mutation task failed"))?
+ }
+ 
+ impl DiskStoreRenameDataExt for LocalDiskWrapper {
+diff --git a/crates/ecstore/src/disk/fs.rs b/crates/ecstore/src/disk/fs.rs
+index 7dbbaf1..4a5212a 100644
+--- a/crates/ecstore/src/disk/fs.rs
++++ b/crates/ecstore/src/disk/fs.rs
+@@ -160,7 +160,11 @@ pub fn lstat_std(path: impl AsRef<Path>) -> io::Result<Metadata> {
+ }
+ 
+ pub async fn make_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
+-    fs::create_dir_all(path.as_ref()).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("make_dir_all", fs::create_dir_all(path.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::create_dir_all(path.as_ref());
++    future.await
+ }
+ 
+ fn is_dir_error(e: &io::Error) -> bool {
+@@ -211,11 +215,19 @@ pub fn remove_all_std(path: impl AsRef<Path>) -> io::Result<()> {
+ }
+ 
+ pub async fn mkdir(path: impl AsRef<Path>) -> io::Result<()> {
+-    fs::create_dir(path.as_ref()).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("mkdir", fs::create_dir(path.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::create_dir(path.as_ref());
++    future.await
+ }
+ 
+ pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> io::Result<()> {
+-    fs::rename(from, to).await
++    #[cfg(rustfs_fs_probe)]
++    let future = tokio::fs_probe::scope_step("rename", fs::rename(from.as_ref(), to.as_ref()));
++    #[cfg(not(rustfs_fs_probe))]
++    let future = fs::rename(from, to);
++    future.await
+ }
+ 
+ #[cfg(any(not(windows), test))]
+diff --git a/crates/ecstore/src/disk/local/commit.rs b/crates/ecstore/src/disk/local/commit.rs
+index 1fa6b88..f8e8075 100644
+--- a/crates/ecstore/src/disk/local/commit.rs
++++ b/crates/ecstore/src/disk/local/commit.rs
+@@ -261,7 +261,12 @@ async fn read_rename_destination_metadata(
+     #[cfg(not(windows))]
+     let _ = (rename_commit_guard, mutation_lease);
+     #[cfg(not(windows))]
+-    let result = match super::super::fs::read_file(file_path).await {
++    let read_future = super::super::fs::read_file(file_path);
++    #[cfg(not(windows))]
++    #[cfg(rustfs_fs_probe)]
++    let read_future = tokio::fs_probe::scope_step("dest_meta_read", read_future);
++    #[cfg(not(windows))]
++    let result = match read_future.await {
+         Ok(data) => Ok(Some(data)),
+         Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+         Err(err) => Err(err),
+@@ -555,7 +560,7 @@ impl LocalDisk {
+                 let owned_directory_guard = commit.directory_guard.clone();
+                 let owned_mutation_lease = commit.mutation_lease.clone();
+                 async move {
+-                    os::run_blocking_namespace_operation(owned_mutation_lease, move || {
++                    let write_op = os::run_blocking_namespace_operation(owned_mutation_lease, move || {
+                         #[cfg(test)]
+                         run_owned_file_write_before_open(&src_file_path);
+                         let mut prepared_metadata_source = os::create_prepared_rename_source_with_commit_guard(
+@@ -565,19 +570,23 @@ impl LocalDisk {
+                         )?;
+                         prepared_metadata_source.write_all(&new_dst_buf, tmp_meta_sync != SyncMode::None)?;
+                         Ok(prepared_metadata_source)
+-                    })
+-                    .await
+-                    .map_err(to_file_error)
+-                    .map_err(DiskError::from)
++                    });
++                    #[cfg(rustfs_fs_probe)]
++                    let write_op = tokio::fs_probe::scope_step("staged_meta_write", write_op);
++                    write_op
++                        .await
++                        .map_err(to_file_error)
++                        .map_err(DiskError::from)
+                 }
+             };
+             let shard_sync = async {
+-                if durability.syncs_data_shards()
+-                    && let Some((src_data_path, _)) = has_data_dir_path.as_ref()
+-                    && let Err(err) = os::sync_dir_files_with_limiter(src_data_path, self.file_sync_permits.clone()).await
+-                    && err.kind() != ErrorKind::NotFound
+-                {
+-                    return Err::<(), DiskError>(to_file_error(err).into());
++                if durability.syncs_data_shards() && let Some((src_data_path, _)) = has_data_dir_path.as_ref() {
++                    let sync_op = os::sync_dir_files_with_limiter(src_data_path, self.file_sync_permits.clone());
++                    #[cfg(rustfs_fs_probe)]
++                    let sync_op = tokio::fs_probe::scope_step("src_dir_sync", sync_op);
++                    if let Err(err) = sync_op.await && err.kind() != ErrorKind::NotFound {
++                        return Err::<(), DiskError>(to_file_error(err).into());
++                    }
+                 }
+                 Ok(())
+             };
+@@ -625,30 +634,32 @@ impl LocalDisk {
+                     "Healing commit could not purge the stale destination data dir"
+                 );
+             }
+-            if let Some((src_data_path, dst_data_path)) = has_data_dir_path.as_ref()
+-                && let Err(err) = os::rename_all_with_commit_guard(
++            if let Some((src_data_path, dst_data_path)) = has_data_dir_path.as_ref() {
++                let rename_op = os::rename_all_with_commit_guard(
+                     src_data_path,
+                     dst_data_path,
+                     &skip_parent,
+                     commit.publication_root,
+                     &commit.directory_guard,
+                     commit.mutation_lease.clone(),
+-                )
+-                .await
+-            {
+-                info!(
+-                    target: "rustfs_ecstore::disk::local",
+-                    event = EVENT_DISK_LOCAL_RENAME_REJECTED,
+-                    component = LOG_COMPONENT_ECSTORE,
+-                    subsystem = LOG_SUBSYSTEM_DISK_LOCAL,
+-                    reason = "rename_all_data_path_failed",
+-                    src_path = ?src_data_path,
+-                    dst_path = ?dst_data_path,
+-                    error = ?err,
+-                    "Disk local rename flow failed"
+                 );
+-                commit.restore_published_data_source().await?;
+-                return Err(err);
++                #[cfg(rustfs_fs_probe)]
++                let rename_op = tokio::fs_probe::scope_step("rename_data_dir", rename_op);
++                if let Err(err) = rename_op.await {
++                    info!(
++                        target: "rustfs_ecstore::disk::local",
++                        event = EVENT_DISK_LOCAL_RENAME_REJECTED,
++                        component = LOG_COMPONENT_ECSTORE,
++                        subsystem = LOG_SUBSYSTEM_DISK_LOCAL,
++                        reason = "rename_all_data_path_failed",
++                        src_path = ?src_data_path,
++                        dst_path = ?dst_data_path,
++                        error = ?err,
++                        "Disk local rename flow failed"
++                    );
++                    commit.restore_published_data_source().await?;
++                    return Err(err);
++                }
+             }
+             #[cfg(test)]
+             if has_data_dir_path.is_some() {
+@@ -752,7 +763,7 @@ impl LocalDisk {
+                 return Err(DiskError::Unexpected);
+             }
+ 
+-            if let Err(err) = os::rename_all_with_prepared_source(
++            let rename_meta_op = os::rename_all_with_prepared_source(
+                 prepared_metadata_source,
+                 &src_file_path,
+                 &dst_file_path,
+@@ -760,8 +771,10 @@ impl LocalDisk {
+                 commit.publication_root,
+                 &commit.directory_guard,
+                 commit.mutation_lease.clone(),
+-            )
+-            .await
++            );
++            #[cfg(rustfs_fs_probe)]
++            let rename_meta_op = tokio::fs_probe::scope_step("rename_meta", rename_meta_op);
++            if let Err(err) = rename_meta_op.await
+             {
+                 info!(
+                     target: "rustfs_ecstore::disk::local",
+@@ -798,7 +811,10 @@ impl LocalDisk {
+                 && let Some(parent) = dst_file_path.parent()
+             {
+                 let fsync_started = rustfs_io_metrics::put_stage_timer();
+-                if let Err(err) = os::fsync_dst_dir_group_commit(parent, Some(commit.mutation_lease.clone())).await {
++                let dst_fsync_op = os::fsync_dst_dir_group_commit(parent, Some(commit.mutation_lease.clone()));
++                #[cfg(rustfs_fs_probe)]
++                let dst_fsync_op = tokio::fs_probe::scope_step("dst_dir_fsync", dst_fsync_op);
++                if let Err(err) = dst_fsync_op.await {
+                     rustfs_io_metrics::record_put_object_stage_duration_from(
+                         rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_DST_DIR_FSYNC,
+                         fsync_started,
+@@ -835,7 +851,10 @@ impl LocalDisk {
+                         break;
+                     }
+                     let fsync_started = rustfs_io_metrics::put_stage_timer();
+-                    if let Err(err) = os::fsync_dir_with_owner(dir, Some(commit.mutation_lease.clone())).await {
++                    let ancestor_fsync_op = os::fsync_dir_with_owner(dir, Some(commit.mutation_lease.clone()));
++                    #[cfg(rustfs_fs_probe)]
++                    let ancestor_fsync_op = tokio::fs_probe::scope_step("ancestor_fsync", ancestor_fsync_op);
++                    if let Err(err) = ancestor_fsync_op.await {
+                         rustfs_io_metrics::record_put_object_stage_duration_from(
+                             rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_ANCESTOR_DIR_FSYNC,
+                             fsync_started,
+diff --git a/crates/ecstore/src/disk/os.rs b/crates/ecstore/src/disk/os.rs
+index 14a56b5..0a8a0af 100644
+--- a/crates/ecstore/src/disk/os.rs
++++ b/crates/ecstore/src/disk/os.rs
+@@ -494,7 +494,18 @@ pub fn fsync_dir_std(dir: impl AsRef<Path>) -> io::Result<()> {
+         if let Some(kind) = fsync_dir_recorder::take_failure(dir.as_ref()) {
+             return Err(io::Error::from(kind));
+         }
+-        std::fs::File::open(dir.as_ref())?.sync_all()?;
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_dir_open");
++        let dir_file = std::fs::File::open(dir.as_ref());
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_dir_open_end");
++        let dir_file = dir_file?;
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_dir_sync");
++        let sync_result = dir_file.sync_all();
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_dir_sync_end");
++        sync_result?;
+     }
+     #[cfg(not(unix))]
+     let _ = dir;
+@@ -1780,7 +1791,12 @@ pub(crate) fn sync_file(path: &Path) -> io::Result<()> {
+     let file = std::fs::OpenOptions::new().write(true).open(path)?;
+     #[cfg(not(windows))]
+     let file = std::fs::File::open(path)?;
+-    file.sync_data()
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_fdatasync");
++    let sync_result = file.sync_data();
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_fdatasync_end");
++    sync_result
+ }
+ 
+ fn sync_file_with_put_stage_metric(path: &Path) -> io::Result<()> {
+@@ -1794,9 +1810,13 @@ fn sync_file_with_put_stage_metric(path: &Path) -> io::Result<()> {
+ }
+ 
+ fn sync_files(paths: &[PathBuf]) -> io::Result<()> {
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_fsync_files");
+     for path in paths {
+         sync_file_with_put_stage_metric(path)?;
+     }
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_fsync_files_end");
+     Ok(())
+ }
+ 
+@@ -1839,9 +1859,13 @@ pub(crate) async fn sync_dir_files_with_limiter(dir: impl AsRef<Path>, disk_perm
+     let scan_dir = dir.clone();
+     let group_file_fdatasync = file_fdatasync_group_commit_enabled();
+     let files = run_file_sync_blocking(disk_permits.clone(), move || {
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_scan");
+         let files = regular_files(&scan_dir)?;
+         if files.len() < PARALLEL_FILE_SYNC_THRESHOLD {
+             if group_file_fdatasync && !files.is_empty() {
++                #[cfg(rustfs_fs_probe)]
++                tokio::fs_probe::sub_step("sub_scan_end");
+                 return Ok(Some(files));
+             }
+             rustfs_io_metrics::record_put_rename_fdatasync_batch(
+@@ -1856,8 +1880,12 @@ pub(crate) async fn sync_dir_files_with_limiter(dir: impl AsRef<Path>, disk_perm
+                 fsync_started,
+             );
+             result?;
++            #[cfg(rustfs_fs_probe)]
++            tokio::fs_probe::sub_step("sub_scan_end");
+             return Ok(None);
+         }
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_scan_end");
+         Ok::<_, io::Error>(Some(files))
+     })
+     .await?;
+@@ -2084,7 +2112,11 @@ pub(in crate::disk) async fn rename_with_namespace_owner(
+     namespace_owner: Option<Arc<dyn Send + Sync>>,
+ ) -> io::Result<()> {
+     if namespace_owner.is_none() {
+-        return tokio::fs::rename(src, dst).await;
++        #[cfg(rustfs_fs_probe)]
++        let future = tokio::fs_probe::scope_step("rename_no_owner", tokio::fs::rename(src, dst));
++        #[cfg(not(rustfs_fs_probe))]
++        let future = tokio::fs::rename(src, dst);
++        return future.await;
+     }
+     let src = src.to_path_buf();
+     let dst = dst.to_path_buf();
+@@ -2220,6 +2252,8 @@ pub(crate) struct PreparedRenameSource {
+ 
+ impl PreparedRenameSource {
+     pub(crate) fn write_all(&mut self, data: &[u8], sync: bool) -> io::Result<()> {
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_prep_write");
+         #[cfg(all(test, windows))]
+         windows_rename_test_hooks::run_before_source_write(&self.path);
+         #[cfg(windows)]
+@@ -2232,6 +2266,8 @@ impl PreparedRenameSource {
+             #[cfg(not(windows))]
+             self.source.sync_data()?;
+         }
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_prep_write_end");
+         Ok(())
+     }
+ }
+@@ -2241,6 +2277,8 @@ pub(crate) fn create_prepared_rename_source_with_commit_guard(
+     dst_file_path: &Path,
+     commit_guard: &RenameCommitGuard,
+ ) -> io::Result<PreparedRenameSource> {
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_prep_open");
+     #[cfg(windows)]
+     {
+         if src_file_path.parent() != Some(commit_guard.source_parent.as_path()) {
+@@ -2277,6 +2315,8 @@ pub(crate) fn create_prepared_rename_source_with_commit_guard(
+         let metadata = source.metadata()?;
+         #[cfg(unix)]
+         use std::os::unix::fs::MetadataExt;
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_prep_open_end");
+         Ok(PreparedRenameSource {
+             path: src_file_path.to_path_buf(),
+             source,
+@@ -2880,6 +2920,8 @@ fn rename_into_existing_parent(
+ ) -> io::Result<()> {
+     use rustix::fs::{Mode, OFlags, open, renameat};
+ 
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_rename");
+     let Some(parent_guard) = parent_guard else {
+         let rename_started = rustfs_io_metrics::put_stage_timer();
+         let result = super::fs::rename_std(src_file_path, dst_file_path);
+@@ -2887,6 +2929,8 @@ fn rename_into_existing_parent(
+             rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_RENAME_SYSCALL,
+             rename_started,
+         );
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::sub_step("sub_rename_end");
+         return result;
+     };
+     let src_parent = src_file_path
+@@ -2914,6 +2958,8 @@ fn rename_into_existing_parent(
+         rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_RENAME_SYSCALL,
+         rename_started,
+     );
++    #[cfg(rustfs_fs_probe)]
++    tokio::fs_probe::sub_step("sub_rename_end");
+     result
+ }
+ 
+diff --git a/crates/ecstore/src/set_disk/core/io_primitives.rs b/crates/ecstore/src/set_disk/core/io_primitives.rs
+index e21c854..801e6c5 100644
+--- a/crates/ecstore/src/set_disk/core/io_primitives.rs
++++ b/crates/ecstore/src/set_disk/core/io_primitives.rs
+@@ -3188,7 +3188,9 @@ impl SetDisks {
+         let (commit_tx, commit_rx) = tokio::sync::oneshot::channel();
+ 
+         let coordinator_failure_receipt = rollback_receipt.clone();
+-        let tail_drain = tokio::spawn({
++        // The spawned tail drains under the caller's OP scope so its fanout
++        // blocking jobs stay linked to this operation.
++        let tail_drain = tokio::spawn(tokio::fs_probe::propagate_op({
+             let fanout_src_bucket = src_bucket.clone();
+             let fanout_src_object = src_object.clone();
+             let fanout_dst_bucket = dst_bucket.clone();
+@@ -3210,87 +3212,97 @@ impl SetDisks {
+                     let file_info = file_info.clone();
+                     let successful_rename_completion_rank = successful_rename_completion_rank.clone();
+                     let namespace_commit_guard = namespace_commit_guard.clone();
+-                    tasks.spawn(async move {
+-                        let _namespace_commit_guard = namespace_commit_guard.clone();
+-                        let mut dispatch_state = RenameDispatchState::NotDispatched;
+-                        let result = std::panic::AssertUnwindSafe(async {
+-                            #[allow(clippy::let_unit_value)]
+-                            let _fanout_task_guard = Self::rename_fanout_task_guard(&dst_object);
+-
+-                            let Some(disk) = disk else {
+-                                return Err(DiskError::DiskNotFound);
+-                            };
++                    tasks.spawn(tokio::fs_probe::scope_disk(
++                        i as u16,
++                        0,
++                        tokio::fs_probe::propagate_op(async move {
++                            let _namespace_commit_guard = namespace_commit_guard.clone();
++                            let mut dispatch_state = RenameDispatchState::NotDispatched;
++                            let result = std::panic::AssertUnwindSafe(async {
++                                #[allow(clippy::let_unit_value)]
++                                let _fanout_task_guard = Self::rename_fanout_task_guard(&dst_object);
++
++                                let Some(disk) = disk else {
++                                    return Err(DiskError::DiskNotFound);
++                                };
+ 
+-                            let is_delete_marker = file_info.is_canonical_delete_marker();
+-                            // Clone FileInfo and set erasure.index for this disk
+-                            let mut file_info = file_info.clone();
+-                            if file_info.erasure.index == 0 {
+-                                file_info.erasure.index = i + 1;
+-                            }
+-                            if file_info.erasure.index == 0 || (!is_delete_marker && !file_info.has_valid_erasure_geometry()) {
+-                                return Err(DiskError::FileCorrupt);
+-                            }
++                                let is_delete_marker = file_info.is_canonical_delete_marker();
++                                // Clone FileInfo and set erasure.index for this disk
++                                let mut file_info = file_info.clone();
++                                if file_info.erasure.index == 0 {
++                                    file_info.erasure.index = i + 1;
++                                }
++                                if file_info.erasure.index == 0 || (!is_delete_marker && !file_info.has_valid_erasure_geometry()) {
++                                    return Err(DiskError::FileCorrupt);
++                                }
+ 
+-                            Self::rename_fanout_barrier(&dst_object, i, rename_fanout_barrier_phase::RENAME).await;
++                                Self::rename_fanout_barrier(&dst_object, i, rename_fanout_barrier_phase::RENAME).await;
+ 
+-                            if let Some(err) = Self::rename_injected_error(&dst_object, i) {
+-                                return Err(err);
+-                            }
++                                if let Some(err) = Self::rename_injected_error(&dst_object, i) {
++                                    return Err(err);
++                                }
+ 
+-                            let disk_wait_started = rustfs_io_metrics::put_stage_timer();
+-                            dispatch_state = RenameDispatchState::MayHavePublished;
+-                            let observed = disk
+-                                .rename_data_borrowed_with_fence_observed(
+-                                    &src_bucket,
+-                                    &src_object,
+-                                    &file_info,
+-                                    &dst_bucket,
+-                                    &dst_object,
+-                                    crate::disk::RenameDataGuards {
+-                                        scanner_publication_lease_token,
+-                                        namespace_owner: namespace_commit_guard
+-                                            .clone()
+-                                            .map(|owner| owner as Arc<dyn Send + Sync>),
+-                                        ..Default::default()
+-                                    },
+-                                )
+-                                .await;
+-                            let rejected_before_publication = observed.rejected_before_publication();
+-                            let result = observed.result;
+-                            #[cfg(test)]
+-                            if result.is_ok() {
+-                                rollback_fault_injection::after_rename(&dst_object, i)?;
+-                            }
+-                            if let Some(disk_wait_started) = disk_wait_started {
+-                                let duration_ms = disk_wait_started.elapsed().as_secs_f64() * 1000.0;
+-                                rustfs_io_metrics::record_put_object_stage_duration(
+-                                    rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_DISK_WAIT,
+-                                    duration_ms,
+-                                );
+-                                let position = if result.is_ok() {
+-                                    let rank = successful_rename_completion_rank
+-                                        .as_ref()
+-                                        .map(|rank| rank.fetch_add(1, Ordering::Relaxed) + 1)
+-                                        .unwrap_or(1);
+-                                    if rank <= write_quorum {
+-                                        rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_QUORUM_FIRST
++                                let disk_wait_started = rustfs_io_metrics::put_stage_timer();
++                                dispatch_state = RenameDispatchState::MayHavePublished;
++                                let observed = disk
++                                    .rename_data_borrowed_with_fence_observed(
++                                        &src_bucket,
++                                        &src_object,
++                                        &file_info,
++                                        &dst_bucket,
++                                        &dst_object,
++                                        crate::disk::RenameDataGuards {
++                                            scanner_publication_lease_token,
++                                            namespace_owner: namespace_commit_guard
++                                                .clone()
++                                                .map(|owner| owner as Arc<dyn Send + Sync>),
++                                            ..Default::default()
++                                        },
++                                    )
++                                    .await;
++                                let rejected_before_publication = observed.rejected_before_publication();
++                                let result = observed.result;
++                                #[cfg(rustfs_fs_probe)]
++                                {
++                                    let op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                                    let status = if result.is_ok() { 0 } else { 1 };
++                                    tokio::fs_probe::record_disk_complete(i as u16, 0, status, op);
++                                }
++                                #[cfg(test)]
++                                if result.is_ok() {
++                                    rollback_fault_injection::after_rename(&dst_object, i)?;
++                                }
++                                if let Some(disk_wait_started) = disk_wait_started {
++                                    let duration_ms = disk_wait_started.elapsed().as_secs_f64() * 1000.0;
++                                    rustfs_io_metrics::record_put_object_stage_duration(
++                                        rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_DISK_WAIT,
++                                        duration_ms,
++                                    );
++                                    let position = if result.is_ok() {
++                                        let rank = successful_rename_completion_rank
++                                            .as_ref()
++                                            .map(|rank| rank.fetch_add(1, Ordering::Relaxed) + 1)
++                                            .unwrap_or(1);
++                                        if rank <= write_quorum {
++                                            rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_QUORUM_FIRST
++                                        } else {
++                                            rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_QUORUM_TAIL
++                                        }
+                                     } else {
+-                                        rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_QUORUM_TAIL
+-                                    }
+-                                } else {
+-                                    rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_ERROR
+-                                };
+-                                rustfs_io_metrics::record_put_rename_disk_wait_completion(position, duration_ms);
+-                            }
+-                            if rejected_before_publication {
+-                                dispatch_state = RenameDispatchState::RejectedBeforePublication;
+-                            }
+-                            result
+-                        })
+-                        .catch_unwind()
+-                        .await;
+-                        (i, dispatch_state, result)
+-                    });
++                                        rustfs_io_metrics::PUT_RENAME_DISK_WAIT_COMPLETION_POSITION_ERROR
++                                    };
++                                    rustfs_io_metrics::record_put_rename_disk_wait_completion(position, duration_ms);
++                                }
++                                if rejected_before_publication {
++                                    dispatch_state = RenameDispatchState::RejectedBeforePublication;
++                                }
++                                result
++                            })
++                            .catch_unwind()
++                            .await;
++                            (i, dispatch_state, result)
++                        })),
++                    );
+                 }
+ 
+                 let mut commit_tx = Some(commit_tx);
+@@ -3310,6 +3322,13 @@ impl SetDisks {
+ 
+                 while let Some(joined) = tasks.join_next().await {
+                     results_seen += 1;
++                    let (disk_idx, res_status) = match &joined {
++                        Ok((idx, _dispatch_state, Ok(Ok(_res)))) => (*idx as u16, 0u8),
++                        Ok((idx, _dispatch_state, Ok(Err(_err)))) => (*idx as u16, 1u8),
++                        Ok((idx, _dispatch_state, Err(_panic))) => (*idx as u16, 2u8),
++                        Err(_join_err) => (u16::MAX, 3u8),
++                    };
++                    let success_before = success_count as u8;
+                     match joined {
+                         Ok((idx, dispatch_state, Ok(Ok(res)))) => {
+                             dispatch_states[idx] = dispatch_state;
+@@ -3333,6 +3352,23 @@ impl SetDisks {
+                             fanout_panic += 1;
+                         }
+                     }
++                    let success_after = success_count as u8;
++                    let quorum_satisfied = !sent_commit && success_count >= write_quorum;
++                    #[cfg(rustfs_fs_probe)]
++                    {
++                        let op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                        tokio::fs_probe::record_quorum_result(
++                            disk_idx,
++                            0,
++                            res_status,
++                            success_before,
++                            success_after,
++                            quorum_satisfied,
++                            results_seen as u32,
++                            write_quorum as u32,
++                            op,
++                        );
++                    }
+ 
+                     if !sent_commit && success_count >= write_quorum {
+                         let snapshot_commit = Self::rename_data_commit_from_observations(
+@@ -3349,6 +3385,16 @@ impl SetDisks {
+                             cleanup_at_snapshot = commit.cleanup_disks.iter().map(Option::is_some).collect();
+                         }
+                         if let Some(commit_tx) = commit_tx.take() {
++                            #[cfg(rustfs_fs_probe)]
++                            let send_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                            #[cfg(rustfs_fs_probe)]
++                            tokio::fs_probe::record_quorum_send(
++                                tokio::fs_probe::KIND_SEND_OK,
++                                results_seen as u32,
++                                write_quorum as u32,
++                                disk_count as u32,
++                                send_op,
++                            );
+                             let _ = commit_tx.send(snapshot_commit);
+                         }
+                         sent_commit = true;
+@@ -3386,6 +3432,16 @@ impl SetDisks {
+                     )
+                     .await;
+                     if let Some(commit_tx) = commit_tx.take() {
++                        #[cfg(rustfs_fs_probe)]
++                        let send_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++                        #[cfg(rustfs_fs_probe)]
++                        tokio::fs_probe::record_quorum_send(
++                            tokio::fs_probe::KIND_SEND_ERR,
++                            results_seen as u32,
++                            write_quorum as u32,
++                            disk_count as u32,
++                            send_op,
++                        );
+                         let _ = commit_tx.send(Err(ret_err));
+                     }
+                     return None;
+@@ -3427,10 +3483,14 @@ impl SetDisks {
+                     };
+                     let dst_bucket = fanout_dst_bucket.clone();
+                     let dst_object = fanout_dst_object.clone();
+-                    backup_reclaims.push(tokio::spawn(async move {
+-                        let backup_path = format!("{dst_object}/{rollback_dir}/{STORAGE_FORMAT_FILE_BACKUP}");
+-                        disk.delete(&dst_bucket, &backup_path, DeleteOptions::default()).await
+-                    }));
++                    backup_reclaims.push(tokio::spawn(tokio::fs_probe::scope_disk(
++                        idx as u16,
++                        0,
++                        tokio::fs_probe::propagate_op(async move {
++                            let backup_path = format!("{dst_object}/{rollback_dir}/{STORAGE_FORMAT_FILE_BACKUP}");
++                            disk.delete(&dst_bucket, &backup_path, DeleteOptions::default()).await
++                        }),
++                    )));
+                 }
+                 for result in join_all(backup_reclaims).await {
+                     match result {
+@@ -3471,16 +3531,24 @@ impl SetDisks {
+                     cleanup: tail_cleanup,
+                 })
+             }
+-        });
++        }));
+ 
+         let quorum_wait_started = rustfs_io_metrics::put_stage_timer();
++        #[cfg(rustfs_fs_probe)]
++        let wait_op = tokio::fs_probe::OP.try_get().unwrap_or(tokio::fs_probe::OP_NONE);
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_BEGIN, 0, wait_op);
+         let commit = match commit_rx.await {
+             Ok(commit) => commit,
+             Err(_) => {
++                #[cfg(rustfs_fs_probe)]
++                tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_END, 0, wait_op);
+                 record_indeterminate_rename(disks, (&dst_bucket, &dst_object), coordinator_failure_receipt).await;
+                 return Err(DiskError::Unexpected);
+             }
+         };
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_WAIT_END, 0, wait_op);
+         rustfs_io_metrics::record_put_object_stage_duration_from(
+             rustfs_io_metrics::PUT_STAGE_SET_DISK_RENAME_QUORUM_WAIT,
+             quorum_wait_started,
+diff --git a/crates/ecstore/src/set_disk/ops/object.rs b/crates/ecstore/src/set_disk/ops/object.rs
+index 0416310..040c422 100644
+--- a/crates/ecstore/src/set_disk/ops/object.rs
++++ b/crates/ecstore/src/set_disk/ops/object.rs
+@@ -3460,8 +3460,18 @@ impl SetDisks {
+         data: &mut PutObjReader,
+         opts: &ObjectOptions,
+     ) -> Result<(ObjectInfo, Option<OldCurrentSize>)> {
+-        self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None)
+-            .await
++        #[cfg(rustfs_fs_probe)]
++        let op = tokio::fs_probe::op_hash(bucket, object);
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_OP_BEGIN, 0, op);
++        #[cfg(rustfs_fs_probe)]
++        let future = tokio::fs_probe::OP.scope(op, self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None));
++        #[cfg(not(rustfs_fs_probe))]
++        let future = self.put_object_with_old_current_size_boxed(bucket, object, data, opts, None);
++        let result = future.await;
++        #[cfg(rustfs_fs_probe)]
++        tokio::fs_probe::record(tokio::fs_probe::KIND_OP_END, 0, op);
++        result
+     }
+ 
+     pub(crate) async fn put_object_with_old_current_size_for_data_movement(
+@@ -4998,9 +5008,13 @@ impl SetDisks {
+                 }
+                 let mut cancellation = PutObjectCommitCancellation::new();
+                 let child_token = cancellation.child_token();
+-                let result = tokio::spawn(async move { Box::pin(commit(Some(child_token))).await })
+-                    .await
+-                    .map_err(|err| Error::other(format!("put_object commit task failed: {err}")))?;
++                // Carry the caller's OP scope into the detached commit task so
++                // its rename wait, sends, and fanout jobs stay linked to this
++                // operation; Tokio task-locals are not inherited by spawns.
++                let result =
++                    tokio::spawn(tokio::fs_probe::propagate_op(async move { Box::pin(commit(Some(child_token))).await }))
++                        .await
++                        .map_err(|err| Error::other(format!("put_object commit task failed: {err}")))?;
+                 cancellation.disarm();
+                 result
+             } else {
+diff --git a/rustfs/src/startup_entrypoint.rs b/rustfs/src/startup_entrypoint.rs
+index e2402b2..6d807de 100644
+--- a/rustfs/src/startup_entrypoint.rs
++++ b/rustfs/src/startup_entrypoint.rs
+@@ -51,6 +51,19 @@ pub fn run_process() {
+     #[allow(clippy::drop_non_drop)]
+     drop(dial9_guard);
+ 
++    #[cfg(rustfs_fs_probe)]
++    {
++        // Drop the main runtime first so its probe writers exit early,
++        // then flush. What actually makes the flush race-free is
++        // fs_probe's own admission gate — it closes record admission and
++        // drains every admitted writer (including the still-live static
++        // FSYNC_RUNTIME's threads) before reading the ring — not this
++        // join order. Late events are refused and counted, not recorded.
++        // `process::exit` on the error path skips drops.
++        drop(runtime);
++        tokio::fs_probe::flush_to_env();
++    }
++
+     if let Err(ref e) = result {
+         if e.to_string() != OBSERVABILITY_INIT_FATAL_ALREADY_REPORTED {
+             // Tracing may not be initialized when startup fails this early.
